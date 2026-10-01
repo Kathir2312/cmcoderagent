@@ -9,3 +9,4 @@ build/
 .cmcoder/settings.local.json
 .cmcoder/credentials.json
 evals/.runs/
+.coverage
