@@ -24,6 +24,9 @@ shell commands) runs locally; the model is always reached over the network.
 | D6 | Language / stack | **Python 3.12+ for the core engine and CLI**; TypeScript only for the VS Code extension, which VS Code requires. See §3.1. |
 | D7 | How the IDE uses the agent | The VS Code extension **runs the Python CLI as a child process** and talks to it over JSON over stdio, as Claude Code does. There is one engine. |
 | D8 | Where the model runs | **Never on the dev machine.** Always a remote URL, so TLS, auth headers, corporate proxies/CAs, latency and network errors are first-class concerns (§4.3–4.5). |
+| D9 | Reference deployment | A model server **on the company network**, reached over HTTPS through an internal domain name: `https://aiXIngerence.localnw.ae` (spelling to be confirmed). This is a user/project setting, never hard-coded. See §4.6. |
+| D10 | Reference models | **Qwen3 ~7B** as the small/fast model and **Qwen3 ~27B** as the main model (exact IDs to be read from the server's `/v1/models`). See §5.1. |
+| D11 | Product and command name | Product **cmcoder**; command `cmcoder`; config folder `.cmcoder/`; memory file `CMCODER.md`. |
 
 ## 2. Goals and non-goals
 
@@ -80,6 +83,7 @@ Remote model server — cloud API, or Ollama / vLLM / LM Studio / llama.cpp on a
 | Token estimates | `tiktoken` (approximate for non-OpenAI models) | Context budgeting when the server doesn't report usage |
 | Fuzzy edit matching | `rapidfuzz`, `difflib` | Edit fallback for whitespace drift |
 | Secrets | `keyring` | API keys in the OS keychain |
+| Corporate certificates | `truststore` | Trust the OS certificate store (internal CAs) without extra setup |
 | Tests | `pytest`, `pytest-asyncio`, `respx` (mock httpx) | Provider quirks testable without a real server |
 | Lint / types | `ruff`, `pyright` (strict on core) | |
 | VS Code extension | TypeScript, webview UI in React + Vite | VS Code extensions must be JS/TS |
@@ -170,6 +174,39 @@ Later, optional adapters: OpenAI **Responses API**, native **Anthropic** (for pr
 - Plain `http://` to a non-localhost host prints a one-time warning, since code is sent in clear text.
 - `cmcoder doctor` tests reachability, TLS, auth, the model list (`GET /models`), streaming and tool calling, and reports latency to first token.
 
+### 4.6 Reference deployment (company network)
+
+The first target environment, and the one evals and `doctor` are tuned for:
+
+```jsonc
+// ~/.cmcoder/settings.json  (or .cmcoder/settings.json committed for the team)
+{
+  "providers": {
+    "corp": {
+      "baseUrl": "https://aiXIngerence.localnw.ae/v1",  // confirm exact host and path
+      "apiKeyHelper": "…",                              // only if the server requires a key
+      "caCertPath": "/path/to/corp-root-ca.pem"         // if the cert is from an internal CA
+    }
+  },
+  "model": "corp:<qwen3-27b-id>",
+  "smallFastModel": "corp:<qwen3-7b-id>"
+}
+```
+
+Things this setup needs, all covered by §4.5:
+- **Internal certificate authority:** a certificate for a `.localnw.ae` name is
+  usually issued by the company's own CA. Python does not read the Windows or
+  macOS certificate store by default, so we use `truststore` to trust the OS
+  store automatically, with `caCertPath` as a fallback.
+- **Internal DNS:** the name only resolves on the company network or VPN.
+  `doctor` reports DNS failure separately from TLS and auth failures so users
+  know whether to connect the VPN or fix a certificate.
+- **Proxies:** if a corporate proxy is set, `.localnw.ae` must be in `NO_PROXY`;
+  `doctor` detects and warns about this.
+- **Authentication:** to be confirmed (none, static API key, or a gateway that
+  uses domain/AD sign-in). Static key and custom headers are supported from
+  Phase 0; domain sign-in (Kerberos/NTLM) would be added only if the gateway needs it.
+
 Named **provider profiles** let users keep several endpoints (e.g. `local`,
 `openai`, `openrouter`) and switch between them with `/model local:qwen3-coder`.
 
@@ -193,8 +230,33 @@ Models behave very differently, so each one is described by a profile:
 ```
 
 - Built-in profiles for common models; user overrides in settings.
+- Where the server reports the real context window (e.g. vLLM `max_model_len`
+  in `/v1/models`, Ollama `/api/show`), that value overrides the profile.
 - Unknown models get conservative defaults; `cmcoder doctor --probe` runs a short
   tool-calling test against the endpoint and suggests a profile.
+
+### 5.1 Reference models and their roles
+
+| Role | Model | Profile highlights |
+|---|---|---|
+| Main agent (`model`) | **Qwen3 ~27B** | Native tool calling, `full` prompt tier, `str_replace` edits with fuzzy fallback, thinking on for planning turns |
+| Small/fast (`smallFastModel`) | **Qwen3 ~7B** | Titles, compaction summaries, command-safety checks, simple read-only subagents; `compact` prompt tier, thinking off |
+
+Notes for the Qwen3 family:
+- **Thinking mode:** Qwen3 writes reasoning in `<think>…</think>`. It is shown
+  collapsed in the UI and never sent back to the model. Thinking is switched off
+  for small, quick calls (via the `/no_think` switch or the server's
+  `enable_thinking` chat-template option, whichever the server supports) to save latency.
+- **Tool calling depends on the server:** vLLM needs tool calling enabled with
+  the Hermes parser; Ollama supports Qwen3 tools natively. `doctor --probe`
+  checks it, and the prompted-tool fallback (§6) covers servers where it is off.
+- **Context window:** Qwen3's native window is 32K tokens, extendable (e.g. with
+  YaRN) if the server is configured for it. Compaction thresholds come from the
+  real served window, not an assumption.
+- **Expectations for ~7B:** it can't reliably drive multi-step edits on its own,
+  so it is never the default main model. Users can still choose it with `/model`.
+- **Sampling:** start from Qwen's recommended settings for each mode (lower
+  temperature for non-thinking turns) and tune with evals.
 
 ## 6. Agent loop
 
@@ -326,9 +388,14 @@ Started early, because quality depends heavily on the model:
 
 ## 17. Open questions
 
-1. Product name and command name (`cmcoder` is a placeholder).
+1. ~~Product name~~ — decided: **cmcoder** (D11).
 2. Licence and distribution (internal only vs. public PyPI/Marketplace).
 3. Windows support timing (sandbox and shell behaviour differ a lot).
 4. Default web search backend (needs an API key, or off by default?).
-5. Which 2–3 models are the reference targets for evals and default profiles.
-6. Where the remote model server lives (cloud API, a GPU box on the LAN, a VPN host) and how it's secured: this decides the default auth and TLS guidance.
+5. ~~Reference models~~ — decided: Qwen3 ~27B (main) and ~7B (small/fast) (D10). Exact model IDs still to be confirmed from `/v1/models`.
+6. ~~Server location~~ — decided: company network, internal HTTPS domain (D9). Still to confirm:
+   - the exact hostname spelling and base path (`/v1`?);
+   - which server software runs the models (Ollama, vLLM, LM Studio, llama.cpp, or a gateway in front);
+   - whether it needs an API key or domain sign-in;
+   - whether its certificate is from an internal CA, and whether a corporate proxy sits in the way;
+   - the served context window for each model.
