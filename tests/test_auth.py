@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import stat
+import sys
 
 import pytest
 
@@ -18,7 +19,8 @@ def test_store_falls_back_to_private_file_without_keychain() -> None:
     where = store_api_key("corp", "sk-123")
     assert "no OS keychain" in where
     path = credentials_file()
-    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    if sys.platform != "win32":  # Windows has no POSIX permission bits
+        assert stat.S_IMODE(path.stat().st_mode) == 0o600
     assert load_stored_api_key("corp") == "sk-123"
     delete_api_key("corp")
     assert load_stored_api_key("corp") is None

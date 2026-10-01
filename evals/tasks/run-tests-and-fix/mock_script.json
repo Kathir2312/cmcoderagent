@@ -4,7 +4,7 @@
    {
     "name": "Bash",
     "arguments": {
-     "command": "python3 -m unittest -q"
+     "command": "\"$PYTHON\" -m unittest -q"
     }
    }
   ]
@@ -36,7 +36,7 @@
    {
     "name": "Bash",
     "arguments": {
-     "command": "python3 -m unittest -q"
+     "command": "\"$PYTHON\" -m unittest -q"
     }
    }
   ]

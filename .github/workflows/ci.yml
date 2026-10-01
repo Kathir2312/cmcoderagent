@@ -6,14 +6,27 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    name: test (${{ matrix.os }}, py${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12"]
+        include:
+          - { os: ubuntu-latest, python-version: "3.11" }
+          - { os: ubuntu-latest, python-version: "3.12" }
+          - { os: macos-latest, python-version: "3.12" }
+          - { os: windows-latest, python-version: "3.11" }
+          - { os: windows-latest, python-version: "3.12" }
     steps:
       - uses: actions/checkout@v4
-      - name: Install ripgrep
+      - name: Install ripgrep (Linux)
+        if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y ripgrep
+      - name: Install ripgrep (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ripgrep
+      # Windows: no ripgrep on purpose, so the built-in search fallback is what
+      # runs there. Git Bash comes with the runner image, as on most dev machines.
       - uses: astral-sh/setup-uv@v6
         with:
           python-version: ${{ matrix.python-version }}
@@ -24,6 +37,9 @@ jobs:
           uv run ruff format --check src tests evals
       - name: Type check
         run: uv run pyright
+      - name: Show environment (cmcoder doctor, local checks)
+        run: uv run cmcoder doctor --no-probe
+        continue-on-error: true
       - name: Tests
         run: uv run pytest -q
       - name: Evals (scripted model)

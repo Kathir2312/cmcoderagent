@@ -96,7 +96,7 @@ Remote model server — cloud API, or Ollama / vLLM / LM Studio / llama.cpp on a
 **Python-specific risks and mitigations**
 - *Startup time* (imports can add hundreds of ms): lazy-import heavy modules; keep `--protocol stdio` mode lean, since VS Code starts it once per session anyway.
 - *Distribution*: users need Python 3.11+ until the standalone binary exists; `cmcoder doctor` checks the environment.
-- *Persistent shell for Bash*: `asyncio` subprocess with sentinel markers to detect command end and capture exit codes; Windows support later.
+- *Persistent shell for Bash*: `asyncio` subprocess with sentinel markers to detect command end and capture exit codes. On Windows the shell is Git Bash (see §3.3).
 
 ### 3.2 Repository layout
 
@@ -115,6 +115,25 @@ cmcoderagent/
 ├── vscode/                   # TypeScript extension + React webview
 └── evals/                    # benchmark tasks, runner, mock model server
 ```
+
+### 3.3 Windows support
+
+cmcoder runs natively on Windows (not through WSL), with the same behaviour as on macOS and Linux:
+
+| Area | Windows approach |
+|---|---|
+| Bash tool | **Git Bash** from Git for Windows, as Claude Code does. Found next to `git.exe`, on PATH, or in the standard install folders; `CMCODER_GIT_BASH_PATH` overrides. The WSL launcher (`System32\bash.exe`) is skipped because it sees a different filesystem. Permission rules (`Bash(npm test:*)`) work unchanged. |
+| Killing commands | Commands run in their own process group; timeouts and Ctrl+C kill the whole tree with `taskkill /T`. |
+| Ctrl+C | `loop.add_signal_handler` doesn't exist on Windows; a plain SIGINT handler forwards to the event loop instead. |
+| Paths | File tools accept `C:\...`, `C:/...` and Git Bash `/c/...` paths; all paths are resolved before permission checks (8.3 short names). |
+| Line endings | Write saves exactly what it's given; Edit keeps a file's CRLF endings; command output is normalised to LF. |
+| Search | ripgrep if installed, otherwise a built-in Python search with the same .gitignore and glob semantics. |
+| Certificates | Windows certificate store via `truststore`; with `caCertPath`, Python's default context (which also loads the Windows ROOT/CA stores) plus that file. |
+| Piped input | `PeekNamedPipe` instead of `select` to detect `git diff \| cmcoder -p ...`. |
+| Encoding | stdout/stderr forced to UTF-8; all file I/O is explicit UTF-8. |
+
+CI runs the full test suite and evals on Windows (without ripgrep, to exercise the fallback), macOS and Linux.
+The pseudo-terminal REPL tests are POSIX-only.
 
 ## 4. Provider layer (OpenAI-compatible first)
 
@@ -430,7 +449,7 @@ Started early, because quality depends heavily on the model:
 | **1 — Daily driver** | Textual TUI, sessions/resume, auto-compaction, small/fast model jobs (titles, summaries), prompted-tool fallback and repair, edit-format variants, TodoWrite, checkpoints | Comfortable for daily use on a real repo |
 | **2 — VS Code** | `--protocol stdio`, generated TS protocol types, extension, webview chat, native diffs, IDE context and tools | Same task behaves the same in CLI and VS Code |
 | **3 — Extensibility** | MCP client, hooks, custom slash commands, subagents (`Task`) with per-role models, skills, Bash sandbox | Teams can customise it without forking |
-| **4 — Hardening** | SSO auth provider (e.g. Okta/OIDC) if needed, Responses API / Anthropic adapters, OpenTelemetry, enterprise policy, standalone binary + platform-specific VSIX, Windows support | Release candidate |
+| **4 — Hardening** | SSO auth provider (e.g. Okta/OIDC) if needed, Responses API / Anthropic adapters, OpenTelemetry, enterprise policy, standalone binary + platform-specific VSIX, Windows sandboxing | Release candidate |
 
 ### 16.1 Phase 0 status
 
@@ -459,6 +478,7 @@ Delivered:
 
 Changed from the plan:
 - **Python 3.11+** instead of 3.12+, so it runs on more corporate machines.
+- **Windows support** moved from Phase 4 into Phase 0 (§3.3).
 - **Basic TUI uses prompt_toolkit + rich**; the Textual UI moves to Phase 1.
 - **5 eval tasks**, not ~20; the rest are added in Phase 1 alongside real-model runs.
 - **Not yet verified against the real gateway and Qwen3 models**, which this development environment cannot

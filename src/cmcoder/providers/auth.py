@@ -88,7 +88,7 @@ def _write_credentials_file(data: dict[str, str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     # Create with owner-only permissions from the start.
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, stat.S_IRUSR | stat.S_IWUSR)
-    with os.fdopen(fd, "w") as f:
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
     path.chmod(stat.S_IRUSR | stat.S_IWUSR)
 
@@ -98,7 +98,7 @@ def _read_credentials_file() -> dict[str, str]:
     if not path.exists():
         return {}
     try:
-        return dict(json.loads(path.read_text()))
+        return dict(json.loads(path.read_text(encoding="utf-8")))
     except (OSError, ValueError):
         return {}
 

@@ -33,6 +33,7 @@ def cli(
         env=env,
         capture_output=True,
         text=True,
+        encoding="utf-8",
         timeout=60,
         stdin=subprocess.DEVNULL,
     )
@@ -44,7 +45,7 @@ SCRIPT = [
             {"name": "Write", "arguments": {"file_path": "hello.py", "content": "print('hi')\n"}}
         ]
     },
-    {"tool_calls": [{"name": "Bash", "arguments": {"command": "python3 hello.py"}}]},
+    {"tool_calls": [{"name": "Bash", "arguments": {"command": "cat hello.py"}}]},
     {"content": "Created hello.py; it prints hi."},
 ]
 
@@ -58,7 +59,7 @@ def test_print_mode_text(mock_server: Any, project: Path) -> None:
             "--permission-mode",
             "acceptEdits",
             "--allowedTools",
-            "Bash(python3:*)",
+            "Bash(cat:*)",
         ],
         project,
         server,
@@ -67,7 +68,7 @@ def test_print_mode_text(mock_server: Any, project: Path) -> None:
     assert r.stdout.strip() == "Created hello.py; it prints hi."
     assert (project / "hello.py").read_text() == "print('hi')\n"
     tool_results = [m for m in server.requests[2]["messages"] if m["role"] == "tool"]
-    assert tool_results[1]["content"] == "hi"
+    assert tool_results[1]["content"] == "print('hi')"
 
 
 def test_print_mode_stream_json(mock_server: Any, project: Path) -> None:
@@ -148,6 +149,7 @@ def test_missing_model_config(project: Path) -> None:
         env=env,
         capture_output=True,
         text=True,
+        encoding="utf-8",
         timeout=30,
         stdin=subprocess.DEVNULL,
     )
@@ -161,6 +163,7 @@ def test_protocol_schema_command(project: Path) -> None:
         cwd=project,
         capture_output=True,
         text=True,
+        encoding="utf-8",
         timeout=30,
     )
     assert r.returncode == 0
@@ -175,6 +178,7 @@ def test_version(project: Path, flag: str) -> None:
         cwd=project,
         capture_output=True,
         text=True,
+        encoding="utf-8",
         timeout=30,
     )
     assert r.returncode == 0 and r.stdout.strip()

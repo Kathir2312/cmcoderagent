@@ -21,24 +21,26 @@ class TransportOptions:
 
 
 def build_ssl_context(opts: TransportOptions) -> ssl.SSLContext:
-    """TLS context that trusts the OS certificate store (company CAs) plus `ca_cert_path`.
+    """TLS context that trusts the OS certificate store (company CAs), plus `ca_cert_path`.
 
     Verification is never disabled.
     """
-    ctx: ssl.SSLContext
+    ca = opts.ca_cert_path or os.environ.get("CMCODER_CA_CERT")
+    if ca:
+        # Python's default context loads the OS/OpenSSL roots (on Windows: the
+        # system ROOT and CA stores) and accepts an extra CA file everywhere,
+        # which truststore does not on every platform.
+        ctx = ssl.create_default_context()
+        ctx.load_verify_locations(cafile=os.path.expanduser(ca))
+        return ctx
     if opts.use_system_trust:
         try:
             import truststore
 
-            ctx = truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+            return truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         except Exception:  # truststore unsupported on this platform/Python
-            ctx = ssl.create_default_context()
-    else:
-        ctx = ssl.create_default_context()
-    ca = opts.ca_cert_path or os.environ.get("CMCODER_CA_CERT")
-    if ca:
-        ctx.load_verify_locations(cafile=os.path.expanduser(ca))
-    return ctx
+            pass
+    return ssl.create_default_context()
 
 
 def build_client(

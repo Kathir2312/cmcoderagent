@@ -1,6 +1,6 @@
 {
   "prompt": "Add a function slugify(text) to text_utils.py: lowercase the text, keep only runs of letters and digits, and join them with hyphens. For example slugify('Hello, World!') == 'hello-world'. Run the tests.",
-  "check": "python3 -m unittest -q",
+  "check": "\"$PYTHON\" -m unittest -q",
   "permission_mode": "bypassPermissions",
   "max_turns": 20
 }

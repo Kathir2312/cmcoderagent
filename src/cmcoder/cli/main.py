@@ -13,6 +13,7 @@ import typer
 from rich.console import Console
 
 from .. import __version__
+from ..compat import stdin_has_data, use_utf8_stdio
 from ..config.settings import Settings, SettingsError, load_settings
 from ..core.permissions import MODES
 from ..protocol.events import protocol_json_schema
@@ -38,23 +39,6 @@ def _load(cwd: Path | None = None) -> Settings:
     except SettingsError as e:
         err_console.print(f"[red]error:[/red] {e}")
         raise typer.Exit(2) from e
-
-
-def _stdin_has_data(wait: float = 0.2) -> bool:
-    """True when input is piped in (`cat file | cmcoder -p ...`).
-
-    An open but idle stdin (e.g. when launched by another program) must not
-    block, so only read when data or EOF arrives promptly.
-    """
-    if sys.stdin is None or sys.stdin.isatty():
-        return False
-    try:
-        import select
-
-        ready, _, _ = select.select([sys.stdin], [], [], wait)
-        return bool(ready)
-    except (OSError, ValueError):
-        return False
 
 
 def _split_rules(values: list[str] | None) -> list[str]:
@@ -146,7 +130,7 @@ def main(
             from .headless import run_headless
 
             text = prompt or ""
-            if _stdin_has_data():
+            if stdin_has_data():
                 piped = sys.stdin.read()
                 text = f"{piped}\n\n{text}".strip() if piped.strip() else text
             if not text:
@@ -283,6 +267,7 @@ def version() -> None:
 
 
 def run() -> None:
+    use_utf8_stdio()
     if len(sys.argv) > 1 and sys.argv[1] in SUBCOMMANDS:
         sub_app()
     else:

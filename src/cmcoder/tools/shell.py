@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import os
-import signal
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
+
+from ..compat import kill_process_tree, new_process_group_kwargs
 
 MAX_CAPTURE_BYTES = 5_000_000
 # Max length of a single output line the reader accepts (default asyncio limit is 64 KiB).
@@ -24,7 +25,7 @@ class ShellResult:
 
 
 class PersistentShell:
-    def __init__(self, cwd: Path, shell: str = "bash") -> None:
+    def __init__(self, cwd: Path, shell: str) -> None:
         self.initial_cwd = cwd
         self.shell = shell
         self._proc: asyncio.subprocess.Process | None = None
@@ -50,18 +51,17 @@ class PersistentShell:
             stderr=asyncio.subprocess.STDOUT,
             cwd=self.initial_cwd,
             env=env,
-            start_new_session=True,  # own process group, so a timeout can kill children too
             limit=STREAM_LIMIT,
+            # Own process group: a timeout can kill children too, and the
+            # terminal's Ctrl+C goes to cmcoder rather than the command.
+            **new_process_group_kwargs(),
         )
         return self._proc
 
     def _kill(self) -> None:
         proc, self._proc = self._proc, None
         if proc and proc.returncode is None:
-            try:
-                os.killpg(proc.pid, signal.SIGKILL)
-            except (ProcessLookupError, PermissionError):
-                pass
+            kill_process_tree(proc.pid)
 
     async def close(self) -> None:
         proc = self._proc
@@ -146,4 +146,5 @@ class PersistentShell:
 
 
 def _decode(chunks: list[bytes]) -> str:
-    return b"".join(chunks).decode("utf-8", "replace")
+    # Windows programs run from Git Bash emit CRLF; normalise for the model.
+    return b"".join(chunks).decode("utf-8", "replace").replace("\r\n", "\n")

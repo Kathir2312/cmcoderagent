@@ -12,8 +12,10 @@ Each task folder holds:
   repo/             the starting files (copied to a fresh git repo per run)
   mock_script.json  scripted model replies used with --mock
 
-The check runs in the task's working copy and passes on exit code 0.
-CMCODER_EVAL_OUTPUT points at a file holding the agent's final answer.
+The check runs with bash (Git Bash on Windows) in the task's working copy and
+passes on exit code 0. CMCODER_EVAL_OUTPUT points at a file holding the agent's
+final answer, and $PYTHON is the current Python interpreter (`python3` is not
+available on most Windows machines).
 """
 
 from __future__ import annotations
@@ -27,12 +29,16 @@ import sys
 import time
 from pathlib import Path
 
+from cmcoder.compat import SHELL_HELP, find_shell, to_shell_path
+
 ROOT = Path(__file__).resolve().parent
 TASKS = ROOT / "tasks"
 
 
-def run_task(task_dir: Path, run_dir: Path, args: argparse.Namespace) -> dict[str, object]:
-    spec = json.loads((task_dir / "task.json").read_text())
+def run_task(
+    task_dir: Path, run_dir: Path, args: argparse.Namespace, shell: str
+) -> dict[str, object]:
+    spec = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
     work = run_dir / task_dir.name
     shutil.copytree(task_dir / "repo", work)
     subprocess.run(["git", "init", "-q"], cwd=work, check=True)
@@ -53,11 +59,12 @@ def run_task(task_dir: Path, run_dir: Path, args: argparse.Namespace) -> dict[st
     )
 
     env = dict(os.environ)
+    env["PYTHON"] = to_shell_path(sys.executable)
     server = None
     if args.mock:
         from cmcoder.testing.mock_server import MockServer, MockState
 
-        script = json.loads((task_dir / "mock_script.json").read_text())
+        script = json.loads((task_dir / "mock_script.json").read_text(encoding="utf-8"))
         server = MockServer(MockState(script, api_key="sk-eval"))
         server.__enter__()
         env.update(
@@ -94,6 +101,8 @@ def run_task(task_dir: Path, run_dir: Path, args: argparse.Namespace) -> dict[st
             env=env,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=args.timeout,
             stdin=subprocess.DEVNULL,
         )
@@ -115,17 +124,18 @@ def run_task(task_dir: Path, run_dir: Path, args: argparse.Namespace) -> dict[st
         if isinstance(data, dict) and data.get("type") == "result":
             result = data
     output_file = work / ".cmcoder_eval_output.txt"
-    output_file.write_text(str(result.get("result", "")))
-    (work / ".cmcoder_eval_stderr.txt").write_text(stderr)
+    output_file.write_text(str(result.get("result", "")), encoding="utf-8")
+    (work / ".cmcoder_eval_stderr.txt").write_text(stderr, encoding="utf-8")
 
     check = subprocess.run(
-        spec["check"],
-        shell=True,
+        [shell, "-c", spec["check"]],
         cwd=work,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=120,
-        env={**os.environ, "CMCODER_EVAL_OUTPUT": str(output_file)},
+        env={**env, "CMCODER_EVAL_OUTPUT": to_shell_path(output_file)},
     )
     usage = result.get("usage") or {}
     assert isinstance(usage, dict)
@@ -154,6 +164,10 @@ def main() -> int:
     ap.add_argument("--timeout", type=int, default=900, help="seconds per task")
     args = ap.parse_args()
 
+    shell = find_shell()
+    if shell is None:
+        print(SHELL_HELP, file=sys.stderr)
+        return 2
     tasks = sorted(p for p in TASKS.iterdir() if (p / "task.json").exists())
     if args.task:
         tasks = [t for t in tasks if t.name in args.task]
@@ -162,7 +176,7 @@ def main() -> int:
 
     results = []
     for task in tasks:
-        r = run_task(task, run_dir, args)
+        r = run_task(task, run_dir, args, shell)
         results.append(r)
         mark = "PASS" if r["passed"] else "FAIL"
         print(
@@ -173,7 +187,7 @@ def main() -> int:
         if not r["passed"]:
             print(f"      check: {str(r['check_output']).strip()[-300:]}")
             print(f"      workdir: {r['workdir']}")
-    (run_dir / "results.json").write_text(json.dumps(results, indent=2))
+    (run_dir / "results.json").write_text(json.dumps(results, indent=2), encoding="utf-8")
     passed = sum(1 for r in results if r["passed"])
     print(f"\n{passed}/{len(results)} passed · results in {run_dir / 'results.json'}")
     return 0 if passed == len(results) else 1

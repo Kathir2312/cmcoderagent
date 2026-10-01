@@ -6,12 +6,22 @@ that works with **any OpenAI-compatible endpoint**, such as a LiteLLM gateway se
 The agent runs on your machine (it reads and edits files and runs commands there); the model always runs on a
 remote server. See [docs/DESIGN.md](docs/DESIGN.md) for the architecture and roadmap.
 
-> Status: **Phase 0**. Working agent loop, tools, permissions, LiteLLM/OpenAI-compatible provider,
+> Status: **Phase 0** (Windows, macOS and Linux). Working agent loop, tools, permissions, LiteLLM/OpenAI-compatible provider,
 > basic interactive terminal UI, headless mode, `doctor` and `login`.
 
 ## Install
 
-Requires Python 3.11+, `bash` and [ripgrep](https://github.com/BurntSushi/ripgrep) (`rg`). Linux and macOS for now.
+Works on **Windows, macOS and Linux**. Requires Python 3.11+ and bash:
+
+- **Windows:** install [Git for Windows](https://git-scm.com/download/win), which includes Git Bash. cmcoder
+  finds it automatically (like Claude Code, it runs shell commands with Git Bash). If it's somewhere unusual,
+  set `CMCODER_GIT_BASH_PATH` to the full path of `bash.exe`. Run cmcoder itself from PowerShell, Windows
+  Terminal, cmd or the VS Code terminal.
+- **macOS / Linux:** bash is already there.
+
+[ripgrep](https://github.com/BurntSushi/ripgrep) (`rg`) is optional but recommended for large repos; without
+it Grep/Glob use a slower built-in search. (`winget install BurntSushi.ripgrep.MSVC`, `brew install ripgrep`,
+`apt install ripgrep`.)
 
 ```bash
 uv tool install git+https://github.com/Kathir2312/cmcoderagent   # or: pipx install ...
@@ -21,7 +31,7 @@ For development: `uv sync`, then run it with `uv run cmcoder`.
 
 ## Configure
 
-Create `~/.cmcoder/settings.json` (see [docs/settings.example.json](docs/settings.example.json)):
+Create `~/.cmcoder/settings.json` (on Windows: `%USERPROFILE%\.cmcoder\settings.json`) (see [docs/settings.example.json](docs/settings.example.json)):
 
 ```json
 {
@@ -45,8 +55,8 @@ cmcoder doctor
 `doctor` checks DNS (VPN), proxy settings, the TLS certificate chain, the API key, the model list, streaming,
 the Qwen3 thinking switch and tool calling, and tells you what to fix.
 
-**Internal certificates.** cmcoder trusts the OS certificate store, so if IT has installed the company root CA you
-need nothing else. Otherwise set `"caCertPath": "/path/to/company-root-ca.pem"` on the provider (or
+**Internal certificates.** cmcoder trusts the OS certificate store (the Windows certificate store, macOS Keychain,
+or the Linux CA bundle), so if IT has installed the company root CA you need nothing else. Otherwise set `"caCertPath": "/path/to/company-root-ca.pem"` on the provider (or
 `CMCODER_CA_CERT`). Certificate verification is never switched off.
 
 **Proxies.** `HTTPS_PROXY`/`NO_PROXY` are respected. If you use a corporate proxy, add `.localnw.ae` to `NO_PROXY`.
@@ -63,7 +73,8 @@ Later layers override earlier ones; permission rules from all layers are combine
 | `CMCODER_*` env vars | this shell |
 
 Environment variables: `CMCODER_BASE_URL`, `CMCODER_API_KEY`, `CMCODER_MODEL`, `CMCODER_SMALL_FAST_MODEL`,
-`CMCODER_CA_CERT`, `CMCODER_CUSTOM_HEADERS` (`"Name: value; Other: value"`), `CMCODER_CONFIG_DIR`.
+`CMCODER_CA_CERT`, `CMCODER_CUSTOM_HEADERS` (`"Name: value; Other: value"`), `CMCODER_CONFIG_DIR`,
+`CMCODER_GIT_BASH_PATH` (Windows).
 `OPENAI_BASE_URL` / `OPENAI_API_KEY` are used as fallbacks.
 
 ### Project memory
@@ -104,7 +115,7 @@ endpoint. LiteLLM admins may be able to see that traffic in gateway logs.
 
 ```bash
 uv sync
-uv run pytest -q                       # unit, CLI, TLS and terminal (pty) tests
+uv run pytest -q                       # unit, CLI, TLS and terminal (pty, not on Windows) tests
 uv run ruff check src tests evals && uv run pyright
 uv run python evals/run.py --mock      # eval harness with scripted replies
 uv run python evals/run.py             # evals against your real endpoint/model

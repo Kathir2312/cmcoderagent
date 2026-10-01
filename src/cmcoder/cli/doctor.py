@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import platform
 import shutil
 import socket
 import ssl
@@ -16,6 +17,7 @@ from urllib.parse import urlparse
 from rich.console import Console
 from rich.text import Text
 
+from ..compat import SHELL_HELP, find_shell
 from ..config.settings import Settings, env_api_key
 from ..providers.auth import ApiKeyAuth
 from ..providers.messages import Message, StreamDone, TextDelta, ToolSpec
@@ -63,16 +65,31 @@ class Doctor:
             "Settings loaded from",
             "\n".join(s.sources) or "(no settings files; using defaults)",
         )
-        for tool, why, required in (
-            ("bash", "Bash tool", True),
-            ("rg", "Grep/Glob tools (ripgrep)", True),
-            ("git", "git context in prompts", False),
-        ):
-            path = shutil.which(tool)
-            if path:
-                self.report(OK, f"{tool} found", path)
-            else:
-                self.report(FAIL if required else WARN, f"{tool} not found ({why})")
+        self.report(
+            INFO,
+            f"Platform: {platform.system()} {platform.release()}, Python {platform.python_version()}",
+        )
+        shell = find_shell()
+        if shell:
+            self.report(OK, "bash found (Bash tool)", shell)
+        else:
+            self.report(FAIL, "bash not found (Bash tool)", SHELL_HELP)
+        rg = shutil.which("rg")
+        if rg:
+            self.report(OK, "ripgrep found (fast Grep/Glob)", rg)
+        else:
+            self.report(
+                WARN,
+                "ripgrep (rg) not found",
+                "Grep/Glob use the slower built-in search. "
+                "Install ripgrep for large repos (winget install BurntSushi.ripgrep.MSVC, "
+                "brew install ripgrep, or apt install ripgrep).",
+            )
+        git = shutil.which("git")
+        if git:
+            self.report(OK, "git found", git)
+        else:
+            self.report(WARN, "git not found", "Prompts won't include git status.")
         if not s.providers:
             self.report(
                 FAIL,

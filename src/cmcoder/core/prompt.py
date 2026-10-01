@@ -135,5 +135,10 @@ def build_system_prompt(
         env.append(f"Model: {model}")
     if git := _git_info(cwd):
         env.append(f"Git: {git}")
+    if platform.system() == "Windows":
+        env.append(
+            "Shell: the Bash tool runs Git Bash. Use bash syntax and forward slashes "
+            "(C:/Users/... or /c/Users/...). Use `python` rather than `python3`."
+        )
     parts.append("# Environment\n" + "\n".join(env))
     return "\n\n".join(parts)

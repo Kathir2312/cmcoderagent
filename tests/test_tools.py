@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 import shutil
+import sys
 from pathlib import Path
 
 import pytest
@@ -97,34 +99,89 @@ async def test_edit_preserves_crlf(ctx: ToolContext, project: Path) -> None:
     assert (project / "w.txt").read_bytes() == b"a\r\nc\r\n"
 
 
-needs_rg = pytest.mark.skipif(shutil.which("rg") is None, reason="ripgrep not installed")
+@pytest.fixture(params=["ripgrep", "python"])
+def search_engine(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> str:
+    """Run search tests with ripgrep (when installed) and with the built-in fallback."""
+    if request.param == "ripgrep":
+        if shutil.which("rg") is None:
+            pytest.skip("ripgrep not installed")
+    else:
+        monkeypatch.setattr("cmcoder.tools.search.ripgrep", lambda: None)
+    return str(request.param)
 
 
-@needs_rg
-async def test_glob_respects_gitignore(ctx: ToolContext, project: Path) -> None:
+async def test_glob_respects_gitignore(ctx: ToolContext, project: Path, search_engine: str) -> None:
     (project / ".gitignore").write_text("build/\n")
     (project / "src").mkdir()
     (project / "src/a.py").write_text("")
     (project / "build").mkdir()
     (project / "build/b.py").write_text("")
+    (project / ".hidden").mkdir()
+    (project / ".hidden/c.py").write_text("")
     res = await GlobTool().run(GlobInput(pattern="**/*.py"), ctx)
-    assert "src/a.py" in res.content
-    assert "build" not in res.content
+    assert os.path.join("src", "a.py") in res.content
+    assert "build" not in res.content and ".hidden" not in res.content
+    res = await GlobTool().run(GlobInput(pattern="*.py"), ctx)  # any depth, like ripgrep
+    assert os.path.join("src", "a.py") in res.content
 
 
-@needs_rg
-async def test_grep_modes(ctx: ToolContext, project: Path) -> None:
+async def test_grep_modes(ctx: ToolContext, project: Path, search_engine: str) -> None:
     (project / "a.py").write_text("def hello():\n    pass\n")
     (project / "b.py").write_text("HELLO = 1\n")
-    files = await GrepTool().run(GrepInput(pattern="hello"), ctx)
-    assert files.content.strip() == "a.py"
-    content = await GrepTool().run(
-        GrepInput(pattern="hello", output_mode="content", case_insensitive=True), ctx
+    (project / "notes.md").write_text("hello in markdown\n")
+    (project / "sub").mkdir()
+    (project / "sub/c.py").write_text("x = 1\ny = 2\nhello()\nz = 3\n")
+    (project / ".gitignore").write_text("ignored.py\n")
+    (project / "ignored.py").write_text("hello\n")
+    grep = GrepTool()
+    sub_c = os.path.join("sub", "c.py")
+
+    files = await grep.run(GrepInput(pattern="hello", type="py"), ctx)
+    assert sorted(files.content.splitlines()) == ["a.py", sub_c]
+
+    content = await grep.run(
+        GrepInput(pattern="hello", output_mode="content", case_insensitive=True, glob="*.py"), ctx
     )
-    assert "a.py:1:def hello():" in content.content
-    assert "b.py:1:HELLO = 1" in content.content
-    none = await GrepTool().run(GrepInput(pattern="nomatch"), ctx)
+    lines = content.content.splitlines()
+    assert "a.py:1:def hello():" in lines
+    assert "b.py:1:HELLO = 1" in lines
+    assert not any("notes" in line for line in lines), lines
+    # Like ripgrep, an explicit glob re-includes git-ignored files...
+    assert "ignored.py:1:hello" in lines
+    # ...but without a glob they stay excluded, and ignored directories are always skipped.
+    plain = await grep.run(GrepInput(pattern="hello"), ctx)
+    assert "ignored.py" not in plain.content
+    (project / "build").mkdir()
+    (project / "build/out.py").write_text("hello\n")
+    (project / ".gitignore").write_text("ignored.py\nbuild/\n")
+    globbed = await grep.run(GrepInput(pattern="hello", glob="*.py"), ctx)
+    assert "build" not in globbed.content
+
+    with_ctx = await grep.run(
+        GrepInput(pattern="hello", path="sub", output_mode="content", context_lines=1), ctx
+    )
+    assert with_ctx.content.splitlines() == [
+        f"{sub_c}-2-y = 2",
+        f"{sub_c}:3:hello()",
+        f"{sub_c}-4-z = 3",
+    ]
+
+    count = await grep.run(GrepInput(pattern="=", path="sub", output_mode="count"), ctx)
+    assert count.content.strip() == f"{sub_c}:3"
+
+    multi = await grep.run(GrepInput(pattern=r"def hello\(\):\s+pass", multiline=True), ctx)
+    assert multi.content.strip() == "a.py"
+
+    none = await grep.run(GrepInput(pattern="nomatch"), ctx)
     assert none.content == "No matches found."
+
+
+async def test_grep_bad_regex_is_reported(
+    ctx: ToolContext, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("cmcoder.tools.search.ripgrep", lambda: None)
+    res = await GrepTool().run(GrepInput(pattern="(unclosed"), ctx)
+    assert res.is_error and "Invalid regular expression" in res.content
 
 
 async def test_bash_persists_state_and_reports_exit_codes(ctx: ToolContext, project: Path) -> None:
@@ -133,7 +190,8 @@ async def test_bash_persists_state_and_reports_exit_codes(ctx: ToolContext, proj
         (project / "sub").mkdir()
         await bash.run(BashInput(command="cd sub && export FOO=bar"), ctx)
         res = await bash.run(BashInput(command='pwd; echo "$FOO"'), ctx)
-        assert res.content.splitlines() == [str(project / "sub"), "bar"]
+        cwd, foo = res.content.splitlines()
+        assert cwd.endswith("/sub") and foo == "bar"
         res = await bash.run(
             BashInput(command="echo oops >&2; exit_code() { return 3; }; exit_code"), ctx
         )
@@ -165,3 +223,26 @@ async def test_bash_timeout_and_exit_restart(ctx: ToolContext) -> None:
     finally:
         assert ctx.shell
         await ctx.shell.close()
+
+
+async def test_bash_missing_shell_is_explained(
+    ctx: ToolContext, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("cmcoder.tools.bash.find_shell", lambda: None)
+    res = await BashTool().run(BashInput(command="echo hi"), ctx)
+    assert res.is_error and "Git for Windows" in res.content
+
+
+async def test_write_keeps_line_endings_exactly(ctx: ToolContext, project: Path) -> None:
+    await WriteTool().run(WriteInput(file_path="lf.txt", content="a\nb\n"), ctx)
+    assert (project / "lf.txt").read_bytes() == b"a\nb\n"
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX symlink semantics")
+async def test_context_resolves_symlinked_roots(tmp_path: Path) -> None:
+    real = tmp_path / "real"
+    real.mkdir()
+    link = tmp_path / "link"
+    link.symlink_to(real)
+    c = ToolContext(cwd=link, project_root=link)
+    assert c.cwd == real and c.resolve("a.txt") == real / "a.txt"

@@ -67,7 +67,7 @@ async def cached_model_info(
     """LiteLLM model info (context window etc.), cached for a day. Best effort."""
     path = _cache_path(provider.name)
     try:
-        data = json.loads(path.read_text())
+        data = json.loads(path.read_text(encoding="utf-8"))
         if (
             time.time() - data.get("fetched_at", 0) < MODEL_INFO_TTL
             and data.get("base_url") == provider.base_url
@@ -82,7 +82,8 @@ async def cached_model_info(
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(
-            json.dumps({"fetched_at": time.time(), "base_url": provider.base_url, "models": info})
+            json.dumps({"fetched_at": time.time(), "base_url": provider.base_url, "models": info}),
+            encoding="utf-8",
         )
     except OSError:
         pass

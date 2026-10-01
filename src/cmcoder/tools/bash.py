@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pydantic import Field
 
+from ..compat import SHELL_HELP, find_shell
 from .base import Tool, ToolContext, ToolInput, ToolResult, truncate_middle
 from .shell import PersistentShell
 
@@ -43,7 +44,10 @@ class BashTool(Tool):
 
     async def run(self, args: BashInput, ctx: ToolContext) -> ToolResult:
         if ctx.shell is None:
-            ctx.shell = PersistentShell(ctx.cwd)
+            shell = find_shell()
+            if shell is None:
+                return ToolResult(f"No shell available. {SHELL_HELP}", is_error=True)
+            ctx.shell = PersistentShell(ctx.cwd, shell)
         res = await ctx.shell.run(args.command, float(args.timeout_seconds or DEFAULT_TIMEOUT))
         out = truncate_middle(res.output.rstrip("\n"))
         if res.exit_code not in (0, None):

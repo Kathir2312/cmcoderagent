@@ -109,7 +109,8 @@ class WriteTool(Tool):
         existed = path.exists()
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(args.content, encoding="utf-8")
+            # newline="": write exactly what was given (no LF -> CRLF translation on Windows).
+            path.write_text(args.content, encoding="utf-8", newline="")
         except OSError as e:
             return ToolResult(f"Cannot write {path}: {e}", is_error=True)
         ctx.mark_read(path)

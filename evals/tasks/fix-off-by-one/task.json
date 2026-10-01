@@ -1,6 +1,6 @@
 {
   "prompt": "The mean() function in stats.py returns wrong results. Fix it and make sure the tests pass.",
-  "check": "python3 -m unittest -q",
+  "check": "\"$PYTHON\" -m unittest -q",
   "permission_mode": "bypassPermissions",
   "max_turns": 20
 }

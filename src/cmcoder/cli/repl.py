@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import asyncio
 import difflib
-import signal
 from contextlib import suppress
 from typing import Any
 
@@ -23,6 +22,7 @@ from rich.syntax import Syntax
 from rich.text import Text
 
 from .. import __version__
+from ..compat import InterruptHandler
 from ..config.settings import Settings, config_dir
 from ..core.agent import Agent, PermissionAnswer, PermissionRequest
 from ..core.permissions import MODES
@@ -60,6 +60,7 @@ class Repl:
         self._buffer = ""
         self._last_prompt_tokens = 0
         self._turn_task: asyncio.Task[None] | None = None
+        self._interrupt: InterruptHandler | None = None
 
     # -- rendering helpers ------------------------------------------------
 
@@ -257,8 +258,8 @@ class Repl:
 
     def _arm_interrupt(self) -> None:
         task = self._turn_task
-        if task is not None and not task.done():
-            asyncio.get_running_loop().add_signal_handler(signal.SIGINT, task.cancel)
+        if task is not None and not task.done() and self._interrupt is not None:
+            self._interrupt.arm(task.cancel)
 
     async def _run_turn(self, prompt: str) -> None:
         assert self.agent is not None
@@ -271,8 +272,8 @@ class Repl:
 
         task = asyncio.create_task(consume())
         self._turn_task = task
+        self._interrupt = InterruptHandler(asyncio.get_running_loop())
         self._arm_interrupt()
-        loop = asyncio.get_running_loop()
         try:
             await task
         except asyncio.CancelledError:
@@ -283,7 +284,8 @@ class Repl:
             )
         finally:
             self._turn_task = None
-            loop.remove_signal_handler(signal.SIGINT)
+            self._interrupt.disarm()
+            self._interrupt = None
             self._stop_status()
             self._stop_live()
 

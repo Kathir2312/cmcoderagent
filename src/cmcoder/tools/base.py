@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 from pydantic import BaseModel, ConfigDict
 
+from ..compat import from_shell_path
 from ..providers.messages import ToolSpec
 
 if TYPE_CHECKING:
@@ -38,8 +39,14 @@ class ToolContext:
     read_files: dict[Path, int] = field(default_factory=dict)
     shell: PersistentShell | None = None
 
+    def __post_init__(self) -> None:
+        # Compare like with like: tool paths are resolved, so the roots must be
+        # too (Windows 8.3 short names, macOS /tmp -> /private/tmp, symlinks).
+        self.cwd = self.cwd.resolve()
+        self.project_root = self.project_root.resolve()
+
     def resolve(self, file_path: str) -> Path:
-        p = Path(file_path).expanduser()
+        p = Path(from_shell_path(file_path)).expanduser()
         if not p.is_absolute():
             p = self.cwd / p
         return p.resolve()
