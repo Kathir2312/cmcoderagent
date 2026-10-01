@@ -91,8 +91,6 @@ Remote model server — cloud API, or Ollama / vLLM / LM Studio / llama.cpp on a
 - *Distribution*: users need Python 3.12+ until the standalone binary exists; `cmcoder doctor` checks the environment.
 - *Persistent shell for Bash*: `asyncio` subprocess with sentinel markers to detect command end and capture exit codes; Windows support later.
 
-### Packages
-
 ### 3.2 Repository layout
 
 ```
