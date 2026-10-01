@@ -1,0 +1,16 @@
+{
+  "providers": {
+    "corp": {
+      "baseUrl": "https://aiXIngerence.localnw.ae/v1",
+      "auth": { "type": "apiKey" },
+      "caCertPath": null
+    }
+  },
+  "model": "corp:qwen3-27b",
+  "smallFastModel": "corp:qwen3-7b",
+  "permissions": {
+    "allow": ["Bash(npm test:*)", "Bash(pytest:*)"],
+    "deny": [],
+    "defaultMode": "default"
+  }
+}

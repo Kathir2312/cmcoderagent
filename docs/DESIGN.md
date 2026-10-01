@@ -1,6 +1,6 @@
 # cmcoderagent — Design
 
-Status: **Draft for discussion** · Scope: architecture and roadmap only (no code yet)
+Status: **Phase 0 implemented** (see §16.1) · Scope: architecture and roadmap
 
 cmcoderagent is an agentic coding assistant that runs on the developer's
 machine. Its behaviour and user experience mirror Claude Code (CLI and VS Code
@@ -21,7 +21,7 @@ shell commands) runs locally; the model is always reached over the network.
 | D3 | Local-only or mixed? | **Mirror Claude Code**: online by default with any OpenAI-compatible endpoint, cloud or self-hosted. No telemetry backend; a single switch disables all non-essential traffic. |
 | D4 | Primary wire protocol | **OpenAI Chat Completions.** Ollama is reached through its OpenAI-compatible `/v1` endpoint. |
 | D5 | Shared/team model server | **Out of scope for now** on our side (no multi-user features). The client still copes with whatever auth and rate limits the remote server applies. |
-| D6 | Language / stack | **Python 3.12+ for the core engine and CLI**; TypeScript only for the VS Code extension, which VS Code requires. See §3.1. |
+| D6 | Language / stack | **Python 3.11+ for the core engine and CLI**; TypeScript only for the VS Code extension, which VS Code requires. See §3.1. |
 | D7 | How the IDE uses the agent | The VS Code extension **runs the Python CLI as a child process** and talks to it over JSON over stdio, as Claude Code does. There is one engine. |
 | D8 | Where the model runs | **Never on the dev machine.** Always a remote URL, so TLS, auth headers, corporate proxies/CAs, latency and network errors are first-class concerns (§4.3–4.5). |
 | D9 | Reference deployment | A model server **on the company network**, reached over HTTPS through an internal domain name: `https://aiXIngerence.localnw.ae` (spelling to be confirmed). This is a user/project setting, never hard-coded. See §4.6. |
@@ -73,7 +73,7 @@ Remote model server — cloud API, or Ollama / vLLM / LM Studio / llama.cpp on a
 
 | Area | Choice | Why |
 |---|---|---|
-| Language | **Python 3.12+**, fully type-hinted | Your preference; good fit for an I/O-bound agent |
+| Language | **Python 3.11+**, fully type-hinted | Your preference; good fit for an I/O-bound agent |
 | Concurrency | `asyncio` | Streaming, parallel tool calls, subprocesses and cancellation in one model |
 | Packaging / env | `uv` + `pyproject.toml` (hatchling) | Fast installs, lockfile, `uv tool install cmcoder` |
 | HTTP | `httpx` (async, HTTP/2) + `httpx-sse` | Full control of streaming and server quirks; proxy and custom CA support |
@@ -95,7 +95,7 @@ Remote model server — cloud API, or Ollama / vLLM / LM Studio / llama.cpp on a
 
 **Python-specific risks and mitigations**
 - *Startup time* (imports can add hundreds of ms): lazy-import heavy modules; keep `--protocol stdio` mode lean, since VS Code starts it once per session anyway.
-- *Distribution*: users need Python 3.12+ until the standalone binary exists; `cmcoder doctor` checks the environment.
+- *Distribution*: users need Python 3.11+ until the standalone binary exists; `cmcoder doctor` checks the environment.
 - *Persistent shell for Bash*: `asyncio` subprocess with sentinel markers to detect command end and capture exit codes; Windows support later.
 
 ### 3.2 Repository layout
@@ -426,11 +426,43 @@ Started early, because quality depends heavily on the model:
 
 | Phase | Scope | Done when |
 |---|---|---|
-| **0 — Foundations** | Python package skeleton (uv, ruff, pyright, pytest), protocol types, provider layer + OpenAI-compatible adapter (TLS, headers, retries), model profiles, agent loop, Read/Write/Edit/Glob/Grep/Bash, basic TUI, `-p`, `doctor`, mock server, first ~20 eval tasks | Fixes a simple bug end-to-end against a remote Ollama and one hosted OpenAI-compatible endpoint |
-| **1 — Daily driver** | Permissions + rules, sessions/resume, memory files, auto-compaction, prompted-tool fallback and repair, edit-format variants, `doctor`, TodoWrite, checkpoints | Comfortable for daily use on a real repo |
+| **0 — Foundations** | Python package skeleton (uv, ruff, pyright, pytest), protocol types, provider layer + OpenAI-compatible adapter (TLS, headers, retries), model profiles, agent loop, Read/Write/Edit/Glob/Grep/Bash, basic TUI, `-p`, `doctor`, mock server, first ~20 eval tasks | Fixes a simple bug end-to-end against the LiteLLM gateway with the reference Qwen3 models |
+| **1 — Daily driver** | Textual TUI, sessions/resume, auto-compaction, small/fast model jobs (titles, summaries), prompted-tool fallback and repair, edit-format variants, TodoWrite, checkpoints | Comfortable for daily use on a real repo |
 | **2 — VS Code** | `--protocol stdio`, generated TS protocol types, extension, webview chat, native diffs, IDE context and tools | Same task behaves the same in CLI and VS Code |
 | **3 — Extensibility** | MCP client, hooks, custom slash commands, subagents (`Task`) with per-role models, skills, Bash sandbox | Teams can customise it without forking |
 | **4 — Hardening** | SSO auth provider (e.g. Okta/OIDC) if needed, Responses API / Anthropic adapters, OpenTelemetry, enterprise policy, standalone binary + platform-specific VSIX, Windows support | Release candidate |
+
+### 16.1 Phase 0 status
+
+Delivered:
+- **Provider:** OpenAI-compatible streaming adapter on httpx (tool-call assembly, `reasoning_content` and
+  `<think>` splitting, usage or estimates, LiteLLM cost header, `/models`, `/model/info`); error
+  classification (auth, budget, rate limit, context length, TLS, DNS) with hints; retries with backoff and
+  `Retry-After`; OS trust store via `truststore` plus `caCertPath`; proxy and custom headers.
+- **Auth:** API key from `CMCODER_API_KEY` or OS keychain (`cmcoder login`/`logout`), with a 0600 file
+  fallback where no keychain exists; `AuthProvider` interface ready for SSO.
+- **Model profiles:** built-in Qwen3 large/small profiles, user overrides, server-reported limits.
+- **Agent loop:** tool-argument repair and validation, unknown-tool and repeated-call handling, permission
+  flow (ask / allow always / deny with feedback), max turns, context-usage warning, clean history after
+  interrupts and errors. Read-only tools still run one at a time.
+- **Tools:** Read, Write, Edit (read-before-write, staleness check, CRLF-safe), Glob and Grep (ripgrep),
+  Bash (persistent shell, timeouts that kill the process group, stdin closed).
+- **Permissions:** the four modes, allow/deny rules, safe read-only commands, chained-command protection,
+  secret-file protection, rules saved to `settings.local.json`.
+- **Settings and memory:** layered settings + env vars; `CMCODER.md`/`AGENTS.md`/`CMCODER.local.md`.
+- **CLI:** interactive REPL (prompt_toolkit + rich: streaming Markdown, permission dialogs with diffs,
+  Shift+Tab modes, Ctrl+C interrupt, `/help /model /mode /clear /cost /exit`); `-p` with text/json/stream-json
+  and piped stdin; `doctor` (local tools, proxy, DNS, TCP, TLS chain and issuer, key, models, model info,
+  streaming latency, thinking switch, tool calling); `models`; `protocol-schema`.
+- **Testing:** unit, CLI end-to-end, TLS against a generated private CA, and pseudo-terminal REPL tests,
+  all against the scripted mock server; eval runner with 5 tasks (mock and real-model modes); CI workflow.
+
+Changed from the plan:
+- **Python 3.11+** instead of 3.12+, so it runs on more corporate machines.
+- **Basic TUI uses prompt_toolkit + rich**; the Textual UI moves to Phase 1.
+- **5 eval tasks**, not ~20; the rest are added in Phase 1 alongside real-model runs.
+- **Not yet verified against the real gateway and Qwen3 models**, which this development environment cannot
+  reach. The first step on the company network is `cmcoder doctor`, then `evals/run.py`.
 
 ## 17. Open questions
 

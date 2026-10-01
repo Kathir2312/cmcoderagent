@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ripgrep
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: uv sync
+      - name: Lint
+        run: |
+          uv run ruff check src tests evals
+          uv run ruff format --check src tests evals
+      - name: Type check
+        run: uv run pyright
+      - name: Tests
+        run: uv run pytest -q
+      - name: Evals (scripted model)
+        run: uv run python evals/run.py --mock

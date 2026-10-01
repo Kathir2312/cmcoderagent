@@ -1,0 +1,6 @@
+{
+  "prompt": "Rename the function get_usr to get_user everywhere in this project.",
+  "check": "! grep -rn get_usr --include='*.py' . && python3 -c \"from app import main; assert main() == {'id': 1}\"",
+  "permission_mode": "bypassPermissions",
+  "max_turns": 20
+}

@@ -1,0 +1,16 @@
+[
+ {
+  "tool_calls": [
+   {
+    "name": "Grep",
+    "arguments": {
+     "pattern": "MAX_RETRIES",
+     "output_mode": "content"
+    }
+   }
+  ]
+ },
+ {
+  "content": "7"
+ }
+]
