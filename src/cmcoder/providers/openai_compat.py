@@ -29,6 +29,7 @@ from .messages import (
     Usage,
 )
 from .profiles import ModelProfile
+from .thinking import CLOSE as CLOSE_TAG
 from .thinking import ThinkSplitter
 
 # --- Errors ------------------------------------------------------------------
@@ -106,6 +107,9 @@ def classify_http_error(
 ) -> ProviderError:
     msg = _error_message(body)
     low = msg.lower()
+    raw = (body.decode("utf-8", "replace") if isinstance(body, bytes) else body).lower()
+    # LiteLLM reports some auth failures with status 400 and type "auth_error".
+    auth_like = '"auth_error"' in raw or "authentication error" in low or "invalid api key" in low
     err: ProviderError
     if "budget" in low:
         err = BudgetExceeded(
@@ -113,7 +117,7 @@ def classify_http_error(
             status=status,
             hint="Contact the LiteLLM admin to raise the key's budget.",
         )
-    elif status in (401, 403):
+    elif status in (401, 403) or auth_like:
         err = AuthFailed(
             f"Authentication failed ({status}): {msg}",
             status=status,
@@ -233,6 +237,8 @@ class OpenAICompatProvider:
         self.auth = auth
         self.client = client
         self.max_retries = max_retries
+        # Models seen to omit the opening <think> (detected automatically).
+        self.open_think_models: set[str] = set()
 
     async def aclose(self) -> None:
         await self.client.aclose()
@@ -352,7 +358,7 @@ class OpenAICompatProvider:
                         raise err
                     started = True
                     cost = _parse_cost(resp.headers)
-                    async for ev in self._parse_stream(resp, profile, body, cost):
+                    async for ev in self._parse_stream(resp, profile, body, cost, thinking):
                         yield ev
                     return
             except ProviderError as err:
@@ -373,10 +379,21 @@ class OpenAICompatProvider:
         profile: ModelProfile,
         body: dict[str, Any],
         cost: float | None,
+        thinking: bool | None = None,
     ) -> AsyncIterator[StreamEvent]:
-        splitter = ThinkSplitter() if profile.reasoning in ("auto", "think-tags") else None
+        requested = str(body.get("model", ""))
+        starts_open = thinking is not False and (
+            profile.reasoning == "think-open"
+            or (profile.reasoning == "auto" and requested in self.open_think_models)
+        )
+        splitter = (
+            ThinkSplitter(starts_open=starts_open)
+            if profile.reasoning in ("auto", "think-tags", "think-open")
+            else None
+        )
         text: list[str] = []
-        reasoning: list[str] = []
+        field_reasoning: list[str] = []  # from reasoning_content / reasoning fields
+        tag_reasoning: list[str] = []  # from <think> tags inside content
         calls: dict[int, dict[str, str]] = {}
         usage: Usage | None = None
         finish: str | None = None
@@ -390,7 +407,7 @@ class OpenAICompatProvider:
                     text.append(p)
                     events.append(TextDelta(p))
                 else:
-                    reasoning.append(p)
+                    tag_reasoning.append(p)
                     events.append(ReasoningDelta(p))
             return events
 
@@ -420,7 +437,7 @@ class OpenAICompatProvider:
                 delta = choice.get("delta") or choice.get("message") or {}
                 r = delta.get("reasoning_content") or delta.get("reasoning")
                 if isinstance(r, str) and r:
-                    reasoning.append(r)
+                    field_reasoning.append(r)
                     yield ReasoningDelta(r)
                 c = delta.get("content")
                 if isinstance(c, str) and c:
@@ -449,8 +466,22 @@ class OpenAICompatProvider:
                     text.append(p)
                     yield TextDelta(p)
                 else:
-                    reasoning.append(p)
+                    tag_reasoning.append(p)
                     yield ReasoningDelta(p)
+        content = "".join(text)
+        if splitter and starts_open and not splitter.saw_close:
+            # Expected </think> never came: the model didn't think this time,
+            # so what looked like reasoning is the answer.
+            content = "".join(tag_reasoning) + content
+            tag_reasoning = []
+        elif splitter and not splitter.saw_open and CLOSE_TAG in content:
+            # The template opened <think> for the model (Qwen3 Thinking-2507):
+            # move the text before </think> to reasoning, and start "open"
+            # for this model from now on.
+            before, _, after = content.partition(CLOSE_TAG)
+            tag_reasoning.insert(0, before)
+            content = after.lstrip()
+            self.open_think_models.add(requested)
 
         tool_calls: list[ToolCall] = []
         seen_ids: set[str] = set()
@@ -464,18 +495,16 @@ class OpenAICompatProvider:
             seen_ids.add(call_id)
             tool_calls.append(ToolCall(call_id, entry["name"], entry["arguments"]))
 
-        content = "".join(text)
+        reasoning = "".join(field_reasoning) + "".join(tag_reasoning)
         if usage is None:
             usage = Usage(
                 prompt_tokens=estimate_tokens(json.dumps(body.get("messages", []))),
-                completion_tokens=estimate_tokens(content + "".join(reasoning))
+                completion_tokens=estimate_tokens(content + reasoning)
                 + sum(estimate_tokens(tc.arguments) for tc in tool_calls),
                 estimated=True,
             )
         usage.cost = cost
-        msg = Message(
-            role="assistant", content=content, tool_calls=tool_calls, reasoning="".join(reasoning)
-        )
+        msg = Message(role="assistant", content=content, tool_calls=tool_calls, reasoning=reasoning)
         yield StreamDone(message=msg, usage=usage, finish_reason=finish, model=model)
 
 

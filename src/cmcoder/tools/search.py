@@ -18,6 +18,7 @@ from typing import Literal
 import pathspec
 from pydantic import Field
 
+from ..sensitive import is_secret, ripgrep_exclude_globs
 from .base import Tool, ToolContext, ToolInput, ToolResult, truncate_middle
 
 MAX_GLOB_RESULTS = 100
@@ -141,8 +142,13 @@ def python_glob(root: Path, pattern: str) -> list[Path]:
     ]
 
 
+MAX_FALLBACK_FILE_BYTES = 10 * 1024 * 1024
+
+
 def _read_text_file(path: Path) -> str | None:
     try:
+        if path.stat().st_size > MAX_FALLBACK_FILE_BYTES:
+            return None  # like a binary file: too large for the built-in search
         data = path.read_bytes()
     except OSError:
         return None
@@ -151,8 +157,10 @@ def _read_text_file(path: Path) -> str | None:
     return data.decode("utf-8", "replace")
 
 
-def python_grep(args: GrepInput, target: Path, cwd: Path) -> tuple[list[str], str | None]:
-    """Returns (output lines, error)."""
+def python_grep(
+    args: GrepInput, target: Path, cwd: Path, project_root: Path | None = None
+) -> tuple[list[str], str | None]:
+    """Returns (output lines, error). Secret files under `project_root` are skipped."""
     flags = re.IGNORECASE if args.case_insensitive else 0
     if args.multiline:
         flags |= re.DOTALL | re.MULTILINE
@@ -171,6 +179,8 @@ def python_grep(args: GrepInput, target: Path, cwd: Path) -> tuple[list[str], st
         files = list(walk_files(target, deadline, include=glob_spec))
     if glob_spec is not None:
         files = [f for f in files if glob_spec.match_file(f.relative_to(base).as_posix())]
+    if project_root is not None:
+        files = [f for f in files if not is_secret(f, project_root)]
     if args.type:
         exts = TYPE_EXTENSIONS.get(args.type)
         if exts is None:
@@ -327,7 +337,9 @@ class GrepTool(Tool):
             if rg:
                 lines, error = await self._ripgrep(rg, args, target, ctx)
             else:
-                lines, error = await asyncio.to_thread(python_grep, args, target, ctx.cwd)
+                lines, error = await asyncio.to_thread(
+                    python_grep, args, target, ctx.cwd, ctx.project_root
+                )
         except TimeoutError:
             return ToolResult("Grep timed out; narrow the path or pattern.", is_error=True)
         if error:
@@ -339,7 +351,9 @@ class GrepTool(Tool):
         if len(lines) > len(shown):
             body += f"\n\n({len(lines) - len(shown)} more lines not shown; raise head_limit or narrow the search)"
         unit = "files" if args.output_mode == "files_with_matches" else "lines"
-        return ToolResult(truncate_middle(body), summary=f"{len(lines)} {unit}")
+        return ToolResult(
+            truncate_middle(body, ctx.max_output_chars), summary=f"{len(lines)} {unit}"
+        )
 
     async def _ripgrep(
         self, rg: str, args: GrepInput, target: Path, ctx: ToolContext
@@ -361,6 +375,9 @@ class GrepTool(Tool):
             argv += ["--glob", args.glob]
         if args.type:
             argv += ["--type", args.type]
+        # After the user's glob: in ripgrep the last matching glob wins. (Globs
+        # don't filter an explicitly named file; the permission check covers that.)
+        argv += ripgrep_exclude_globs(target, ctx.project_root)
         argv += ["--regexp", args.pattern, "--", str(target)]
         code, out, err = await _run(argv, ctx.cwd)
         if code == 1:

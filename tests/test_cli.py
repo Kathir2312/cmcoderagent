@@ -182,3 +182,20 @@ def test_version(project: Path, flag: str) -> None:
         timeout=30,
     )
     assert r.returncode == 0 and r.stdout.strip()
+
+
+def test_settings_env_reaches_bash_commands(mock_server: Any, project: Path) -> None:
+    (project / ".cmcoder").mkdir()
+    (project / ".cmcoder/settings.json").write_text(
+        json.dumps({"env": {"CMCODER_TEST_FLAG": "from-settings"}})
+    )
+    server = mock_server(
+        [
+            {"tool_calls": [{"name": "Bash", "arguments": {"command": "echo $CMCODER_TEST_FLAG"}}]},
+            {"content": "ok"},
+        ]
+    )
+    r = cli(["-p", "show flag", "--permission-mode", "bypassPermissions"], project, server)
+    assert r.returncode == 0, r.stderr
+    tool_msg = [m for m in server.requests[1]["messages"] if m["role"] == "tool"][0]
+    assert tool_msg["content"] == "from-settings"

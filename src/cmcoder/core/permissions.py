@@ -7,19 +7,24 @@ Rule syntax:
   Edit(src/**)         file tools on paths matching a gitignore-style pattern,
                        relative to the project root. Edit rules also cover Write.
 
-Order of evaluation: deny rules > allow rules > built-in secret-file protection
-> the permission mode's defaults.
+Order of evaluation: deny rules > protected paths (always ask before editing
+cmcoder settings or .git, except in bypassPermissions) > allow rules > built-in
+secret-file protection > the permission mode's defaults.
 """
 
 from __future__ import annotations
 
 import re
+import shlex
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
 import pathspec
 
+from ..config.settings import config_dir
+from ..sensitive import is_secret
 from ..tools.base import Tool, ToolContext
 
 MODES = ("default", "acceptEdits", "plan", "bypassPermissions")
@@ -30,36 +35,52 @@ _RULE_RE = re.compile(r"^\s*([A-Za-z_][\w-]*)\s*(?:\((.*)\))?\s*$", re.S)
 # never approves a command containing them ("npm test; rm -rf ~").
 _SHELL_OPERATORS = (";", "&", "|", "`", "$(", ">", "<", "\n", "\r")
 
-# Read-only commands allowed without asking (when they contain no operators).
-SAFE_COMMANDS = (
-    "ls",
-    "pwd",
-    "git status",
-    "git diff",
-    "git log",
-    "git show",
-    "git branch",
-    "which",
-    "whoami",
-    "date",
-    "uname",
-)
+# Read-only commands allowed without asking. Each entry maps a command to a
+# check on its arguments, because some read-only commands have writing options
+# (`git branch -D`, `git diff --output=FILE`, `date -s`).
+_GIT_BRANCH_LIST_FLAGS = {
+    "-a",
+    "--all",
+    "-r",
+    "--remotes",
+    "-v",
+    "-vv",
+    "--verbose",
+    "-l",
+    "--list",
+    "--show-current",
+    "--no-color",
+    "--color",
+    "--merged",
+    "--no-merged",
+    "--contains",
+}
 
-# Files never sent to the model unless an explicit allow rule names them.
-SECRET_PATTERNS = (
-    ".env",
-    ".env.*",
-    "*.pem",
-    "*.key",
-    "*.p12",
-    "*.pfx",
-    "id_rsa*",
-    "id_ed25519*",
-    "secrets/**",
-    ".cmcoder/credentials.json",
-)
 
-_SECRET_SPEC = pathspec.GitIgnoreSpec.from_lines(SECRET_PATTERNS)
+def _git_read_args(args: list[str]) -> bool:
+    return not any(a.startswith(("--output", "--ext-diff")) for a in args)
+
+
+SAFE_COMMANDS: dict[str, Callable[[list[str]], bool]] = {
+    "ls": lambda args: True,
+    "pwd": lambda args: True,
+    "whoami": lambda args: True,
+    "uname": lambda args: True,
+    "which": lambda args: True,
+    "date": lambda args: all(a.startswith("+") for a in args),
+    "git status": _git_read_args,
+    "git diff": _git_read_args,
+    "git log": _git_read_args,
+    "git show": _git_read_args,
+    "git branch": lambda args: all(a in _GIT_BRANCH_LIST_FLAGS for a in args),
+}
+
+# Paths the agent may not change without asking, even in acceptEdits mode:
+# cmcoder's own settings (an agent could grant itself permissions) and git
+# internals (hooks run code on the next commit).
+PROTECTED_PATTERNS = (".cmcoder/**", ".git/**")
+
+_PROTECTED_SPEC = pathspec.GitIgnoreSpec.from_lines(PROTECTED_PATTERNS)
 
 
 class Decision(Enum):
@@ -119,9 +140,28 @@ def path_matches(spec: str, path: Path, root: Path) -> bool:
     return spec_.match_file(target)
 
 
-def is_secret(path: Path, root: Path) -> bool:
-    rel = _rel(path, root) or path.name
-    return _SECRET_SPEC.match_file(rel)
+def is_protected(path: Path, root: Path) -> bool:
+    if path.is_relative_to(config_dir().resolve()):
+        return True
+    rel = _rel(path, root)
+    return rel is not None and _PROTECTED_SPEC.match_file(rel)
+
+
+def is_safe_command(command: str) -> bool:
+    """Read-only commands that never need approval."""
+    command = command.strip()
+    if not command or has_shell_operators(command):
+        return False
+    try:
+        words = shlex.split(command)
+    except ValueError:
+        return False
+    for name, args_ok in SAFE_COMMANDS.items():
+        n = len(name.split())
+        # The command must start with the exact words, e.g. no `git -c x=y diff`.
+        if words[:n] == name.split():
+            return args_ok(words[n:])
+    return False
 
 
 class PermissionPolicy:
@@ -162,6 +202,18 @@ class PermissionPolicy:
         for rule in self.deny:
             if self._rule_matches(rule, tool, target, ctx):
                 return PermissionCheck(Decision.DENY, f"denied by rule {rule}")
+        if (
+            tool.name in FILE_EDIT_TOOLS
+            and isinstance(target, Path)
+            and self.mode != "bypassPermissions"
+            and is_protected(target, ctx.project_root)
+        ):
+            # Before allow rules: a broad rule like Edit(**) must not let the
+            # agent rewrite its own permissions or git hooks.
+            return PermissionCheck(
+                Decision.ASK,
+                f"{ctx.display(target)} is protected (cmcoder settings or git internals)",
+            )
         for rule in self.allow:
             if self._rule_matches(rule, tool, target, ctx):
                 return PermissionCheck(Decision.ALLOW, f"allowed by rule {rule}")
@@ -184,9 +236,7 @@ class PermissionPolicy:
             return PermissionCheck(Decision.ALLOW)
 
         if tool.name == "Bash":
-            command = str(target or "")
-            safe = any(command_matches(f"{c}:*", command) for c in SAFE_COMMANDS)
-            if safe:
+            if is_safe_command(str(target or "")):
                 return PermissionCheck(Decision.ALLOW)
             if self.mode == "plan":
                 return PermissionCheck(

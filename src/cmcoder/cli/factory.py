@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -25,7 +26,7 @@ from ..providers.auth import ApiKeyAuth, AuthProvider, NoAuth
 from ..providers.openai_compat import OpenAICompatProvider, ProviderError
 from ..providers.profiles import ModelProfile, resolve_profile
 from ..providers.transport import TransportOptions, build_client
-from ..tools.base import ToolContext
+from ..tools.base import ToolContext, output_budget_chars
 from ..tools.registry import default_tools
 
 MODEL_INFO_TTL = 24 * 3600
@@ -111,6 +112,8 @@ async def resolve_model_profile(
 
 
 async def build_agent(settings: Settings, opts: AgentOptions) -> Agent:
+    # Settings `env` applies to the session, including commands the Bash tool runs.
+    os.environ.update({k: str(v) for k, v in settings.env.items()})
     cwd = opts.cwd.resolve()
     root = find_project_root(cwd)
     provider_name, model = settings.resolve_model(opts.model)
@@ -142,7 +145,11 @@ async def build_agent(settings: Settings, opts: AgentOptions) -> Agent:
         profile,
         default_tools(),
         policy,
-        ToolContext(cwd=cwd, project_root=root),
+        ToolContext(
+            cwd=cwd,
+            project_root=root,
+            max_output_chars=output_budget_chars(profile.context_window),
+        ),
         system_prompt,
         max_turns=opts.max_turns or settings.max_turns,
         ask=opts.ask,

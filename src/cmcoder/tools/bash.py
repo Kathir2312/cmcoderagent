@@ -49,7 +49,7 @@ class BashTool(Tool):
                 return ToolResult(f"No shell available. {SHELL_HELP}", is_error=True)
             ctx.shell = PersistentShell(ctx.cwd, shell)
         res = await ctx.shell.run(args.command, float(args.timeout_seconds or DEFAULT_TIMEOUT))
-        out = truncate_middle(res.output.rstrip("\n"))
+        out = truncate_middle(res.output.rstrip("\n"), ctx.max_output_chars)
         if res.exit_code not in (0, None):
             out = f"{out}\n\nExit code {res.exit_code}" if out else f"Exit code {res.exit_code}"
         if not out:

@@ -20,7 +20,9 @@ class ModelProfile(BaseModel):
     )
     parallel_tool_calls: bool = Field(False, alias="parallelToolCalls")
     # auto: split <think> tags out of content and accept reasoning fields.
-    reasoning: Literal["none", "field", "think-tags", "auto"] = "auto"
+    # think-open: output starts inside <think> (Qwen3 Thinking-2507 templates);
+    # "auto" detects this and switches by itself.
+    reasoning: Literal["none", "field", "think-tags", "think-open", "auto"] = "auto"
     # How to turn thinking off for quick calls.
     thinking_switch: Literal["chat_template_kwargs", "prompt", "none"] = Field(
         "none", alias="thinkingSwitch"

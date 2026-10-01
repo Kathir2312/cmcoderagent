@@ -246,3 +246,51 @@ async def test_context_resolves_symlinked_roots(tmp_path: Path) -> None:
     link.symlink_to(real)
     c = ToolContext(cwd=link, project_root=link)
     assert c.cwd == real and c.resolve("a.txt") == real / "a.txt"
+
+
+async def test_grep_never_prints_secret_files(
+    ctx: ToolContext, project: Path, search_engine: str
+) -> None:
+    (project / "secrets").mkdir()
+    (project / "secrets/db.txt").write_text("password=hunter2\n")
+    (project / "server.key").write_text("hunter2 PRIVATE KEY\n")
+    (project / "src").mkdir()
+    (project / "src/deploy.pem").write_text("hunter2\n")
+    (project / "src/app.py").write_text("print('hunter2 is not a secret here')\n")
+    grep = GrepTool()
+    res = await grep.run(GrepInput(pattern="hunter2", output_mode="content"), ctx)
+    assert res.content.splitlines() == [
+        f"{os.path.join('src', 'app.py')}:1:print('hunter2 is not a secret here')"
+    ]
+    # Also when searching a subfolder, and with an explicit glob.
+    sub = await grep.run(GrepInput(pattern="hunter2", path="src", glob="*"), ctx)
+    assert sub.content.strip() == os.path.join("src", "app.py")
+
+
+async def test_read_pages_long_files_at_line_boundaries(project: Path) -> None:
+    ctx = ToolContext(cwd=project, project_root=project, max_output_chars=2_000)
+    (project / "long.py").write_text("".join(f"line_{i} = {i}\n" for i in range(1, 1001)))
+    first = await ReadTool().run(ReadInput(file_path="long.py"), ctx)
+    assert len(first.content) <= 2_000
+    body, _, footer = first.content.rpartition("\n\n")
+    last_shown = int(body.splitlines()[-1].split("\t")[0])
+    assert f"offset={last_shown + 1}" in footer and "of 1000" in footer
+    assert "truncated" not in first.content  # no silent middle cut
+    nxt = await ReadTool().run(ReadInput(file_path="long.py", offset=last_shown + 1), ctx)
+    assert nxt.content.startswith(f"{last_shown + 1:>6}\tline_{last_shown + 1} =")
+
+
+async def test_read_refuses_huge_files(
+    ctx: ToolContext, project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("cmcoder.tools.files.MAX_READ_BYTES", 100)
+    (project / "big.log").write_text("x" * 200)
+    res = await ReadTool().run(ReadInput(file_path="big.log"), ctx)
+    assert res.is_error and "Grep" in res.content
+
+
+def test_output_budget_scales_with_context() -> None:
+    from cmcoder.tools.base import output_budget_chars
+
+    assert output_budget_chars(32_768) < output_budget_chars(131_072) == 30_000
+    assert output_budget_chars(4_096) >= 4_000

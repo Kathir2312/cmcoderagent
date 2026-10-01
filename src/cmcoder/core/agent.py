@@ -24,12 +24,12 @@ from ..providers.messages import (
     ToolSpec,
     Usage,
 )
-from ..providers.openai_compat import ProviderError
+from ..providers.openai_compat import ContextTooLong, ProviderError
 from ..providers.profiles import ModelProfile
 from ..tools.base import Tool, ToolContext, ToolResult, truncate_middle
+from .context import WARN_RATIO, ContextBudget
 from .permissions import Decision, PermissionPolicy, suggest_rule
 
-CONTEXT_WARN_RATIO = 0.85
 MAX_IDENTICAL_CALLS = 3
 
 
@@ -134,6 +134,19 @@ class Agent:
         self.system_prompt = system_prompt
         self.messages: list[Message] = [Message.system(system_prompt)]
         self.usage = Usage()
+        self._budget: ContextBudget | None = None
+
+    def budget(self) -> ContextBudget:
+        """Context budget for the current model profile (rebuilt after /model)."""
+        b = self._budget
+        p = self.profile
+        if b is None or b.window != p.context_window or b.max_output != p.max_output:
+            nb = ContextBudget(p.context_window, p.max_output, self.tool_specs())
+            if b is not None:
+                nb.chars_per_token = b.chars_per_token
+            self._budget = nb
+        assert self._budget is not None
+        return self._budget
 
     def init_event(self) -> ev.SystemInit:
         return ev.SystemInit(
@@ -168,6 +181,8 @@ class Agent:
         last_text = ""
         steps = 0
         recent_calls: list[str] = []
+        warned_context = False
+        overflow_retried = False
 
         def result(subtype: str, text: str, is_error: bool = False) -> ev.Result:
             return ev.Result(
@@ -195,10 +210,34 @@ class Agent:
                     return
                 steps += 1
 
+                budget = self.budget()
+                if not budget.fits(self.messages):
+                    removed = budget.free_space(self.messages)
+                    if removed:
+                        yield ev.Warning(
+                            message=f"Context window nearly full: removed {removed} older tool "
+                            "output(s). Use /clear to start fresh (summarisation arrives in Phase 1)."
+                        )
+                    if not budget.fits(self.messages):
+                        yield ev.Error(
+                            kind="context_length",
+                            message="The conversation no longer fits in the model's context window "
+                            f"({budget.window} tokens).",
+                            hint="Use /clear to start a new conversation, or ask the admin to serve "
+                            "the model with a longer context.",
+                        )
+                        yield result("error", "context window full", is_error=True)
+                        return
+                request_chars = budget.request_chars(self.messages)
+
                 done: StreamDone | None = None
                 try:
                     async for sev in self.provider.stream_chat(
-                        self.model, self.messages, self.tool_specs(), self.profile
+                        self.model,
+                        self.messages,
+                        self.tool_specs(),
+                        self.profile,
+                        max_tokens=budget.max_tokens(self.messages),
                     ):
                         if isinstance(sev, TextDelta):
                             yield ev.AssistantDelta(text=sev.text)
@@ -206,6 +245,27 @@ class Agent:
                             yield ev.ReasoningDelta(text=sev.text)
                         elif isinstance(sev, StreamDone):
                             done = sev
+                except ContextTooLong as e:
+                    # Our estimate was too low: be more conservative, free more, retry once.
+                    if not overflow_retried:
+                        overflow_retried = True
+                        steps -= 1
+                        budget.chars_per_token *= 0.75
+                        removed = budget.free_space(self.messages, keep_recent=1)
+                        yield ev.Warning(
+                            message=f"The server reported the context window was exceeded; "
+                            f"removed {removed} older tool output(s) and retrying."
+                        )
+                        continue
+                    yield ev.Error(
+                        kind=e.kind,
+                        message=str(e).split("\n  hint:")[0],
+                        hint="Use /clear to start a new conversation.",
+                    )
+                    if self.messages[-1].role == "user" and steps == 1:
+                        self.messages.pop()
+                    yield result("error", str(e), is_error=True)
+                    return
                 except ProviderError as e:
                     yield ev.Error(kind=e.kind, message=str(e).split("\n  hint:")[0], hint=e.hint)
                     # Drop the user message if the model never answered, so retrying works cleanly.
@@ -238,10 +298,13 @@ class Agent:
                     cost=done.usage.cost,
                     context_window=self.profile.context_window,
                 )
-                if done.usage.prompt_tokens > CONTEXT_WARN_RATIO * self.profile.context_window:
+                if not done.usage.estimated:
+                    budget.calibrate(request_chars, done.usage.prompt_tokens)
+                if not warned_context and budget.usage_ratio(done.usage.prompt_tokens) > WARN_RATIO:
+                    warned_context = True
                     yield ev.Warning(
-                        message=f"Context is {done.usage.prompt_tokens}/{self.profile.context_window} "
-                        "tokens. Use /clear to start fresh (automatic compaction arrives in Phase 1)."
+                        message=f"Context is {done.usage.prompt_tokens}/{budget.window} tokens. "
+                        "Older tool output is dropped automatically as it fills; /clear starts fresh."
                     )
                 if msg.content:
                     last_text = msg.content
@@ -302,7 +365,7 @@ class Agent:
         )
 
         def finish(res: ToolResult) -> ev.ToolResult:
-            content = truncate_middle(res.content)
+            content = truncate_middle(res.content, self.ctx.max_output_chars)
             self.messages.append(Message.tool_result(call.id, call.name, content))
             return ev.ToolResult(
                 id=call.id,

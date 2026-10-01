@@ -9,6 +9,7 @@ from pydantic import Field
 from .base import Tool, ToolContext, ToolInput, ToolResult
 
 DEFAULT_READ_LINES = 2000
+MAX_READ_BYTES = 20 * 1024 * 1024
 MAX_LINE_CHARS = 2000
 
 
@@ -18,6 +19,11 @@ def _read_text(path: Path) -> tuple[str | None, str | None]:
     if path.is_dir():
         return None, f"{path} is a directory. Use Glob or `ls` via Bash to list it."
     try:
+        if path.stat().st_size > MAX_READ_BYTES:
+            return None, (
+                f"{path} is larger than {MAX_READ_BYTES // (1024 * 1024)} MB. Use Grep to find the "
+                "relevant part, or Bash with head/tail/sed -n to read a slice."
+            )
         data = path.read_bytes()
     except FileNotFoundError:
         return None, f"File does not exist: {path}"
@@ -70,16 +76,24 @@ class ReadTool(Tool):
                 is_error=True,
             )
         end = min(len(lines), start + (args.limit or DEFAULT_READ_LINES))
-        out = []
+        budget = ctx.max_output_chars - 200  # room for the footer
+        out: list[str] = []
+        size = 0
         for n in range(start, end):
             line = lines[n]
             if len(line) > MAX_LINE_CHARS:
                 line = line[:MAX_LINE_CHARS] + " ... [line truncated]"
-            out.append(f"{n + 1:>6}\t{line}")
+            numbered = f"{n + 1:>6}\t{line}"
+            if out and size + len(numbered) + 1 > budget:
+                end = n  # stop at a line boundary rather than cutting out the middle
+                break
+            out.append(numbered)
+            size += len(numbered) + 1
         body = "\n".join(out)
         if end < len(lines):
             body += (
-                f"\n\n(showing lines {start + 1}-{end} of {len(lines)}; use offset to read more)"
+                f"\n\n(showing lines {start + 1}-{end} of {len(lines)}; call Read with "
+                f"offset={end + 1} to continue, or use Grep to find what you need)"
             )
         return ToolResult(body, summary=f"Read {end - start} lines")
 

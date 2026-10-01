@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 from typing import Any
 
@@ -258,3 +259,101 @@ async def test_reasoning_never_sent_back(mock_server: Any, project: Path) -> Non
     finally:
         await agent.close()
     assert "private" not in str(server.requests[1]["messages"])
+
+
+# --- Context window management (found in validation: Qwen3 at 32K) ---
+
+
+def small_window_agent(server: Any, project: Path, window: int, max_output: int = 2048) -> Agent:
+    profile = resolve_profile(
+        "qwen3-27b", overrides=[{"contextWindow": window, "maxOutput": max_output}]
+    )
+    agent = make_agent(server, project, mode="bypassPermissions")
+    agent.profile = profile
+    agent.ctx.max_output_chars = 6_000
+    return agent
+
+
+async def test_max_tokens_never_exceeds_remaining_context(mock_server: Any, project: Path) -> None:
+    (project / "big.txt").write_text("".join(f"row {i:05d} " + "x" * 50 + "\n" for i in range(400)))
+    reads = [
+        {
+            "tool_calls": [
+                {
+                    "name": "Read",
+                    "arguments": {"file_path": "big.txt", "offset": 1 + 90 * i, "limit": 90},
+                }
+            ]
+        }
+        for i in range(6)
+    ]
+    server = mock_server([*reads, {"content": "done"}])
+    agent = small_window_agent(server, project, window=12_000, max_output=4_000)
+    events = await run(agent, "read it all")
+    assert result(events).subtype == "success"
+    for body in server.requests:
+        # The mock counts prompt tokens the way a server would (from the JSON
+        # request); prompt + requested output must fit the window.
+        server_prompt_tokens = len(json.dumps(body["messages"]) + json.dumps(body["tools"])) / 3.5
+        assert server_prompt_tokens + body["max_tokens"] <= 12_000
+    assert min(b["max_tokens"] for b in server.requests) < 4_000  # it shrank as context filled
+
+
+async def test_old_tool_output_is_dropped_when_window_fills(
+    mock_server: Any, project: Path
+) -> None:
+    from cmcoder.core.context import ELIDED_RESULT
+
+    (project / "big.txt").write_text("".join(f"row {i:05d} " + "y" * 60 + "\n" for i in range(600)))
+    reads = [
+        {
+            "tool_calls": [
+                {
+                    "name": "Read",
+                    "arguments": {"file_path": "big.txt", "offset": 1 + 80 * i, "limit": 80},
+                }
+            ]
+        }
+        for i in range(7)
+    ]
+    server = mock_server([*reads, {"content": "done"}])
+    agent = small_window_agent(server, project, window=10_000)
+    events = await run(agent, "read everything")
+    assert result(events).subtype == "success"
+    warnings = [e.message for e in events if isinstance(e, ev.Warning)]
+    assert any("removed" in w and "older tool output" in w for w in warnings), warnings
+    last_messages = server.requests[-1]["messages"]
+    tool_contents = [m["content"] for m in last_messages if m["role"] == "tool"]
+    assert ELIDED_RESULT in tool_contents  # old outputs dropped...
+    assert tool_contents[-1] != ELIDED_RESULT  # ...recent ones kept
+
+
+async def test_server_context_error_is_retried_after_freeing_space(
+    mock_server: Any, project: Path
+) -> None:
+    (project / "a.txt").write_text("z" * 3000)
+    server = mock_server(
+        [
+            {"tool_calls": [{"name": "Read", "arguments": {"file_path": "a.txt"}}]},
+            {"tool_calls": [{"name": "Read", "arguments": {"file_path": "a.txt", "offset": 1}}]},
+            {
+                "error": {
+                    "status": 400,
+                    "message": "This model's maximum context length is 32768 tokens. However, you requested 40000 tokens.",
+                }
+            },
+            {"content": "recovered"},
+        ]
+    )
+    events = await run(make_agent(server, project, mode="bypassPermissions"), "go")
+    assert result(events).result == "recovered"
+    assert any("exceeded" in e.message for e in events if isinstance(e, ev.Warning))
+
+
+async def test_prompt_too_big_for_window_fails_clearly(mock_server: Any, project: Path) -> None:
+    server = mock_server([{"content": "never"}])
+    agent = small_window_agent(server, project, window=4_000)
+    events = await run(agent, "x" * 50_000)
+    err = next(e for e in events if isinstance(e, ev.Error))
+    assert err.kind == "context_length" and err.hint and "/clear" in err.hint
+    assert server.requests == []  # never sent a request that can't fit

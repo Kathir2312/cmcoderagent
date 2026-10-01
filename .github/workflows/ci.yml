@@ -44,3 +44,19 @@ jobs:
         run: uv run pytest -q
       - name: Evals (scripted model)
         run: uv run python evals/run.py --mock
+
+  litellm-gateway:
+    name: integration (real LiteLLM proxy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: uv sync
+      - name: Install LiteLLM proxy (separate venv)
+        run: |
+          uv venv /tmp/litellm --python 3.12
+          uv pip install --python /tmp/litellm/bin/python 'litellm[proxy]'
+      - name: Gateway tests
+        run: LITELLM_BIN=/tmp/litellm/bin/litellm uv run pytest -q tests/test_litellm_integration.py

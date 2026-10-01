@@ -76,14 +76,14 @@ Remote model server — cloud API, or Ollama / vLLM / LM Studio / llama.cpp on a
 | Language | **Python 3.11+**, fully type-hinted | Your preference; good fit for an I/O-bound agent |
 | Concurrency | `asyncio` | Streaming, parallel tool calls, subprocesses and cancellation in one model |
 | Packaging / env | `uv` + `pyproject.toml` (hatchling) | Fast installs, lockfile, `uv tool install cmcoder` |
-| HTTP | `httpx` (async, HTTP/2) + `httpx-sse` | Full control of streaming and server quirks; proxy and custom CA support |
+| HTTP | `httpx` (async; HTTP/1.1 keep-alive, HTTP/2 optional later) with a built-in SSE parser | Full control of streaming and server quirks; proxy and custom CA support |
 | Data models | `pydantic` v2 | Tool input schemas (gives JSON Schema for free), protocol messages, settings |
 | CLI args | `typer` | Subcommands and flags with little code |
 | TUI | `textual` + `rich` | Closest Python equivalent to Ink: streaming Markdown, panels, dialogs |
 | Line editing (fallback/simple mode) | `prompt_toolkit` | History, multiline input, key bindings |
 | MCP | official `mcp` Python SDK | Maintained client for stdio and HTTP transports |
 | Search | bundled/required `ripgrep`; `pathspec` for `.gitignore` | Speed; same behaviour as Claude Code's Grep/Glob |
-| Token estimates | `tiktoken` (approximate for non-OpenAI models) | Context budgeting when the server doesn't report usage |
+| Token estimates | Character counts, calibrated against the prompt tokens the server reports (§9) | No tokenizer download, which would fail on a locked-down network (tiktoken fetches its vocabulary at runtime) |
 | Fuzzy edit matching | `rapidfuzz`, `difflib` | Edit fallback for whitespace drift |
 | Secrets | `keyring` | API keys in the OS keychain |
 | Corporate certificates | `truststore` | Trust the OS certificate store (internal CAs) without extra setup |
@@ -191,8 +191,8 @@ Later, optional adapters: OpenAI **Responses API**, native **Anthropic** (for pr
 
 ### 4.5 Network and transport (remote model)
 - TLS verification always on; custom CA bundle via `caCertPath` / `SSL_CERT_FILE` for corporate or self-signed servers.
-- `HTTPS_PROXY` / `NO_PROXY` respected; optional mTLS client certificate.
-- Connection pooling and HTTP/2 keep-alive to cut per-turn latency.
+- `HTTPS_PROXY` / `NO_PROXY` respected. (mTLS client certificates: later, if the gateway needs them.)
+- Connection pooling with keep-alive to cut per-turn latency.
 - Plain `http://` to a non-localhost host prints a one-time warning, since code is sent in clear text.
 - `cmcoder doctor` tests reachability, TLS, auth, the model list (`GET /models`), streaming and tool calling, and reports latency to first token.
 
@@ -364,6 +364,9 @@ Tool descriptions are part of the prompt tiers: the `compact` tier uses shorter 
 - **Rules:** `allow` / `ask` / `deny` lists in settings, e.g. `Bash(npm test:*)`, `Edit(src/**)`, `WebFetch(domain:github.com)`, `mcp__server__tool`. Deny wins.
 - **Interactive prompt:** allow once / allow always (saved to `settings.local.json`) / deny with a reason for the model.
 - **Working directory boundary:** writes outside the project and added directories need approval.
+- **Protected paths:** editing `.cmcoder/**`, `.git/**` or `~/.cmcoder/` always asks (even in `acceptEdits`, even with a broad allow rule), so the agent can't grant itself permissions or plant git hooks. Only `bypassPermissions` skips this.
+- **Read-only commands** run without asking only with read-only arguments: `git branch` lists but `git branch -D` asks; `git diff --output=…` and `date -s` ask; `git -c … diff` asks.
+- **Secret files** (`.env*`, `*.pem`, `*.key`, `/secrets`, …) are blocked for Read/Edit/Grep targets and excluded from project-wide Grep results. Bash is not filtered: `cat .env` asks in the default modes.
 - **Bash sandbox (opt-in, then default):** bubblewrap on Linux, Seatbelt on macOS; filesystem writes limited to the project, network limited to an allowlist.
 - Commands are checked for injection tricks (e.g. `;`, `$(...)`, `&&` chains) before an allow rule is applied to them.
 
@@ -371,9 +374,10 @@ Tool descriptions are part of the prompt tiers: the `compact` tier uses shorter 
 
 - **Memory files**, loaded at startup in this order:
   enterprise → `~/.cmcoder/CMCODER.md` → `CMCODER.md` in each folder from the repo root down to the current one → `CMCODER.local.md`.
-  For compatibility, `AGENTS.md` is also read if present. `#` in the prompt adds a line to memory.
-- **Auto-compaction** at a set share of the model profile's `contextWindow` (default 80%): the small/fast model summarises older turns; the recent turns and the todo list are kept as they are. `/compact [focus]` runs it by hand.
-- **Tool-output limits:** long output is cut to head and tail, with the full text saved to a file the model can read if it needs to.
+  For compatibility, `AGENTS.md` is also read if present. (`#` in the prompt to add a line to memory: Phase 1.)
+- **Context budget (Phase 0):** each request's `max_tokens` is capped to the room left in the window (servers like vLLM reject prompt + `max_tokens` > window). When the window fills, the oldest large tool outputs are replaced with a short note (keeping the latest ones), as Claude Code clears old tool results; a server context-length error triggers one retry after freeing more. Token counts are estimated from characters and calibrated against the server's reported usage.
+- **Auto-compaction (Phase 1)** at a set share of the model profile's `contextWindow` (default 80%): the small/fast model summarises older turns; the recent turns and the todo list are kept as they are. `/compact [focus]` runs it by hand.
+- **Tool-output limits:** each output is capped at about a fifth of the context window (≤ 30k chars). Read stops at a line boundary and tells the model which `offset` to continue from; command output keeps head and tail. (Saving the full text to a file for later reading: Phase 1.)
 - `@file` mentions attach file contents; `/context` shows how the window is being used.
 
 ## 10. Sessions
@@ -412,8 +416,8 @@ Keys: `model`, `providers`, `modelProfiles`, `permissions`, `hooks`, `env`, `mcp
 
 ### 13.2 Agent Protocol (stdio)
 `cmcoder --protocol stdio` reads and writes newline-delimited JSON:
-- **Client → agent:** `user_message`, `interrupt`, `permission_response`, `set_mode`, `set_model`, `ide_context` (open file, selection, diagnostics), `ide_tool_result`.
-- **Agent → client:** `assistant_delta`, `reasoning_delta`, `tool_call`, `tool_result`, `permission_request`, `ide_tool_request`, `todo_update`, `usage`, `turn_end`, `error`.
+- **Agent → client (implemented in Phase 0, `src/cmcoder/protocol/events.py`):** `system_init`, `assistant_delta`, `reasoning_delta`, `assistant_message`, `tool_use`, `tool_result`, `permission_denied`, `usage`, `warning`, `error`, `result`. Phase 2 adds `permission_request`, `ide_tool_request` and `todo_update`.
+- **Client → agent (Phase 2):** `user_message`, `interrupt`, `permission_response`, `set_mode`, `set_model`, `ide_context` (open file, selection, diagnostics), `ide_tool_result`.
 
 The protocol is versioned and has no VS Code-specific types, so other IDEs can use it later.
 
@@ -446,7 +450,7 @@ Started early, because quality depends heavily on the model:
 | Phase | Scope | Done when |
 |---|---|---|
 | **0 — Foundations** | Python package skeleton (uv, ruff, pyright, pytest), protocol types, provider layer + OpenAI-compatible adapter (TLS, headers, retries), model profiles, agent loop, Read/Write/Edit/Glob/Grep/Bash, basic TUI, `-p`, `doctor`, mock server, first ~20 eval tasks | Fixes a simple bug end-to-end against the LiteLLM gateway with the reference Qwen3 models |
-| **1 — Daily driver** | Textual TUI, sessions/resume, auto-compaction, small/fast model jobs (titles, summaries), prompted-tool fallback and repair, edit-format variants, TodoWrite, checkpoints | Comfortable for daily use on a real repo |
+| **1 — Daily driver** | **Auto-compaction first** (the 32K default window is the binding constraint, §16.2), Textual TUI, sessions/resume, small/fast model jobs (titles, summaries), prompted-tool fallback and repair, edit-format variants, TodoWrite, checkpoints | Comfortable for daily use on a real repo |
 | **2 — VS Code** | `--protocol stdio`, generated TS protocol types, extension, webview chat, native diffs, IDE context and tools | Same task behaves the same in CLI and VS Code |
 | **3 — Extensibility** | MCP client, hooks, custom slash commands, subagents (`Task`) with per-role models, skills, Bash sandbox | Teams can customise it without forking |
 | **4 — Hardening** | SSO auth provider (e.g. Okta/OIDC) if needed, Responses API / Anthropic adapters, OpenTelemetry, enterprise policy, standalone binary + platform-specific VSIX, Windows sandboxing | Release candidate |
@@ -455,26 +459,30 @@ Started early, because quality depends heavily on the model:
 
 Delivered:
 - **Provider:** OpenAI-compatible streaming adapter on httpx (tool-call assembly, `reasoning_content` and
-  `<think>` splitting, usage or estimates, LiteLLM cost header, `/models`, `/model/info`); error
+  `<think>` splitting including Qwen3 Thinking-2507 output that has only `</think>`, usage or estimates, LiteLLM cost header, `/models`, `/model/info`); error
   classification (auth, budget, rate limit, context length, TLS, DNS) with hints; retries with backoff and
   `Retry-After`; OS trust store via `truststore` plus `caCertPath`; proxy and custom headers.
 - **Auth:** API key from `CMCODER_API_KEY` or OS keychain (`cmcoder login`/`logout`), with a 0600 file
   fallback where no keychain exists; `AuthProvider` interface ready for SSO.
 - **Model profiles:** built-in Qwen3 large/small profiles, user overrides, server-reported limits.
 - **Agent loop:** tool-argument repair and validation, unknown-tool and repeated-call handling, permission
-  flow (ask / allow always / deny with feedback), max turns, context-usage warning, clean history after
-  interrupts and errors. Read-only tools still run one at a time.
-- **Tools:** Read, Write, Edit (read-before-write, staleness check, CRLF-safe), Glob and Grep (ripgrep),
+  flow (ask / allow always / deny with feedback), max turns, context budget (`max_tokens` sized to the
+  window, old tool output dropped when full, retry on overflow), clean history after interrupts and errors. Read-only tools still run one at a time.
+- **Tools:** Read (pages long files), Write, Edit (read-before-write, staleness check, CRLF-safe), Glob and
+  Grep (ripgrep, or a built-in fallback with the same semantics),
   Bash (persistent shell, timeouts that kill the process group, stdin closed).
-- **Permissions:** the four modes, allow/deny rules, safe read-only commands, chained-command protection,
-  secret-file protection, rules saved to `settings.local.json`.
-- **Settings and memory:** layered settings + env vars; `CMCODER.md`/`AGENTS.md`/`CMCODER.local.md`.
+- **Permissions:** the four modes, allow/deny rules, read-only commands checked by argument, chained-command
+  protection, protected paths, secret-file protection (including Grep results), rules saved to
+  `settings.local.json`.
+- **Settings and memory:** layered settings + env vars (settings `env` applies to the session);
+  `CMCODER.md`/`AGENTS.md`/`CMCODER.local.md`.
 - **CLI:** interactive REPL (prompt_toolkit + rich: streaming Markdown, permission dialogs with diffs,
   Shift+Tab modes, Ctrl+C interrupt, `/help /model /mode /clear /cost /exit`); `-p` with text/json/stream-json
   and piped stdin; `doctor` (local tools, proxy, DNS, TCP, TLS chain and issuer, key, models, model info,
   streaming latency, thinking switch, tool calling); `models`; `protocol-schema`.
-- **Testing:** unit, CLI end-to-end, TLS against a generated private CA, and pseudo-terminal REPL tests,
-  all against the scripted mock server; eval runner with 5 tasks (mock and real-model modes); CI workflow.
+- **Testing:** unit, CLI end-to-end, TLS against a generated private CA, pseudo-terminal REPL tests, and
+  gateway tests through a real LiteLLM proxy; eval runner with 5 tasks (mock and real-model modes); CI on
+  Linux, macOS and Windows.
 
 Changed from the plan:
 - **Python 3.11+** instead of 3.12+, so it runs on more corporate machines.
@@ -483,6 +491,23 @@ Changed from the plan:
 - **5 eval tasks**, not ~20; the rest are added in Phase 1 alongside real-model runs.
 - **Not yet verified against the real gateway and Qwen3 models**, which this development environment cannot
   reach. The first step on the company network is `cmcoder doctor`, then `evals/run.py`.
+
+### 16.2 Validation of the plan and Phase 0
+
+Done in this repository, without access to the company network:
+
+| What | How | Result |
+|---|---|---|
+| Plan → code traceability | Every Phase 0 item in §16 checked against the code and tests | Delivered, except the deviations listed in §16.1 |
+| LiteLLM assumptions (§4.7) | Real LiteLLM proxy in front of a scripted vLLM-style backend (`tests/test_litellm_integration.py`, own CI job) | `/v1/models` and `/model/info` as assumed; `chat_template_kwargs`, `parallel_tool_calls`, `stream_options` forwarded; `reasoning_content`, tool-call deltas and usage streamed back; `doctor` and `-p` pass end to end |
+| Internal CA (§4.6) | Tests generate a private root CA and serve HTTPS with it | Clear error without the CA; works with `caCertPath`; `doctor` names the issuer |
+| Windows (§3.3) | CI on windows-latest with Git Bash, without ripgrep | Full suite and evals pass |
+| Adversarial review | Probes against permissions, search, provider and agent | Found and fixed: write-capable "safe" commands, editable settings/git hooks in `acceptEdits`, secrets visible via project-wide Grep, credentials readable on approval, Qwen3 Thinking-2507 output (`</think>` only), LiteLLM auth errors as HTTP 400, and the context issues below |
+| Context window (Qwen3, 32K) | Measured: ~1.9K tokens fixed overhead; one 2,000-line Read ≈ 8.5K tokens | Requests with a fixed `max_tokens=8192` failed once the prompt passed ~24.5K, and one overflow broke the session. Fixed with the context budget (§9). |
+
+Not validated (needs the company network): the real gateway URL and certificate, the real Qwen3 models' tool-calling quality, and real latency. Run `cmcoder doctor` and `uv run python evals/run.py` there.
+
+**Main plan risk:** a 32K window is small for an agent. Phase 0 now degrades gracefully (drops old tool output), but long tasks will lose context. Mitigations, in order: ask the admin to serve a longer context if GPU memory allows; make auto-compaction the first Phase 1 item; keep the small model for side jobs only.
 
 ## 17. Open questions
 
@@ -496,3 +521,4 @@ Changed from the plan:
    - whether a corporate HTTP proxy sits between dev machines and the server;
    - which backend LiteLLM routes to (vLLM, Ollama, …), in case tool calling needs enabling there.
 7. Which SSO provider, if any, and when (D13).
+8. Can the gateway serve the Qwen3 models with a context longer than 32K (§16.2)? Which Qwen3 variants exactly (hybrid, Instruct-2507 or Thinking-2507)? This affects thinking handling and default profiles.

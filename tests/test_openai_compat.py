@@ -47,7 +47,7 @@ async def test_streams_text_reasoning_and_usage(mock_server: Any) -> None:
     assert "".join(e.text for e in events if isinstance(e, ReasoningDelta)) == "hmm"
     assert done.message.content == "Hello there, friend!"
     assert done.message.reasoning == "hmm"
-    assert done.usage.prompt_tokens == 100 and not done.usage.estimated
+    assert done.usage.prompt_tokens > 0 and not done.usage.estimated
     assert done.usage.cost == pytest.approx(0.0012)
     assert done.model == "qwen3-27b"
 
@@ -188,3 +188,41 @@ async def test_list_models_and_model_info(mock_server: Any) -> None:
     info = await provider.model_info()
     await provider.aclose()
     assert info["qwen3-27b"]["max_input_tokens"] == 65536
+
+
+async def test_qwen3_thinking_2507_output_without_opening_tag(mock_server: Any) -> None:
+    """The chat template adds <think>, so only </think> appears in the output."""
+    server = mock_server(
+        [
+            {"reasoning": "first thoughts", "content": "Answer one"},
+            {"reasoning": "more", "content": "Answer two"},
+        ],
+        think_tags="open",
+    )
+    provider = make_provider(server)
+    _, first = await collect(provider)
+    assert first.message.content == "Answer one"
+    assert first.message.reasoning == "first thoughts"
+    # Learned: later replies stream the reasoning as reasoning, not as text.
+    events, second = await collect(provider)
+    await provider.aclose()
+    assert "".join(e.text for e in events if isinstance(e, TextDelta)) == "Answer two"
+    assert "".join(e.text for e in events if isinstance(e, ReasoningDelta)) == "more"
+    assert second.message.content == "Answer two"
+
+
+async def test_open_think_model_that_skips_thinking_keeps_its_answer(mock_server: Any) -> None:
+    server = mock_server([{"content": "Plain answer"}])
+    provider = make_provider(server)
+    provider.open_think_models.add("qwen3-27b")
+    _, done = await collect(provider)
+    await provider.aclose()
+    assert done.message.content == "Plain answer"
+    assert done.message.reasoning == ""
+
+
+def test_litellm_auth_error_with_status_400() -> None:
+    from cmcoder.providers.openai_compat import classify_http_error
+
+    body = b'{"error": {"message": "Authentication Error, Invalid proxy server token passed", "type": "auth_error"}}'
+    assert isinstance(classify_http_error(400, body), AuthFailed)

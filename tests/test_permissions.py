@@ -121,3 +121,77 @@ def test_suggested_rules_actually_match(ctx: ToolContext) -> None:
 def test_invalid_mode_rejected() -> None:
     with pytest.raises(ValueError):
         PermissionPolicy("yolo")
+
+
+# --- Found in validation: auto-approved commands that write, protected paths, credentials ---
+
+
+@pytest.mark.parametrize(
+    ("command", "expected"),
+    [
+        ("git branch", Decision.ALLOW),
+        ("git branch -a -v", Decision.ALLOW),
+        ("git branch -D main", Decision.ASK),
+        ("git branch -m new-name", Decision.ASK),
+        ("git diff HEAD~1", Decision.ALLOW),
+        ("git diff --output=/tmp/x", Decision.ASK),
+        ("git log --oneline -5", Decision.ALLOW),
+        ("git -c core.pager=evil diff", Decision.ASK),
+        ("date", Decision.ALLOW),
+        ("date +%Y-%m-%d", Decision.ALLOW),
+        ("date -s 2020-01-01", Decision.ASK),
+        ("ls -la src", Decision.ALLOW),
+        ("ls; rm -rf /", Decision.ASK),
+    ],
+)
+def test_safe_commands_are_really_read_only(
+    ctx: ToolContext, command: str, expected: Decision
+) -> None:
+    assert check(PermissionPolicy(), BashTool(), bash(command), ctx) == expected
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        ".cmcoder/settings.json",
+        ".cmcoder/settings.local.json",
+        ".git/hooks/pre-commit",
+        ".git/config",
+    ],
+)
+def test_protected_paths_always_ask_before_edits(ctx: ToolContext, path: str) -> None:
+    write = WriteInput(file_path=path, content="x")
+    assert check(PermissionPolicy("acceptEdits"), WriteTool(), write, ctx) == Decision.ASK
+    # Even a broad allow rule doesn't let the agent rewrite its own permissions.
+    assert (
+        check(PermissionPolicy("acceptEdits", allow=["Edit"]), WriteTool(), write, ctx)
+        == Decision.ASK
+    )
+    assert check(PermissionPolicy("plan"), WriteTool(), write, ctx) == Decision.ASK
+    # bypassPermissions means the user accepted the risk.
+    assert check(PermissionPolicy("bypassPermissions"), WriteTool(), write, ctx) == Decision.ALLOW
+    # Reading them is fine.
+    assert check(PermissionPolicy(), ReadTool(), ReadInput(file_path=path), ctx) == Decision.ALLOW
+
+
+def test_user_config_dir_is_protected_and_credentials_are_secret(ctx: ToolContext) -> None:
+    from cmcoder.config.settings import config_dir
+
+    creds = str(config_dir() / "credentials.json")
+    settings = str(config_dir() / "settings.json")
+    assert check(PermissionPolicy(), ReadTool(), ReadInput(file_path=creds), ctx) == Decision.DENY
+    assert (
+        check(PermissionPolicy("bypassPermissions"), ReadTool(), ReadInput(file_path=creds), ctx)
+        == Decision.DENY
+    )
+    edit = WriteInput(file_path=settings, content="{}")
+    assert check(PermissionPolicy("acceptEdits"), WriteTool(), edit, ctx) == Decision.ASK
+
+
+def test_secrets_folder_itself_is_secret(ctx: ToolContext) -> None:
+    from cmcoder.tools.search import GrepInput, GrepTool
+
+    assert (
+        check(PermissionPolicy(), GrepTool(), GrepInput(pattern="x", path="secrets"), ctx)
+        == Decision.DENY
+    )

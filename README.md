@@ -106,7 +106,14 @@ permission mode; Ctrl+C interrupts the current turn.
 
 Rules: `Read`, `Edit(src/**)` (also covers Write), `Bash(npm test:*)` (prefix), `Bash(git status)` (exact).
 Deny rules win over allow rules. Prefix rules never approve chained commands (`;`, `&&`, `|`, `$( )`, redirects).
-Files such as `.env`, `*.pem`, `*.key` and `secrets/**` are never read unless an allow rule names them.
+Files such as `.env`, `*.pem`, `*.key` and `secrets/` are never read (or shown in Grep results) unless an allow
+rule names them. Editing `.cmcoder/`, `.git/` or `~/.cmcoder/` always asks, except in `bypassPermissions`.
+
+### Context window
+
+Qwen3 is often served with a 32K-token window, which an agent fills quickly. cmcoder sizes each request to the
+room left, pages long files, and drops the oldest tool outputs when the window fills (you'll see a warning).
+`/clear` starts fresh. If you can, have the gateway serve a longer context; `cmcoder doctor` reports the window.
 
 **Privacy:** each turn sends your prompt, file contents the agent reads and command output to the configured model
 endpoint. LiteLLM admins may be able to see that traffic in gateway logs.
@@ -118,6 +125,7 @@ uv sync
 uv run pytest -q                       # unit, CLI, TLS and terminal (pty, not on Windows) tests
 uv run ruff check src tests evals && uv run pyright
 uv run python evals/run.py --mock      # eval harness with scripted replies
+LITELLM_BIN=/path/to/litellm uv run pytest tests/test_litellm_integration.py  # through a real LiteLLM proxy
 uv run python evals/run.py             # evals against your real endpoint/model
 uv run cmcoder protocol-schema         # Agent Protocol JSON Schema (for the VS Code extension)
 ```

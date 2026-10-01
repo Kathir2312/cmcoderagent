@@ -101,7 +101,12 @@ class Repl:
             self._live.update(Markdown(self._buffer))
         elif isinstance(event, ev.AssistantMessage):
             self._stop_status()
+            streamed = bool(self._buffer)
             self._stop_live()
+            if event.text and not streamed:
+                # Text that only arrived in the final message (e.g. a reply first
+                # streamed as reasoning, then reclassified) still gets shown.
+                c.print(Markdown(event.text))
         elif isinstance(event, ev.ToolUse):
             self._stop_status()
             c.print(Text("● ", style="cyan") + Text(event.label, style="bold"))

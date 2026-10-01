@@ -32,7 +32,7 @@ class MockState:
         models: list[str] | None = None,
         api_key: str | None = None,
         context_window: int = 32768,
-        think_tags: bool = False,
+        think_tags: bool | str = False,
     ) -> None:
         self.script = list(script)
         self.models = models or ["qwen3-27b", "qwen3-7b"]
@@ -49,7 +49,11 @@ class MockState:
         return {"content": "(mock script exhausted)"}
 
 
-def _chunks(reply: dict[str, Any], model: str, think_tags: bool) -> list[dict[str, Any]]:
+def _chunks(
+    reply: dict[str, Any], model: str, think_tags: bool | str, prompt_tokens: int = 100
+) -> list[dict[str, Any]]:
+    """think_tags: False = reasoning_content field; True = <think>..</think> in content;
+    "open" = like Qwen3 Thinking-2507, only the closing </think> appears."""
     cid = f"chatcmpl-{uuid.uuid4().hex[:8]}"
 
     def chunk(delta: dict[str, Any], finish: str | None = None) -> dict[str, Any]:
@@ -63,7 +67,10 @@ def _chunks(reply: dict[str, Any], model: str, think_tags: bool) -> list[dict[st
     out = [chunk({"role": "assistant"})]
     reasoning = reply.get("reasoning")
     if reasoning:
-        if think_tags:
+        if think_tags == "open":
+            out.append(chunk({"content": f"{reasoning}</th"}))
+            out.append(chunk({"content": "ink>\n\n"}))
+        elif think_tags:
             out.append(chunk({"content": "<thi"}))
             out.append(chunk({"content": f"nk>{reasoning}</th"}))
             out.append(chunk({"content": "ink>\n\n"}))
@@ -94,7 +101,10 @@ def _chunks(reply: dict[str, Any], model: str, think_tags: bool) -> list[dict[st
             out.append(chunk({"tool_calls": [{"index": idx, "function": {"arguments": piece}}]}))
     finish = "tool_calls" if reply.get("tool_calls") else reply.get("finish_reason", "stop")
     out.append(chunk({}, finish))
-    usage = reply.get("usage", {"prompt_tokens": 100, "completion_tokens": 20})
+    completion = len(reply.get("content") or "") + len(json.dumps(reply.get("tool_calls") or []))
+    usage = reply.get(
+        "usage", {"prompt_tokens": prompt_tokens, "completion_tokens": max(1, completion // 4)}
+    )
     out.append(
         {
             "id": cid,
@@ -187,7 +197,11 @@ def make_handler(state: MockState) -> type[BaseHTTPRequestHandler]:
             if "cost" in reply:
                 self.send_header("x-litellm-response-cost", str(reply["cost"]))
             self.end_headers()
-            for c in _chunks(reply, model, state.think_tags):
+            # Realistic usage (~3.5 chars per token), so context handling is exercised.
+            prompt_tokens = int(
+                len(json.dumps(body.get("messages", [])) + json.dumps(body.get("tools", []))) / 3.5
+            )
+            for c in _chunks(reply, model, state.think_tags, prompt_tokens):
                 self.wfile.write(f"data: {json.dumps(c)}\n\n".encode())
                 self.wfile.flush()
                 if reply.get("delay"):

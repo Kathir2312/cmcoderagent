@@ -18,6 +18,11 @@ if TYPE_CHECKING:
 MAX_RESULT_CHARS = 30_000
 
 
+def output_budget_chars(context_window: int) -> int:
+    """Per-tool-output size: about a fifth of the context window, capped at 30k chars."""
+    return max(4_000, min(MAX_RESULT_CHARS, int(context_window * 3 * 0.2)))
+
+
 class ToolInput(BaseModel):
     # Models sometimes add stray keys; ignore them rather than failing the call.
     model_config = ConfigDict(extra="ignore")
@@ -38,6 +43,9 @@ class ToolContext:
     # Resolved path -> mtime_ns when the agent last read (or wrote) it.
     read_files: dict[Path, int] = field(default_factory=dict)
     shell: PersistentShell | None = None
+    # Largest tool output kept in the conversation; set from the model's context
+    # window (smaller windows get smaller outputs).
+    max_output_chars: int = MAX_RESULT_CHARS
 
     def __post_init__(self) -> None:
         # Compare like with like: tool paths are resolved, so the roots must be

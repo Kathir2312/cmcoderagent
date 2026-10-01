@@ -3,6 +3,9 @@
 Qwen3 (and other open models) put reasoning in the content stream when the
 server has no reasoning parser enabled. Tags can be split across chunks, so the
 splitter holds back any tail that could be the start of a tag.
+
+Qwen3 "Thinking-2507" models get the opening <think> from the chat template,
+so their output contains only </think>; `starts_open=True` handles that.
 """
 
 from __future__ import annotations
@@ -20,10 +23,12 @@ def _partial_tag_suffix(text: str, tag: str) -> int:
 
 
 class ThinkSplitter:
-    def __init__(self) -> None:
+    def __init__(self, starts_open: bool = False) -> None:
         self._buf = ""
-        self._in_think = False
+        self._in_think = starts_open
         self._seen_text = False
+        self.saw_open = False
+        self.saw_close = False
 
     def feed(self, chunk: str) -> list[tuple[str, str]]:
         """Feed a content chunk; returns a list of ("text"|"reasoning", piece)."""
@@ -36,6 +41,7 @@ class ThinkSplitter:
                     self._emit(out, "reasoning", self._buf[:idx])
                     self._buf = self._buf[idx + len(CLOSE) :]
                     self._in_think = False
+                    self.saw_close = True
                     # Drop the blank lines models put after </think>.
                     self._buf = self._buf.lstrip("\n")
                     continue
@@ -48,6 +54,7 @@ class ThinkSplitter:
                 self._emit(out, "text", self._buf[:idx])
                 self._buf = self._buf[idx + len(OPEN) :]
                 self._in_think = True
+                self.saw_open = True
                 continue
             hold = _partial_tag_suffix(self._buf, OPEN)
             self._emit(out, "text", self._buf[: len(self._buf) - hold])

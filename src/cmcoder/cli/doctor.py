@@ -275,6 +275,21 @@ class Doctor:
             f"first token {ttft}, total {total:.1f}s, usage {usage}, "
             f"reasoning {'present' if done.message.reasoning else 'none'}",
         )
+        if model in provider.open_think_models:
+            self.report(
+                INFO,
+                f"{model}: output has only a closing </think> (Qwen3 Thinking-2507 style)",
+                "Handled automatically. A reasoning parser on the backend (vLLM "
+                "--reasoning-parser qwen3) would make it cleaner.",
+            )
+        if profile.context_window <= 32_768:
+            self.report(
+                WARN,
+                f"{model}: context window is {profile.context_window} tokens",
+                "Small for an agent: older tool output will be dropped often. If GPU memory allows, "
+                "ask the admin to serve a longer context (e.g. vLLM --max-model-len 65536 or more; "
+                "Qwen3 supports long context via YaRN).",
+            )
 
         # 2. thinking switch
         if profile.thinking_switch != "none":
