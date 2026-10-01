@@ -27,6 +27,9 @@ shell commands) runs locally; the model is always reached over the network.
 | D9 | Reference deployment | A model server **on the company network**, reached over HTTPS through an internal domain name: `https://aiXIngerence.localnw.ae` (spelling to be confirmed). This is a user/project setting, never hard-coded. See §4.6. |
 | D10 | Reference models | **Qwen3 ~7B** as the small/fast model and **Qwen3 ~27B** as the main model (exact IDs to be read from the server's `/v1/models`). See §5.1. |
 | D11 | Product and command name | Product **cmcoder**; command `cmcoder`; config folder `.cmcoder/`; memory file `CMCODER.md`. |
+| D12 | Model gateway | **LiteLLM proxy** exposing an OpenAI-compatible endpoint, with Qwen3 models behind it. See §4.7. |
+| D13 | Authentication | **API key now** (LiteLLM virtual key, sent as `Authorization: Bearer`). Built behind an auth-provider interface so SSO (e.g. Okta/OIDC) can be added later without touching the rest of the engine. |
+| D14 | TLS | Server uses **internal (company CA) certificates**. Trusted through the OS certificate store by default, with a CA-file override. |
 
 ## 2. Goals and non-goals
 
@@ -184,8 +187,8 @@ The first target environment, and the one evals and `doctor` are tuned for:
   "providers": {
     "corp": {
       "baseUrl": "https://aiXIngerence.localnw.ae/v1",  // confirm exact host and path
-      "apiKeyHelper": "…",                              // only if the server requires a key
-      "caCertPath": "/path/to/corp-root-ca.pem"         // if the cert is from an internal CA
+      "auth": { "type": "apiKey" },                     // key from CMCODER_API_KEY or OS keychain
+      "caCertPath": "/path/to/corp-root-ca.pem"         // optional; OS trust store is used first
     }
   },
   "model": "corp:<qwen3-27b-id>",
@@ -194,18 +197,61 @@ The first target environment, and the one evals and `doctor` are tuned for:
 ```
 
 Things this setup needs, all covered by §4.5:
-- **Internal certificate authority:** a certificate for a `.localnw.ae` name is
-  usually issued by the company's own CA. Python does not read the Windows or
-  macOS certificate store by default, so we use `truststore` to trust the OS
-  store automatically, with `caCertPath` as a fallback.
+- **Internal certificate authority (confirmed):** Python does not read the
+  Windows or macOS certificate store by default, so we use `truststore` to trust
+  the OS store automatically (where IT has already installed the company root CA),
+  with `caCertPath` / `SSL_CERT_FILE` as a fallback. `doctor` shows the
+  certificate chain and names the missing CA when verification fails.
+  Verification is never switched off. If the VS Code extension ever makes
+  HTTPS calls itself, Node needs `NODE_EXTRA_CA_CERTS`; today only the Python
+  CLI talks to the server.
 - **Internal DNS:** the name only resolves on the company network or VPN.
   `doctor` reports DNS failure separately from TLS and auth failures so users
   know whether to connect the VPN or fix a certificate.
 - **Proxies:** if a corporate proxy is set, `.localnw.ae` must be in `NO_PROXY`;
   `doctor` detects and warns about this.
-- **Authentication:** to be confirmed (none, static API key, or a gateway that
-  uses domain/AD sign-in). Static key and custom headers are supported from
-  Phase 0; domain sign-in (Kerberos/NTLM) would be added only if the gateway needs it.
+- **Authentication (confirmed: API key):** `cmcoder login` asks for the LiteLLM
+  key once and stores it in the OS keychain; `CMCODER_API_KEY` overrides it for
+  CI. The key is never written to settings files or session logs.
+
+**Auth-provider interface.** All requests get their credentials from one
+interface (`get_headers()`, `refresh()`, `on_401()`), so adding SSO later is a
+new provider, not a rewrite:
+
+| Provider | When | How |
+|---|---|---|
+| `apiKey` | Phase 0 | Static key from keychain/env, `Authorization: Bearer` |
+| `apiKeyHelper` | Phase 1 | Runs a command that prints a key (works with any company script) |
+| `oidc` (e.g. Okta) | Later, when needed | Device-code sign-in in the browser, token cached in keychain, refreshed automatically; LiteLLM validates the JWT |
+
+### 4.7 LiteLLM gateway specifics
+
+LiteLLM sits between cmcoder and the Qwen3 servers. What we use and handle:
+
+- **Model names are LiteLLM aliases** set by the admin (e.g. `qwen3-27b`), not
+  the underlying model files. `GET /v1/models` lists the aliases the key may use;
+  `/model/info` (when exposed) gives context window, max output and
+  function-calling support, which `doctor` uses to fill model profiles automatically.
+- **Tool calling still depends on the backend behind LiteLLM** (e.g. vLLM needs
+  its tool parser enabled). LiteLLM passes tools through but cannot add tool
+  calling to a backend that lacks it. `doctor --probe` tests it per model; the
+  prompted-tool fallback covers gaps.
+- **Qwen3 thinking switch:** sent as extra request fields (e.g.
+  `chat_template_kwargs.enable_thinking`). Whether LiteLLM forwards them
+  depends on its config, so `doctor` tests it and falls back to the `/no_think`
+  prompt switch.
+- **Reasoning text** may come back in a `reasoning_content` field (LiteLLM's
+  normalised form) or as `<think>` tags; both are handled (§4.2).
+- **Budgets and rate limits per key:** LiteLLM can reject requests when a key's
+  budget or rate limit is hit. These errors are shown clearly ("key budget
+  exceeded — contact the LiteLLM admin") and are not retried in a loop.
+- **Cost:** if LiteLLM returns a response-cost header, `/cost` shows it;
+  otherwise cost is token counts only.
+- **Fallbacks and retries:** LiteLLM may retry or route to a fallback model
+  itself; cmcoder keeps its own retries small to avoid multiplying them, and
+  records which model actually answered (from the response's `model` field).
+- **Privacy:** LiteLLM can log prompts and responses. The user docs must say
+  that the gateway admins may be able to see code sent to the model.
 
 Named **provider profiles** let users keep several endpoints (e.g. `local`,
 `openai`, `openrouter`) and switch between them with `/model local:qwen3-coder`.
@@ -384,7 +430,7 @@ Started early, because quality depends heavily on the model:
 | **1 — Daily driver** | Permissions + rules, sessions/resume, memory files, auto-compaction, prompted-tool fallback and repair, edit-format variants, `doctor`, TodoWrite, checkpoints | Comfortable for daily use on a real repo |
 | **2 — VS Code** | `--protocol stdio`, generated TS protocol types, extension, webview chat, native diffs, IDE context and tools | Same task behaves the same in CLI and VS Code |
 | **3 — Extensibility** | MCP client, hooks, custom slash commands, subagents (`Task`) with per-role models, skills, Bash sandbox | Teams can customise it without forking |
-| **4 — Hardening** | Responses API / Anthropic adapters, OpenTelemetry, enterprise policy, standalone binary + platform-specific VSIX, Windows support | Release candidate |
+| **4 — Hardening** | SSO auth provider (e.g. Okta/OIDC) if needed, Responses API / Anthropic adapters, OpenTelemetry, enterprise policy, standalone binary + platform-specific VSIX, Windows support | Release candidate |
 
 ## 17. Open questions
 
@@ -392,10 +438,9 @@ Started early, because quality depends heavily on the model:
 2. Licence and distribution (internal only vs. public PyPI/Marketplace).
 3. Windows support timing (sandbox and shell behaviour differ a lot).
 4. Default web search backend (needs an API key, or off by default?).
-5. ~~Reference models~~ — decided: Qwen3 ~27B (main) and ~7B (small/fast) (D10). Exact model IDs still to be confirmed from `/v1/models`.
-6. ~~Server location~~ — decided: company network, internal HTTPS domain (D9). Still to confirm:
-   - the exact hostname spelling and base path (`/v1`?);
-   - which server software runs the models (Ollama, vLLM, LM Studio, llama.cpp, or a gateway in front);
-   - whether it needs an API key or domain sign-in;
-   - whether its certificate is from an internal CA, and whether a corporate proxy sits in the way;
-   - the served context window for each model.
+5. ~~Reference models~~ — decided: Qwen3 family (D10). The exact LiteLLM aliases and context windows will be read from `/v1/models` and `/model/info` by `doctor`; not blocking.
+6. ~~Server, gateway, auth, TLS~~ — decided (D9, D12–D14). Still to confirm, not blocking Phase 0:
+   - the exact hostname spelling;
+   - whether a corporate HTTP proxy sits between dev machines and the server;
+   - which backend LiteLLM routes to (vLLM, Ollama, …), in case tool calling needs enabling there.
+7. Which SSO provider, if any, and when (D13).
