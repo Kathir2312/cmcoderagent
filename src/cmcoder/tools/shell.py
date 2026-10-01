@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import os
 import uuid
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -29,6 +30,9 @@ class PersistentShell:
         self.initial_cwd = cwd
         self.shell = shell
         self._proc: asyncio.subprocess.Process | None = None
+        # Killed shells still to be reaped, so their pipes are closed cleanly
+        # (Windows warns about unclosed transports otherwise).
+        self._killed: list[asyncio.subprocess.Process] = []
         self._lock = asyncio.Lock()
 
     async def _start(self) -> asyncio.subprocess.Process:
@@ -60,17 +64,20 @@ class PersistentShell:
 
     def _kill(self) -> None:
         proc, self._proc = self._proc, None
-        if proc and proc.returncode is None:
+        if proc is None:
+            return
+        if proc.returncode is None:
             kill_process_tree(proc.pid)
+        self._killed.append(proc)
 
     async def close(self) -> None:
-        proc = self._proc
         self._kill()
-        if proc:
-            try:
+        procs, self._killed = self._killed, []
+        for proc in procs:
+            with suppress(TimeoutError, ProcessLookupError):
                 await asyncio.wait_for(proc.wait(), 5)
-            except TimeoutError:
-                pass
+            if proc.stdin is not None:
+                proc.stdin.close()
 
     async def run(self, command: str, timeout: float) -> ShellResult:
         async with self._lock:

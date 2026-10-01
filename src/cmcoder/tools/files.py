@@ -14,6 +14,9 @@ MAX_LINE_CHARS = 2000
 
 def _read_text(path: Path) -> tuple[str | None, str | None]:
     """Return (text, error)."""
+    # Check first: on Windows, opening a directory raises PermissionError.
+    if path.is_dir():
+        return None, f"{path} is a directory. Use Glob or `ls` via Bash to list it."
     try:
         data = path.read_bytes()
     except FileNotFoundError:
