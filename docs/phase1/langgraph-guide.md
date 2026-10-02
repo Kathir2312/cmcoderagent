@@ -343,7 +343,60 @@ difference between checking at start-up and checking at the point of use.
 
 ## 6. Sessions and resume
 
-*Not started.*
+*Done.* Code: `src/cmcoder/core/sessions.py`, `Agent.save_session` / `Agent.resume`.
+
+### The LangGraph way
+
+This is what a **checkpointer** is for:
+
+```python
+from langgraph.checkpoint.sqlite import SqliteSaver
+
+graph = builder.compile(checkpointer=SqliteSaver.from_conn_string("sessions.db"))
+config = {"configurable": {"thread_id": "fix-login-bug"}}
+graph.invoke({"messages": [("user", "fix the login bug")]}, config)
+# later, even after a restart:
+graph.invoke({"messages": [("user", "and add a test")]}, config)   # same thread: continues
+```
+
+The checkpointer saves the **whole graph state after every super-step**
+(each node run), keyed by `thread_id`. Listing threads, picking one and
+cleaning up old ones is up to your app.
+
+### The cmcoder way
+
+| LangGraph | cmcoder |
+|---|---|
+| `thread_id` | session id (a UUID), the file name |
+| checkpointer (SQLite/Postgres) | one JSON Lines file per session, appended after every step |
+| state snapshot per super-step | a `message` record per new message; a `reset` record when history is replaced |
+| `graph.invoke(..., config)` on an existing thread | `cmcoder --continue` / `--resume ID` / `/resume` |
+| `graph.get_state(config)` | `sessions.load(path)` → messages + meta |
+| (your code) | `list_sessions`, titles, `cleanup(days)` |
+
+### Why they differ
+
+A checkpointer stores complete snapshots, which is ideal for branching and
+time travel (item 7) but heavy for a chat log. cmcoder **appends deltas** and
+only writes the full list when history is rewritten. A one-hour session stays
+a small text file you can read, `grep`, or attach to a bug report.
+
+Two problems the checkpointer doesn't solve for you, which every agent with
+tools has:
+- **A crash mid-tool** leaves an `AIMessage` with tool calls and no
+  `ToolMessage`s. Resuming that thread fails at the provider. cmcoder repairs
+  it on load (`repair`): every unanswered call gets an "Interrupted" result.
+- **What to persist.** cmcoder doesn't save the system prompt, so memory files
+  and settings are current on resume. It never saves credentials, and the
+  files are owner-only (0600) because transcripts contain code and command
+  output.
+
+### Exercise
+
+Compile the [Phase 0 LangGraph sketch](../phase0/langgraph-guide.md#5-cmcoder-written-in-langgraph-sketch)
+with `SqliteSaver`. Start a run that calls a slow tool and kill the process
+mid-tool, then resume the thread and read the error. Fix it with a node that
+does what `sessions.repair` does before the model is called.
 
 ## 7. Checkpoints and `/rewind`
 

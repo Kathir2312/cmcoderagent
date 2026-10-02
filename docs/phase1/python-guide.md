@@ -803,8 +803,134 @@ administrator prompt and `C:\Program Files\cmcoder\`.
 
 ## 6. Sessions and resume
 
-*Not started.* Will cover: JSON Lines files, saving and loading conversations,
-file permissions, and restoring a session cleanly after an interrupt.
+*Done.* Code: `src/cmcoder/core/sessions.py` (new), `Agent.save_session` /
+`Agent.resume` / `Agent.clear` (`core/agent.py`), `resume_session`
+(`cli/factory.py`), `--continue` / `--resume` (`cli/main.py`), `/resume`
+(`cli/repl.py`). Tests: `tests/test_sessions.py`, plus a `/resume` test in
+`tests/test_repl_pty.py`.
+
+### The problem
+
+Close the terminal and the conversation was gone. On a long task, or after
+a crash, you had to explain everything again.
+
+### The idea
+
+Save every conversation to disk as it happens, one file per conversation:
+
+```
+~/.cmcoder/projects/<project-name>-<hash>/<session-id>.jsonl
+```
+
+How you get it back:
+- `cmcoder --continue` (or `-c`) carries on with the latest conversation in
+  this project.
+- `cmcoder --resume 3f2a` (or `-r`) picks one by id; the first few characters
+  of the id are enough.
+- `/resume` inside a session lists the project's conversations to choose
+  from.
+- `/clear` starts a new conversation, and the old one stays resumable.
+- `-p` runs are saved too, so `cmcoder -p --continue "and now…"` works in
+  scripts.
+
+Files untouched for `cleanupPeriodDays` (default 30) are deleted at start-up.
+`"persistSessions": false` turns saving off; an organisation can enforce
+that in managed settings.
+
+### The code
+
+**The file format: JSON Lines** (`.jsonl`). One JSON object per line. That
+suits a growing log: adding a line never rewrites the file, and if a crash
+cuts the last line in half, only that line is lost. `load()` skips any line
+that doesn't parse. The records are:
+
+```json
+{"type": "meta", "session_id": "…", "cwd": "…", "model": "qwen3-27b", "created": 1790000000.0}
+{"type": "message", "message": {"role": "user", "content": "fix the test", "turn": 1}}
+{"type": "message", "message": {"role": "assistant", "tool_calls": [ … ]}}
+{"type": "reset", "messages": [ … ]}
+```
+
+A `reset` record holds the whole conversation. It's written when the history
+was replaced rather than extended (compaction, `/clear`, a failed request
+being rolled back). `load()` simply replays the lines in order.
+
+**What gets written** (`SessionLog.save`). The agent calls `save_session()`
+after every step and in `finally:` when a turn ends, so a crash loses at most
+one step. To know what's new, the log remembers the `id()` of every message
+it has written. (`id()` is the object's identity: the same object always has
+the same id.)
+
+```python
+if ids[:n] == self._saved:          # the old messages are still there, in order
+    write the new ones as "message" records
+else:                               # the history was replaced
+    write one "reset" record
+```
+
+**What's not written.** The system prompt isn't saved, because it's rebuilt
+on resume so memory files and settings are current. No API keys or settings
+are written either. Files are created **owner-only**: `os.open(path,
+os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)`, in a folder with mode
+`0o700`. `0o600` is octal for "the owner can read and write; nobody else can
+do anything". On Windows, your user folder's permissions apply.
+
+**Repairing a cut-off session** (`repair`). If cmcoder was killed while a
+tool was running, the file ends with an assistant message that called a tool
+but has no tool result. The server would reject that ("tool call without a
+result"), so `repair()` adds an "Interrupted" result for every unanswered
+call. Ctrl+C was already handled this way during a session
+(`_repair_after_interrupt`), and that result is now saved too.
+
+**Which project a session belongs to** (`project_key`). It's a readable name
+plus a hash of the project path. `os.path.normcase` lower-cases the path on
+Windows, so `C:\Repo` and `c:\repo` count as the same project there.
+`hashlib.sha256(...).hexdigest()[:16]` turns any path into 16 safe
+characters for a folder name.
+
+**Turn numbers.** Each user message now carries `turn` (1, 2, 3, …). It isn't
+sent to the model. It's what item 7's `/rewind` uses to find "the state
+before message 3".
+
+### New Python ideas
+
+- **JSON Lines**, and appending with `os.open(..., O_APPEND)`.
+- **File modes in octal** (`0o600`, `0o700`) and `stat.S_IMODE` to read them back.
+- **`dataclasses.asdict`** turns a dataclass (and nested ones like `ToolCall`)
+  into plain dicts for JSON.
+- **`id(obj)`**: an object's identity, used to tell "same messages plus new
+  ones" from "replaced".
+- **`try / finally`** in an async generator: the `finally` block runs whether
+  the turn ends normally, with an error, or by Ctrl+C.
+
+### The tests
+
+`tests/test_sessions.py`:
+- a turn is saved (owner-only file and folder; no system prompt in the file),
+  resumed in a fresh agent, continued, and appended to the same file;
+- a crash mid-tool (half-written last line, tool call without result) loads
+  as a valid transcript;
+- Ctrl+C during `sleep 30` saves a valid transcript;
+- compaction writes a `reset` record, and `/clear` starts a new session while
+  the old one stays findable;
+- Windows paths: `C:\Users\Dev\Repo` and `c:\users\dev\repo\` map to one
+  project (the test uses Python's Windows path rules, `ntpath`, so it runs on
+  any OS);
+- old sessions and their checkpoints are cleaned up;
+- the real CLI: `-p`, then `-p --continue` (the second request contains the
+  first conversation), and a clear error for an unknown `--resume` id;
+- `persistSessions: false` writes nothing.
+
+`tests/test_repl_pty.py::test_resume_command` drives a real terminal:
+- chat, then `/clear`;
+- `/resume` lists the conversation, choosing `1` resumes it, and the model
+  receives the earlier messages.
+
+### Try it
+
+Start `cmcoder`, ask something, quit with `/exit`, then run `cmcoder -c` and
+ask "what did I just ask you?". The files are in `~/.cmcoder/projects/` (on
+Windows `%USERPROFILE%\.cmcoder\projects\`); open one to see the JSON Lines.
 
 ## 7. Checkpoints and `/rewind`
 

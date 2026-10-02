@@ -23,6 +23,7 @@ from ..core.agent import Agent, AskFn
 from ..core.compaction import Summarizer
 from ..core.permissions import ModeNotAllowed, PermissionPolicy
 from ..core.prompt import build_system_prompt, load_memory_files
+from ..core.sessions import SessionLog, cleanup, find_session, list_sessions, load
 from ..providers.auth import ApiKeyAuth, AuthProvider, NoAuth
 from ..providers.openai_compat import OpenAICompatProvider, ProviderError
 from ..providers.profiles import ModelProfile, resolve_profile
@@ -144,6 +145,8 @@ class AgentOptions:
     append_system_prompt: str | None = None
     ask: AskFn | None = None
     persist_rules: bool = True
+    continue_session: bool = False  # --continue: the latest session in this project
+    resume: str | None = None  # --resume ID (or a unique prefix of it)
 
 
 async def resolve_model_profile(
@@ -210,8 +213,14 @@ async def build_agent(settings: Settings, opts: AgentOptions) -> Agent:
             add_local_allow_rule(root, rule)
 
     summarizer = await build_summarizer(settings, provider)
+    session = SessionLog(root) if settings.persist_sessions else None
+    if session is not None:
+        try:
+            cleanup(settings.cleanup_period_days)
+        except OSError:
+            pass
 
-    return Agent(
+    agent = Agent(
         provider,
         model,
         profile,
@@ -230,7 +239,31 @@ async def build_agent(settings: Settings, opts: AgentOptions) -> Agent:
         on_context_window=lambda m, n: save_learned_window(provider.base_url, m, n, ERROR_SOURCE),
         auto_compact=settings.auto_compact,
         compact_threshold=settings.auto_compact_threshold,
+        session=session,
     )
+    if opts.continue_session or opts.resume:
+        resume_session(agent, settings, root, opts.resume)
+    return agent
+
+
+def resume_session(agent: Agent, settings: Settings, root: Path, ref: str | None) -> None:
+    """Load a saved session into the agent: the latest one, or `ref`."""
+    if not settings.persist_sessions:
+        raise SettingsError("Sessions are not saved (persistSessions is false).")
+    if ref:
+        info = find_session(root, ref)
+        if info is None:
+            raise SettingsError(
+                f"No single session in this project matches {ref!r}. "
+                "Start cmcoder and use /resume to pick one."
+            )
+    else:
+        sessions = list_sessions(root)
+        if not sessions:
+            raise SettingsError("No saved session in this project to continue.")
+        info = sessions[0]
+    messages, _meta = load(info.path)
+    agent.resume(messages, SessionLog(root, info.session_id))
 
 
 async def build_summarizer(

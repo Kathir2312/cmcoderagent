@@ -115,6 +115,16 @@ def main(
     verbose: Annotated[
         bool, typer.Option("--verbose", "-v", help="Show tool calls (-p) and reasoning.")
     ] = False,
+    continue_session: Annotated[
+        bool,
+        typer.Option("--continue", "-c", help="Continue the latest conversation in this project."),
+    ] = False,
+    resume: Annotated[
+        str | None,
+        typer.Option(
+            "--resume", "-r", help="Resume a saved conversation by id (or the start of its id)."
+        ),
+    ] = None,
     version: Annotated[bool, typer.Option("--version", help="Print the version and exit.")] = False,
 ) -> None:
     from .factory import AgentOptions
@@ -138,6 +148,8 @@ def main(
         disallowed_tools=_split_rules(disallowed_tools),
         max_turns=max_turns,
         append_system_prompt=append_system_prompt,
+        continue_session=continue_session,
+        resume=resume,
     )
     try:
         if print_mode:

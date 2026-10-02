@@ -191,3 +191,25 @@ def test_compact_command(mock_server: Any, project: Path) -> None:
     finally:
         term.close()
     assert "keep the file name" in json.dumps(server.state.summary_requests)
+
+
+def test_resume_command(mock_server: Any, project: Path) -> None:
+    server = mock_server([{"content": "Apple noted."}, {"content": "It was apple."}])
+    term = Term(project, server)
+    try:
+        assert term.expect(rb"/help for commands")
+        term.send("remember the word apple\r")
+        assert term.expect(rb"Apple noted\."), term.text()
+        term.send("/clear\r")
+        assert term.expect(rb"Started a new conversation"), term.text()
+        term.send("/resume\r")
+        assert term.expect(rb"remember the word apple"), term.text()
+        assert term.expect(rb"resume which\?"), term.text()
+        term.send("1\r")
+        assert term.expect(rb"Resumed conversation [0-9a-f]{8} \(2 messages\)"), term.text()
+        term.send("which word?\r")
+        assert term.expect(rb"It was apple\."), term.text()
+    finally:
+        term.close()
+    contents = [m["content"] for m in server.requests[1]["messages"]]
+    assert "remember the word apple" in contents

@@ -30,6 +30,7 @@ from ..tools.base import Tool, ToolContext, ToolResult, truncate_middle
 from .compaction import CompactionError, Summarizer, compact
 from .context import WARN_RATIO, ContextBudget
 from .permissions import Decision, PermissionPolicy, suggest_rule
+from .sessions import SessionLog
 from .steer import file_work_redirect
 
 MAX_IDENTICAL_CALLS = 3
@@ -126,6 +127,7 @@ class Agent:
         on_rule_saved: Callable[[str], None] | None = None,
         summarizer: Summarizer | None = None,
         on_context_window: Callable[[str, int], None] | None = None,
+        session: SessionLog | None = None,
         auto_compact: bool = True,
         compact_threshold: float = 0.8,
     ) -> None:
@@ -138,7 +140,11 @@ class Agent:
         self.max_turns = max_turns
         self.ask = ask
         self.on_rule_saved = on_rule_saved
-        self.session_id = str(uuid.uuid4())
+        # Where the conversation is saved (None: not saved).
+        self.session = session
+        self.session_id = session.session_id if session else str(uuid.uuid4())
+        self._session_started = False
+        self.turn = 0  # user turns so far in this session
         self.system_prompt = system_prompt
         self.messages: list[Message] = [Message.system(system_prompt)]
         self.usage = Usage()
@@ -176,7 +182,38 @@ class Agent:
         )
 
     def clear(self) -> None:
+        """Start a new conversation (the old one stays resumable)."""
         self.messages = [Message.system(self.system_prompt)]
+        self.turn = 0
+        if self.session is not None:
+            self.session = SessionLog(self.ctx.project_root)
+            self.session_id = self.session.session_id
+            self._session_started = False
+
+    def resume(self, messages: list[Message], session: SessionLog | None = None) -> None:
+        """Continue a saved conversation (`messages` without the system prompt)."""
+        self.messages = [Message.system(self.system_prompt), *messages]
+        self.turn = max((m.turn or 0 for m in messages), default=0)
+        if session is not None:
+            self.session = session
+            self.session_id = session.session_id
+        if self.session is not None:
+            self.session.mark_saved(self.messages)
+            self._session_started = True
+
+    def save_session(self) -> None:
+        """Write new messages to the session file. Never fails the turn."""
+        if self.session is None:
+            return
+        try:
+            if not self._session_started:
+                if len(self.messages) <= 1:
+                    return  # nothing to save yet
+                self.session.start(self.ctx.cwd, self.model)
+                self._session_started = True
+            self.session.save(self.messages)
+        except OSError:
+            pass
 
     def tool_specs(self) -> list[ToolSpec]:
         return [t.spec() for t in self.tools.values()]
@@ -224,6 +261,7 @@ class Agent:
             return
         self.messages = res.messages
         self.usage.add(res.usage)
+        self.save_session()
         yield ev.Compacted(
             trigger=trigger,  # type: ignore[arg-type]
             summarized_messages=res.summarized,
@@ -237,7 +275,10 @@ class Agent:
     async def run(self, prompt: str) -> AsyncIterator[ev.Event]:
         """Run one user turn. Yields protocol events, ending with a Result."""
         started = time.monotonic()
-        self.messages.append(Message.user(prompt))
+        self.turn += 1
+        user_message = Message.user(prompt)
+        user_message.turn = self.turn
+        self.messages.append(user_message)
         turn_usage = Usage()
         last_text = ""
         steps = 0
@@ -266,6 +307,7 @@ class Agent:
 
         try:
             while True:
+                self.save_session()  # after every step, so a crash loses little
                 if steps >= self.max_turns:
                     yield ev.Warning(
                         message=f"Stopped after {self.max_turns} model calls (max turns)."
@@ -362,6 +404,7 @@ class Agent:
                     )
                     if self.messages[-1].role == "user" and steps == 1:
                         self.messages.pop()
+                        self.turn -= 1
                     yield result("error", str(e), is_error=True)
                     return
                 except ProviderError as e:
@@ -369,6 +412,7 @@ class Agent:
                     # Drop the user message if the model never answered, so retrying works cleanly.
                     if self.messages[-1].role == "user" and steps == 1:
                         self.messages.pop()
+                        self.turn -= 1
                     yield result("error", str(e), is_error=True)
                     return
                 if done is None:
@@ -441,6 +485,8 @@ class Agent:
         except asyncio.CancelledError:
             self._repair_after_interrupt()
             raise
+        finally:
+            self.save_session()
 
     async def _run_call(
         self, call: ToolCall, repeated: bool

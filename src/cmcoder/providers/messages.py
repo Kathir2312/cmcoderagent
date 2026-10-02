@@ -31,6 +31,8 @@ class Message:
     # Model reasoning (e.g. Qwen3 <think> text). Kept for display and logs,
     # never sent back to the model.
     reasoning: str = ""
+    # On user messages: the turn number in the session (for /rewind). Not sent.
+    turn: int | None = None
 
     @classmethod
     def system(cls, content: str) -> Message:

@@ -27,6 +27,7 @@ from ..compat import InterruptHandler
 from ..config.settings import Settings, config_dir
 from ..core.agent import Agent, PermissionAnswer, PermissionRequest
 from ..core.permissions import MODES, ModeNotAllowed
+from ..core.sessions import SessionLog, age, list_sessions, load
 from ..protocol import events as ev
 from ..providers.messages import Usage
 from ..providers.openai_compat import OpenAICompatProvider
@@ -68,7 +69,8 @@ def short_rule(rule: str, limit: int = 60) -> str:
 HELP = """\
 [bold]Commands[/bold]
   /help              show this help
-  /clear             start a new conversation
+  /clear             start a new conversation (the old one can be resumed)
+  /resume [n|id]     list saved conversations in this project, or resume one
   /compact [focus]   summarise the conversation so far to free context
                      (e.g. /compact keep the failing test names)
   /model [name]      show or switch the model (e.g. /model qwen3-27b)
@@ -302,6 +304,8 @@ class Repl:
             self.agent.clear()
             self._last_prompt_tokens = 0
             c.print("[dim]Started a new conversation.[/dim]")
+        elif name == "resume":
+            await self._resume(arg)
         elif name == "model":
             if not arg:
                 c.print(
@@ -339,6 +343,66 @@ class Repl:
         else:
             c.print(f"[red]Unknown command /{name}. Type /help.[/red]")
         return True
+
+    async def _resume(self, arg: str) -> None:
+        """/resume: list this project's sessions, or load one by number or id."""
+        assert self.agent is not None
+        c = self.console
+        root = self.agent.ctx.project_root
+        sessions = [s for s in list_sessions(root) if s.session_id != self.agent.session_id][:15]
+        if not sessions:
+            c.print("[dim]No other saved conversations in this project.[/dim]")
+            return
+        choice = arg
+        if not choice:
+            for i, s in enumerate(sessions, 1):
+                c.print(
+                    Text.assemble(
+                        (f"  {i:>2} ", "bold"),
+                        (f"{age(s.updated):>9}  ", "dim"),
+                        s.title,
+                        (f"  ({s.messages} messages, {s.session_id[:8]})", "dim"),
+                    )
+                )
+            assert self.session is not None
+            try:
+                choice = (
+                    await self.session.prompt_async("  resume which? (Enter to cancel): ")
+                ).strip()
+            except (KeyboardInterrupt, EOFError):
+                return
+            if not choice:
+                return
+        if choice.isdigit() and 1 <= int(choice) <= len(sessions):
+            info = sessions[int(choice) - 1]
+        else:
+            matches = [s for s in sessions if s.session_id.startswith(choice)]
+            if len(matches) != 1:
+                c.print(Text(f"No single conversation matches {choice!r}.", style="red"))
+                return
+            info = matches[0]
+        messages, _meta = load(info.path)
+        self.agent.resume(messages, SessionLog(root, info.session_id))
+        self._last_prompt_tokens = 0
+        self._show_resumed()
+
+    def _show_resumed(self) -> None:
+        """After resuming: which conversation, and where it left off."""
+        assert self.agent is not None
+        c = self.console
+        msgs = self.agent.messages[1:]
+        c.print(
+            Text(
+                f"Resumed conversation {self.agent.session_id[:8]} ({len(msgs)} messages).",
+                style="cyan",
+            )
+        )
+        last_user = next((m for m in reversed(msgs) if m.role == "user"), None)
+        last_reply = next((m for m in reversed(msgs) if m.role == "assistant" and m.content), None)
+        if last_user:
+            c.print(Text("> " + clip_preview(last_user.content, 3)[0], style="dim"))
+        if last_reply:
+            c.print(Markdown(clip_preview(last_reply.content, 8)[0]))
 
     # -- main loop -----------------------------------------------------------
 
@@ -404,6 +468,8 @@ class Repl:
                 border_style="cyan",
             )
         )
+        if len(agent.messages) > 1:
+            self._show_resumed()
         bindings = KeyBindings()
 
         @bindings.add("s-tab")

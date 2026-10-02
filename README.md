@@ -95,7 +95,11 @@ git diff | cmcoder -p "review this diff"
 cmcoder -p "..." --output-format json         # or stream-json (one event per line)
 ```
 
-In the interactive session: `/help`, `/model`, `/mode`, `/compact`, `/clear`, `/cost`, `/exit`; Shift+Tab cycles the
+Conversations are saved per project: `cmcoder -c` continues the latest one, `cmcoder -r <id>` resumes a
+specific one, and `/resume` lists them (files under `~/.cmcoder/projects/`, owner-only, deleted after
+`cleanupPeriodDays`, default 30; `"persistSessions": false` turns saving off).
+
+In the interactive session: `/help`, `/model`, `/mode`, `/compact`, `/resume`, `/clear`, `/cost`, `/exit`; Shift+Tab cycles the
 permission mode; Ctrl+C interrupts the current turn.
 
 ### Permissions

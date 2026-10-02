@@ -388,7 +388,7 @@ Tool descriptions are part of the prompt tiers: the `compact` tier uses shorter 
 ## 10. Sessions
 
 - Saved as JSONL under `~/.cmcoder/projects/<project-hash>/<session-id>.jsonl`.
-- `--continue`, `--resume [id]`, `/resume` picker.
+- `--continue`, `--resume [id]`, `/resume` picker. *(Phase 1, done: JSON Lines with `message` / `reset` / `title` records, owner-only files, repaired on load if cut off mid-tool; `persistSessions`, `cleanupPeriodDays`.)*
 - **Checkpoints:** file state saved before each edit; `/rewind` restores code, the conversation, or both.
 - Cost and token use are tracked per session (`/cost`); prices per model are configurable and may be 0 for local models.
 

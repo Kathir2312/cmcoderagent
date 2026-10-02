@@ -166,6 +166,14 @@ permissions, API keys never written); `--continue`, `--resume [id]` and a
 **Done when:** a session interrupted mid-tool resumes with a valid transcript;
 tests on Windows paths.
 
+**Status: done.**
+- Interrupted (Ctrl+C) and crashed (half-written file) sessions both load as
+  valid transcripts.
+- Windows paths are normalised (`C:\Repo` = `c:\repo`).
+- `/clear` keeps the old conversation resumable, and `-p` runs are saved too.
+- New settings: `persistSessions` (default true; managed settings can turn it
+  off) and `cleanupPeriodDays` (default 30).
+
 ### 7. Checkpoints and `/rewind`
 
 **What:** file contents saved before every Write/Edit; `/rewind` restores code,
@@ -217,7 +225,7 @@ SSO, OpenTelemetry, Windows sandboxing (Phase 4).
 - [x] 3. Detect the real context window
 - [x] 4. Steer Qwen away from Bash for file work (real-gateway measurement pending)
 - [x] 5. Managed settings
-- [ ] 6. Sessions and resume
+- [x] 6. Sessions and resume
 - [ ] 7. Checkpoints and `/rewind`
 - [ ] 8. TodoWrite
 - [ ] 9. Small/fast model jobs

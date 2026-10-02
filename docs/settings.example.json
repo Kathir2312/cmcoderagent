@@ -10,6 +10,8 @@
   "smallFastModel": "corp:qwen3-7b",
   "autoCompact": true,
   "autoCompactThreshold": 0.8,
+  "persistSessions": true,
+  "cleanupPeriodDays": 30,
   "permissions": {
     "allow": ["Bash(npm test:*)", "Bash(pytest:*)"],
     "deny": [],

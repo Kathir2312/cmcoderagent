@@ -69,6 +69,9 @@ class Settings(_Model):
     auto_compact: bool = Field(True, alias="autoCompact")
     auto_compact_threshold: float = Field(0.8, alias="autoCompactThreshold", ge=0.3, le=0.95)
     env: dict[str, str] = Field(default_factory=dict)
+    # Save conversations for --continue / --resume, and delete them after N days.
+    persist_sessions: bool = Field(True, alias="persistSessions")
+    cleanup_period_days: int = Field(30, alias="cleanupPeriodDays", ge=1)
     # Managed settings only: use only the providers the managed file defines.
     lock_providers: bool = Field(False, alias="lockProviders")
     # Where each layer came from, for `cmcoder doctor`.
