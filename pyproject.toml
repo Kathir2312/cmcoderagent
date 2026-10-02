@@ -37,6 +37,8 @@ packages = ["src/cmcoder"]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+# Leaked subprocess/pipe transports must fail the run, not just warn.
+filterwarnings = ["error::pytest.PytestUnraisableExceptionWarning"]
 
 [tool.ruff]
 line-length = 100
