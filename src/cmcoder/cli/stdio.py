@@ -9,10 +9,12 @@ ever goes to stdout: stray prints are sent to stderr.
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
 import threading
 import time
 import uuid
+from contextlib import suppress
 from typing import BinaryIO
 
 from pydantic import ValidationError
@@ -45,29 +47,49 @@ class StdioServer:
 
     # --- input ---------------------------------------------------------------
 
-    def _start_reader(self, stdin: BinaryIO) -> None:
+    def _start_reader(self, stdin_fd: int) -> None:
         """Read stdin in a thread: portable (Windows pipes don't work with
         asyncio's stdin readers) and a daemon, so a blocked read never holds
-        up exit."""
+        up exit.
+
+        It reads the raw file descriptor with `os.read`, not `sys.stdin`: a
+        daemon thread blocked inside a *buffered* read holds the buffer's lock,
+        and Python aborts (SIGABRT) if it is still held at interpreter exit."""
         loop = asyncio.get_running_loop()
 
-        def read() -> None:
-            for line in iter(stdin.readline, b""):
+        def put(line: bytes) -> None:
+            with suppress(RuntimeError):  # the loop already closed: we're exiting
                 loop.call_soon_threadsafe(self.inbox.put_nowait, line)
-            loop.call_soon_threadsafe(self.inbox.put_nowait, b"")  # EOF
+
+        def read() -> None:
+            buffer = b""
+            while True:
+                try:
+                    chunk = os.read(stdin_fd, 65536)
+                except OSError:
+                    chunk = b""
+                if not chunk:
+                    break
+                buffer += chunk
+                *lines, buffer = buffer.split(b"\n")
+                for line in lines:
+                    put(line)
+            if buffer:
+                put(buffer)
+            put(b"")  # EOF
 
         threading.Thread(target=read, name="cmcoder-stdin", daemon=True).start()
 
     # --- main loop -----------------------------------------------------------
 
-    async def serve(self, stdin: BinaryIO) -> int:
+    async def serve(self, stdin_fd: int) -> int:
         self.opts.ask = self.ask
         try:
             self.agent = await build_agent(self.settings, self.opts)
         except (SettingsError, ProviderError, ValueError) as e:
             self.error("startup", str(e).split("\n  hint:")[0], getattr(e, "hint", None))
             return 2
-        self._start_reader(stdin)
+        self._start_reader(stdin_fd)
         self.emit(self.agent.init_event())
         if self.agent.ctx.todos:  # a resumed conversation
             self.emit(ev.TodoUpdate(todos=self.agent.ctx.todos))
@@ -237,4 +259,4 @@ async def run_stdio(settings: Settings, opts: AgentOptions) -> int:
     out = sys.stdout.buffer
     # Only protocol events may reach stdout; anything else printed goes to stderr.
     sys.stdout = sys.stderr
-    return await StdioServer(settings, opts, out).serve(sys.stdin.buffer)
+    return await StdioServer(settings, opts, out).serve(sys.stdin.fileno())

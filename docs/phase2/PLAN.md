@@ -61,11 +61,28 @@ second turn, and a clean shutdown on EOF.
 **What:** `vscode/src/protocol.ts` generated from the Python models
 (`cmcoder protocol-schema`). CI fails if it's out of date.
 
+**Status: done.** `src/cmcoder/protocol/typescript.py`: a small generator from
+the JSON Schema (no npm code generator to review). `cmcoder protocol-schema
+--typescript` writes it; `tests/test_protocol_ts.py` fails when the file is
+stale. Event fields are all required (the agent always sends them); message
+fields with defaults are optional.
+
 ### 3. Extension skeleton
 
 **What:** activation, finding `cmcoder` (setting `cmcoder.executable`, else
 PATH), starting one process per workspace folder, restarting after a crash,
 an output channel with the process's stderr, `npm run package` → `.vsix`.
+
+**Status: done.** `vscode/src/extension.ts`, `agentProcess.ts`, `chatView.ts`:
+- `cmcoder.executable` + `cmcoder.executableArgs` (e.g. `uv run --project …`),
+  `cmcoder.permissionMode`; commands New Conversation, Stop, Open Chat
+  (Ctrl+Alt+K), Show Log, Open Settings File;
+- a missing `cmcoder` or a crash shows a message and a **Restart** button;
+- `.vsix`: 22 KB. CI job "VS Code extension" type-checks, runs the tests on
+  three OSes and uploads `cmcoder.vsix`.
+- Found by the extension's tests: `cmcoder --protocol stdio` sometimes died
+  with SIGABRT at shutdown (a daemon thread in a buffered stdin read). Fixed
+  by reading the raw descriptor; a regression test runs shutdown 8 times.
 
 ### 4. Chat panel
 
@@ -73,10 +90,23 @@ an output channel with the process's stderr, `npm run package` → `.vsix`.
 cards with the first lines of output, the todo checklist, token usage, a
 stop button (and Esc), "New conversation".
 
+**Status: done.** `vscode/src/webview/main.ts` + `media/chat.css`: plain DOM
+code, VS Code theme colours. Model output is Markdown with raw HTML escaped;
+the page's Content Security Policy allows only the bundled script; links
+open in the browser only for http(s). Checked in Chromium with a scripted
+conversation (screenshots in the session); an automated UI test comes with
+item 11.
+
 ### 5. Permission prompts
 
 **What:** Allow / Always / Deny (with a message for the model) inside the
 chat panel, the mode picker, high-risk commands without "Always".
+
+**Status: done** (built with the chat panel): a card per request with a
+preview (the command, the file to write, or the Edit's -/+ lines), **Allow**,
+**Always allow** (only when the request can be remembered; the tooltip shows
+the rule), **Deny** with an optional message; cancelled cards when the turn
+is interrupted.
 
 ### 6. Native diff review
 
@@ -131,10 +161,10 @@ OpenTelemetry, standalone binary, platform-specific VSIX, Windows sandboxing
 ## Checklist
 
 - [x] 1. `cmcoder --protocol stdio`
-- [ ] 2. Generated TypeScript protocol types
-- [ ] 3. Extension skeleton
-- [ ] 4. Chat panel
-- [ ] 5. Permission prompts
+- [x] 2. Generated TypeScript protocol types
+- [x] 3. Extension skeleton
+- [x] 4. Chat panel
+- [x] 5. Permission prompts
 - [ ] 6. Native diff review
 - [ ] 7. Editor context
 - [ ] 8. IDE tools

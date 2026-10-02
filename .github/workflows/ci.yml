@@ -60,3 +60,40 @@ jobs:
           uv pip install --python /tmp/litellm/bin/python 'litellm[proxy]'
       - name: Gateway tests
         run: LITELLM_BIN=/tmp/litellm/bin/litellm uv run pytest -q tests/test_litellm_integration.py
+
+  vscode:
+    name: VS Code extension (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    defaults:
+      run:
+        working-directory: vscode
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: vscode/package-lock.json
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: uv sync --project ..
+      - run: npm ci
+      - name: Type check
+        run: npm run typecheck
+      - name: Build
+        run: npm run build
+      - name: Tests (against the real cmcoder and the mock model server)
+        run: uv run --project .. npm test
+      - name: Package
+        if: runner.os == 'Linux'
+        run: npm run package
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'Linux'
+        with:
+          name: cmcoder-vsix
+          path: vscode/cmcoder.vsix

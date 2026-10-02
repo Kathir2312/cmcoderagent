@@ -1,0 +1,93 @@
+{
+  "name": "cmcoder",
+  "displayName": "cmcoder",
+  "description": "Agentic coding assistant for your company's model gateway, in VS Code.",
+  "version": "0.1.0",
+  "publisher": "cmcoder",
+  "private": true,
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Kathir2312/cmcoderagent"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": ["AI", "Programming Languages"],
+  "main": "./dist/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "cmcoder",
+          "title": "cmcoder",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "cmcoder": [
+        {
+          "type": "webview",
+          "id": "cmcoder.chat",
+          "name": "Chat"
+        }
+      ]
+    },
+    "commands": [
+      { "command": "cmcoder.newConversation", "title": "New Conversation", "category": "cmcoder", "icon": "$(add)" },
+      { "command": "cmcoder.stop", "title": "Stop", "category": "cmcoder", "icon": "$(debug-stop)" },
+      { "command": "cmcoder.focus", "title": "Open Chat", "category": "cmcoder" },
+      { "command": "cmcoder.showLog", "title": "Show Log", "category": "cmcoder" },
+      { "command": "cmcoder.openSettings", "title": "Open Settings File", "category": "cmcoder" }
+    ],
+    "menus": {
+      "view/title": [
+        { "command": "cmcoder.newConversation", "when": "view == cmcoder.chat", "group": "navigation" }
+      ]
+    },
+    "keybindings": [
+      { "command": "cmcoder.focus", "key": "ctrl+alt+k", "mac": "cmd+alt+k" }
+    ],
+    "configuration": {
+      "title": "cmcoder",
+      "properties": {
+        "cmcoder.executable": {
+          "type": "string",
+          "default": "cmcoder",
+          "markdownDescription": "The `cmcoder` command. A full path, or a name on `PATH`. To run it from a source checkout, set this to `uv` and `#cmcoder.executableArgs#` to `[\"run\", \"--project\", \"C:\\\\path\\\\to\\\\cmcoder\", \"cmcoder\"]`."
+        },
+        "cmcoder.executableArgs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Arguments placed before cmcoder's own (e.g. for `uv run`)."
+        },
+        "cmcoder.permissionMode": {
+          "type": "string",
+          "enum": ["", "default", "acceptEdits", "plan", "bypassPermissions"],
+          "default": "",
+          "description": "Permission mode for new conversations (empty: your cmcoder settings decide)."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "generate": "cd .. && uv run cmcoder protocol-schema --typescript > vscode/src/protocol.ts",
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "node esbuild.mjs --tests && node --test --test-reporter=spec \"dist-test/**/*.test.js\"",
+    "package": "node esbuild.mjs --production && vsce package --skip-license --out cmcoder.vsix",
+    "vscode:prepublish": "node esbuild.mjs --production"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "~1.90.0",
+    "@vscode/vsce": "^3.2.0",
+    "esbuild": "^0.25.0",
+    "marked": "^15.0.0",
+    "typescript": "~5.8.0"
+  }
+}

@@ -163,6 +163,21 @@ it. If you can, have the gateway serve a longer context.
 **Privacy:** each turn sends your prompt, file contents the agent reads and command output to the configured model
 endpoint. LiteLLM admins may be able to see that traffic in gateway logs.
 
+## VS Code extension (Phase 2, in progress)
+
+The extension in [`vscode/`](vscode/) runs the same `cmcoder` (`cmcoder --protocol stdio`) behind a chat panel in
+the side bar. Build and install it (needs Node.js 20+ to build; using it needs only VS Code and `cmcoder`):
+
+```bash
+cd vscode
+npm ci
+npm run package                                  # -> vscode/cmcoder.vsix
+code --install-extension cmcoder.vsix
+```
+
+CI also builds `cmcoder.vsix` (the `cmcoder-vsix` artifact of the "VS Code extension" job). See
+[vscode/README.md](vscode/README.md) for how to use it.
+
 ## Development
 
 ```bash
@@ -173,6 +188,8 @@ uv run python evals/run.py --mock      # eval harness with scripted replies (20 
 LITELLM_BIN=/path/to/litellm uv run pytest tests/test_litellm_integration.py  # through a real LiteLLM proxy
 uv run python evals/run.py             # evals against your real endpoint/model
 uv run cmcoder protocol-schema         # Agent Protocol JSON Schema (for the VS Code extension)
+uv run cmcoder protocol-schema --typescript > vscode/src/protocol.ts   # after changing the protocol
+cd vscode && npm ci && npm run typecheck && uv run --project .. npm test   # the extension's tests
 ```
 
 `python -m cmcoder.testing.mock_server --script replies.json` runs a scripted OpenAI-compatible server for

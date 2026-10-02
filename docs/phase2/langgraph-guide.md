@@ -79,3 +79,54 @@ Write a 20-line Python client: start `cmcoder --protocol stdio` with
 `assistant_delta`, and answer every `permission_request` with `allow: false`
 and `feedback: "read-only today"`. Compare the code with a LangGraph SDK
 client that resumes interrupts.
+
+---
+
+## 2. Generated TypeScript protocol types
+
+### The LangGraph way
+
+The LangGraph SDK ships hand-written TypeScript types for runs and threads;
+your *state* types you write twice (Python `TypedDict`, TS interface) or
+generate from JSON Schema yourself.
+
+### The cmcoder way
+
+The pydantic models generate both the JSON Schema and `protocol.ts`; a test
+fails if they drift. Same principle as `graph.get_input_jsonschema()` /
+`get_output_jsonschema()` in LangGraph, taken one step further.
+
+---
+
+## 3–5. Extension, chat panel, permission prompts
+
+### The LangGraph way
+
+A front end such as **Agent Chat UI** uses `useStream()` from
+`@langchain/langgraph-sdk/react`: it streams messages, shows tool calls, and
+when the run hits an `interrupt()` it renders the payload and calls
+`submit(undefined, { command: { resume: answer } })`.
+
+### The cmcoder way
+
+| LangGraph front end | cmcoder extension |
+|---|---|
+| `useStream()` over HTTP | `AgentProcess` over a child process's stdin/stdout |
+| `stream.messages` | `assistant_delta` / `assistant_message` events |
+| tool-call rendering from `AIMessage.tool_calls` + `ToolMessage` | `tool_use` / `tool_result` events, with a ready-made `label` and `summary` |
+| `stream.interrupt` value | `permission_request` event |
+| `submit(..., {command: {resume}})` | `permission_response` |
+| `stream.stop()` | `interrupt` message |
+| React components | plain TypeScript DOM code (no framework) |
+
+### Why they differ
+
+The agent computes the display labels (`Edit(mathops.py)`, `exit 0 · pipe 1 0`)
+so every front end (REPL, TUI, VS Code) shows the same thing. In a LangGraph UI
+you'd usually derive them from raw tool calls in the front end.
+
+### Exercise
+
+In `webview/main.ts`, find where `permission_request` is rendered. Compare it
+with the "human-in-the-loop" example of Agent Chat UI: what does each show
+the user before they approve an edit?

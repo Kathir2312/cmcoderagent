@@ -229,3 +229,15 @@ async def test_resumed_conversation_sends_its_todos(mock_server: Any, project: P
         assert (await second.next()) == {"type": "todo_update", "todos": plan}
     finally:
         await second.close()
+
+
+async def test_shutdown_never_aborts(mock_server: Any, project: Path) -> None:
+    """Found by the VS Code extension's tests: `shutdown` then EOF sometimes
+    ended in SIGABRT. Python aborts at exit when a daemon thread is blocked in
+    a buffered stdin read; the reader now uses os.read on the raw descriptor."""
+    server = mock_server([])
+    for _ in range(8):
+        agent = await Agent.start(project, server)
+        await agent.next()
+        await agent.send(type="shutdown")
+        assert await agent.close() == 0

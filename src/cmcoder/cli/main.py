@@ -321,10 +321,23 @@ def models(
 
 
 @sub_app.command(
-    "protocol-schema", help="Print the Agent Protocol JSON Schema (for generating TS types)."
+    "protocol-schema",
+    help="Print the Agent Protocol JSON Schema: agent events and client messages.",
 )
-def protocol_schema() -> None:
-    print(json.dumps(protocol_json_schema(), indent=2))
+def protocol_schema(
+    typescript: Annotated[
+        bool, typer.Option("--typescript", help="Print TypeScript types instead.")
+    ] = False,
+) -> None:
+    if typescript:
+        from ..protocol.typescript import generate_typescript
+
+        sys.stdout.write(generate_typescript())
+        return
+    from ..protocol.messages import messages_json_schema
+
+    schema = {"events": protocol_json_schema(), "messages": messages_json_schema()}
+    print(json.dumps(schema, indent=2))
 
 
 @sub_app.command(help="Print the version.")
