@@ -450,7 +450,7 @@ Started early, because quality depends heavily on the model:
 | Phase | Scope | Done when |
 |---|---|---|
 | **0 — Foundations** | Python package skeleton (uv, ruff, pyright, pytest), protocol types, provider layer + OpenAI-compatible adapter (TLS, headers, retries), model profiles, agent loop, Read/Write/Edit/Glob/Grep/Bash, basic TUI, `-p`, `doctor`, mock server, first ~20 eval tasks | Fixes a simple bug end-to-end against the LiteLLM gateway with the reference Qwen3 models |
-| **1 — Daily driver** | **Auto-compaction first** (the 32K default window is the binding constraint, §16.2), Textual TUI, sessions/resume, small/fast model jobs (titles, summaries), prompted-tool fallback and repair, edit-format variants, TodoWrite, checkpoints | Comfortable for daily use on a real repo |
+| **1 — Daily driver** | **Auto-compaction first** (the 32K default window is the binding constraint, §16.2), **the user-trial fixes in §16.3**, Textual TUI, sessions/resume, small/fast model jobs (titles, summaries), prompted-tool fallback and repair, edit-format variants, TodoWrite, checkpoints | Comfortable for daily use on a real repo |
 | **2 — VS Code** | `--protocol stdio`, generated TS protocol types, extension, webview chat, native diffs, IDE context and tools | Same task behaves the same in CLI and VS Code |
 | **3 — Extensibility** | MCP client, hooks, custom slash commands, subagents (`Task`) with per-role models, skills, Bash sandbox | Teams can customise it without forking |
 | **4 — Hardening** | SSO auth provider (e.g. Okta/OIDC) if needed, Responses API / Anthropic adapters, OpenTelemetry, enterprise policy, standalone binary + platform-specific VSIX, Windows sandboxing | Release candidate |
@@ -508,6 +508,31 @@ Done in this repository, without access to the company network:
 Not validated (needs the company network): the real gateway URL and certificate, the real Qwen3 models' tool-calling quality, and real latency. Run `cmcoder doctor` and `uv run python evals/run.py` there.
 
 **Main plan risk:** a 32K window is small for an agent. Phase 0 now degrades gracefully (drops old tool output), but long tasks will lose context. Mitigations, in order: ask the admin to serve a longer context if GPU memory allows; make auto-compaction the first Phase 1 item; keep the small model for side jobs only.
+
+### 16.3 Phase 1 backlog from user trials (Windows, real gateway, Qwen3.6-27B)
+
+Found while using Phase 0 on a real project; all are Phase 1 work.
+
+1. **Permission prompt pushed off screen by long previews (bug).** When the model
+   writes a whole file through Bash (`cat > file << EOF … EOF`), the preview prints
+   every line, the panel grows taller than the window, and the 1/2/3 options scroll
+   out of view. Fix:
+   - cap the preview height (first and last lines plus "… N more lines"; full text on
+     request, e.g. `v` to view);
+   - always draw the options **after** the preview, and repeat them in the input line
+     (`1 yes · 2 always · 3 no:`);
+   - on invalid input (e.g. `11`), re-show the options instead of a bare prompt;
+   - in the Textual UI (Phase 1), render the prompt as a fixed-height dialog with a
+     scrollable preview, so the options can never scroll away.
+2. **Model uses Bash for file work.** Qwen3.6 writes files with Bash heredocs and reads
+   them with `python -c "open(...)"`, instead of the Write/Read/Glob tools. This bypasses
+   read-before-write checks, causes permission prompts, and leads to item 1. Fix: tune
+   the system prompt and tool descriptions for Qwen, detect common patterns
+   (`cat > f <<`, `echo … > f`, `python -c "open(…)"`) and tell the model to use the
+   proper tool, and add evals that score which tools are used.
+3. **Real context window unknown.** The gateway doesn't expose `/model/info`, so cmcoder
+   assumes 32K for Qwen3. Get the real value from the admin, or detect it automatically
+   from the server's "maximum context length is N" error, and cache it.
 
 ## 17. Open questions
 
