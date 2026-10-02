@@ -116,3 +116,63 @@ def test_resume_restores_the_last_todo_list(project: Path) -> None:
     )
     agent.resume(messages)
     assert agent.ctx.todos == PLAN[:1]  # the latest list wins
+
+
+def reads(n: int) -> list[dict[str, Any]]:
+    return [
+        {"tool_calls": [{"name": "Glob", "arguments": {"pattern": f"*{i}.py"}}]} for i in range(n)
+    ]
+
+
+def make_agent(server: Any, project: Path) -> Agent:
+    return Agent(
+        make_provider(server),
+        "qwen3-27b",
+        resolve_profile("qwen3-27b"),
+        default_tools(),
+        PermissionPolicy("bypassPermissions"),
+        ToolContext(cwd=project, project_root=project),
+        "test",
+    )
+
+
+def reminders(request: dict[str, Any]) -> int:
+    return sum(
+        "Use the TodoWrite tool now" in (m.get("content") or "")
+        for m in request["messages"]
+        if m["role"] == "tool"
+    )
+
+
+async def test_reminder_after_several_calls_without_todos(mock_server: Any, project: Path) -> None:
+    """Hands-on test on Windows: Qwen never called TodoWrite on its own, so
+    the checklist never appeared. After 3 tool calls it is reminded once."""
+    server = mock_server([*reads(5), {"content": "Done."}])
+    agent = make_agent(server, project)
+    try:
+        [e async for e in agent.run("refactor everything")]
+    finally:
+        await agent.close()
+    assert [reminders(r) for r in server.requests] == [0, 0, 0, 1, 1, 1]
+
+
+async def test_no_reminder_when_todos_are_used(mock_server: Any, project: Path) -> None:
+    todo = {"tool_calls": [{"name": "TodoWrite", "arguments": {"todos": PLAN}}]}
+    server = mock_server([todo, *reads(4), {"content": "Done."}])
+    agent = make_agent(server, project)
+    try:
+        [e async for e in agent.run("fix the bug")]
+    finally:
+        await agent.close()
+    assert all(reminders(r) == 0 for r in server.requests)
+
+
+async def test_no_reminder_for_short_tasks(mock_server: Any, project: Path) -> None:
+    server = mock_server([*reads(2), {"content": "Done."}, *reads(2), {"content": "Done."}])
+    agent = make_agent(server, project)
+    try:
+        [e async for e in agent.run("look")]
+        [e async for e in agent.run("look again")]  # the count starts over each turn
+    finally:
+        await agent.close()
+    assert all(reminders(r) == 0 for r in server.requests)

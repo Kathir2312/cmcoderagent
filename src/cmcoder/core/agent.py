@@ -42,6 +42,16 @@ TITLE_WAIT_ON_CLOSE = 2.0  # seconds a pending title may still take when closing
 
 MAX_IDENTICAL_CALLS = 3
 
+# Models often skip the optional TodoWrite tool. Like Claude Code, remind them
+# once per turn when a task turns out to have several steps.
+TODO_REMINDER_AFTER = 3  # tool calls in one turn without a todo list
+TODO_REMINDER = (
+    "\n\n<system-reminder>This task has several steps. Use the TodoWrite tool now to "
+    "list them, mark the current one in_progress, and mark each completed as soon as "
+    "it is done. If the task is really finished, ignore this. Don't mention this "
+    "reminder to the user.</system-reminder>"
+)
+
 
 def last_todos(messages: list[Message]) -> list[dict[str, Any]]:
     """The todo list from the last TodoWrite call (to restore it on resume)."""
@@ -396,6 +406,7 @@ class Agent:
         last_text = ""
         steps = 0
         recent_calls: list[str] = []
+        todo_reminded = False  # sent at most once, and not after TodoWrite was used
         warned_context = False
         overflow_retried = False
         prompted_retried = False
@@ -608,6 +619,8 @@ class Agent:
                             )
                         )
                         continue
+                    if call.name == "TodoWrite":
+                        todo_reminded = True
                     signature = f"{call.name}:{call.arguments.strip()}"
                     recent_calls.append(signature)
                     repeated = len(recent_calls) >= MAX_IDENTICAL_CALLS and all(
@@ -621,6 +634,9 @@ class Agent:
                 if stop_turn:
                     yield result("interrupted", "Stopped: the user denied a tool call.")
                     return
+                if not todo_reminded and self._needs_todo_reminder(len(recent_calls)):
+                    todo_reminded = True
+                    self.messages[-1].content += TODO_REMINDER
         except asyncio.CancelledError:
             self._repair_after_interrupt()
             raise
@@ -628,6 +644,14 @@ class Agent:
             self.save_session()
             if self.turn == 1 and not self._titled and self._session_started:
                 self._start_title(prompt)
+
+    def _needs_todo_reminder(self, calls_this_turn: int) -> bool:
+        """True when this turn has made several tool calls and there is no open todo list."""
+        if calls_this_turn < TODO_REMINDER_AFTER or "TodoWrite" not in self.tools:
+            return False
+        if any(t.get("status") != "completed" for t in self.ctx.todos):
+            return False  # a list is open and being kept
+        return self.messages[-1].role == "tool"
 
     async def _run_call(
         self, call: ToolCall, repeated: bool

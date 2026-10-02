@@ -198,6 +198,9 @@ work, shown in the REPL and kept across compaction.
 
 **Status: done.** A ☑ ◐ ☐ checklist in the REPL and `/todos`. No permission
 needed. Kept in the compaction summary and restored on `--resume`.
+Models may skip the optional tool, so after 3 tool calls in one turn without
+an open todo list, the agent adds a one-time reminder to the latest tool
+result (as Claude Code does).
 
 ### 9. Small/fast model jobs
 
@@ -303,3 +306,7 @@ SSO, OpenTelemetry, Windows sandboxing (Phase 4).
       Found: rewinding to message 1 left an empty conversation, so `-c` had
       nothing to continue. Fixed: the pre-rewind conversation is now kept as a
       resumable "Before rewind: …" session, and the `-c` error is clearer.
+    - Found: the ☑ ◐ ☐ checklist never appeared. Qwen didn't call the
+      optional TodoWrite tool. Fixed: a firmer prompt rule with an example,
+      and a one-time reminder after 3 tool calls in a turn without a todo
+      list. To re-check on Windows.

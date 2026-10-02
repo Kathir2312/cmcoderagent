@@ -498,6 +498,13 @@ to the summary message explicitly. Either way, keep the plan **outside** the
 part of history that gets trimmed.
 
 Also: the tool is `read_only` with no target, so it needs no human approval.
+
+**Nudging the model.** Small open models often skip optional tools. In
+LangGraph you'd add a conditional edge or a `pre_model_hook` that inspects
+state (e.g. "3+ tool messages this run and `todos` is empty") and injects a
+reminder. cmcoder does the same inside its loop: it appends a
+`<system-reminder>` to the last tool result once per turn
+(`_needs_todo_reminder` in `core/agent.py`).
 Approval prompts are for side effects, and a plan has none.
 
 ### Exercise

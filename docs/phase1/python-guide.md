@@ -1133,6 +1133,21 @@ the same repair-tolerant `parse_tool_arguments` the agent uses.
 tasks with 3 or more steps, keep a todo list with TodoWrite …". The tool
 description repeats it, and says not to use it for simple one-step requests.
 
+**Reminding the model.** On Windows, Qwen ignored that line: it did the
+whole task without ever calling TodoWrite, so no checklist appeared. Claude
+Code solves this with *system reminders*, and cmcoder does the same. In
+`Agent.run`, after a step's tool calls, `_needs_todo_reminder` checks:
+
+- 3 or more tool calls this turn (`TODO_REMINDER_AFTER`);
+- no TodoWrite call this turn, and no open (not completed) todo list;
+- the reminder hasn't been sent this turn yet.
+
+If so, `TODO_REMINDER` (a short `<system-reminder>…</system-reminder>`
+text) is appended to the content of the last tool result. It goes there,
+not in a new user message, because the next request must still end with the
+tool results the model asked for. The text says "ignore this if the task is
+finished" and "don't mention this reminder", so it doesn't leak into replies.
+
 ### New Python ideas
 
 - **`Literal` types** for a fixed set of values, checked by pydantic.
