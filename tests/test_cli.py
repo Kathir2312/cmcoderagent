@@ -68,7 +68,7 @@ def test_print_mode_text(mock_server: Any, project: Path) -> None:
     assert r.stdout.strip() == "Created hello.py; it prints hi."
     assert (project / "hello.py").read_text() == "print('hi')\n"
     tool_results = [m for m in server.requests[2]["messages"] if m["role"] == "tool"]
-    assert tool_results[1]["content"] == "1 hello.py"
+    assert tool_results[1]["content"].split() == ["1", "hello.py"]  # BSD wc pads with spaces
 
 
 def test_print_mode_stream_json(mock_server: Any, project: Path) -> None:
