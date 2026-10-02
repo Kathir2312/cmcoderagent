@@ -89,7 +89,7 @@ Remote model server — cloud API, or Ollama / vLLM / LM Studio / llama.cpp on a
 | Corporate certificates | `truststore` | Trust the OS certificate store (internal CAs) without extra setup |
 | Tests | `pytest`, `pytest-asyncio`, `respx` (mock httpx) | Provider quirks testable without a real server |
 | Lint / types | `ruff`, `pyright` (strict on core) | |
-| VS Code extension | TypeScript, webview UI in React + Vite | VS Code extensions must be JS/TS |
+| VS Code extension | TypeScript; webview UI in plain TypeScript, bundled with esbuild (Phase 2 decision) | VS Code extensions must be JS/TS |
 | Protocol types across languages | pydantic → JSON Schema → generated TS types | One source of truth for Python and TypeScript |
 | Distribution | PyPI (`uv tool` / `pipx`) first; later a standalone binary (PyInstaller or Nuitka) bundled in platform-specific VSIX packages | Extension users shouldn't need to manage Python |
 
@@ -113,7 +113,7 @@ cmcoderagent/
 │   └── cli/                  # typer entry point, Textual TUI, headless and stdio modes
 ├── tests/
 ├── docs/                     # DESIGN.md (living) + one folder per phase: PLAN, guides, STATUS
-├── vscode/                   # TypeScript extension + React webview
+├── vscode/                   # TypeScript extension + webview
 └── evals/                    # benchmark tasks, runner, mock model server
 ```
 
@@ -462,11 +462,11 @@ Started early, because quality depends heavily on the model:
 | **3 — Extensibility** | MCP client, hooks, custom slash commands, subagents (`Task`) with per-role models, skills, Bash sandbox | Teams can customise it without forking |
 | **4 — Hardening** | SSO auth provider (e.g. Okta/OIDC) if needed, Responses API / Anthropic adapters, OpenTelemetry, standalone binary + platform-specific VSIX, Windows sandboxing | Release candidate |
 
-Per-phase plans, guides and status reports live in [docs/README.md](README.md) (`docs/phase0/`, `docs/phase1/`, …). Finished phases are frozen as git snapshots (Phase 0: commit `ba6669f`, tag `phase0`).
+Per-phase plans, guides and status reports live in [docs/README.md](README.md) (`docs/phase0/`, `docs/phase1/`, …). Finished phases are frozen as git snapshots (Phase 0: commit `ba6669f`, tag `phase0`; Phase 1: tag `phase1`).
 
 ### 16.1 Phase 0 status
 
-**Phase 0 is complete**; see [phase0/STATUS.md](phase0/STATUS.md). Phase 1 is in progress: [phase1/PLAN.md](phase1/PLAN.md).
+**Phase 0 is complete**; see [phase0/STATUS.md](phase0/STATUS.md). **Phase 1 is complete**; see [phase1/STATUS.md](phase1/STATUS.md). Phase 2 is in progress: [phase2/PLAN.md](phase2/PLAN.md).
 
 
 Delivered:

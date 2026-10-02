@@ -8,7 +8,7 @@ its own folder. The current phase's documents are updated as features land.
 |---|---|---|---|
 | **0 — Foundations** | ✅ Complete | commit `ba6669f` (tag `phase0`) | [phase0/](phase0/) |
 | **1 — Daily driver** | ✅ Complete | tag `phase1` | [phase1/](phase1/) |
-| 2 — VS Code | Planned | — | — |
+| **2 — VS Code** | 🚧 In progress | — | [phase2/](phase2/) |
 | 3 — Extensibility | Planned | — | — |
 | 4 — Hardening | Planned | — | — |
 
