@@ -182,6 +182,12 @@ the conversation, or both, to an earlier user message (DESIGN.md §10).
 **Done when:** tests restore files after edits, including a file the agent
 created (rewind deletes it) and one it changed outside the project (asks first).
 
+**Status: done.**
+- Content-addressed snapshots next to the session file; in memory without one.
+- Choices: code and conversation, conversation only, or code only.
+- The rewound message is put back in the input line.
+- Bash changes aren't tracked, and the screen says so.
+
 ### 8. TodoWrite
 
 **What:** a `TodoWrite` tool that keeps a visible task list for multi-step
@@ -226,7 +232,7 @@ SSO, OpenTelemetry, Windows sandboxing (Phase 4).
 - [x] 4. Steer Qwen away from Bash for file work (real-gateway measurement pending)
 - [x] 5. Managed settings
 - [x] 6. Sessions and resume
-- [ ] 7. Checkpoints and `/rewind`
+- [x] 7. Checkpoints and `/rewind`
 - [ ] 8. TodoWrite
 - [ ] 9. Small/fast model jobs
 - [ ] 10. Tool-call robustness

@@ -9,6 +9,7 @@ import time
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Protocol
 
 from pydantic import ValidationError
@@ -27,9 +28,10 @@ from ..providers.messages import (
 from ..providers.openai_compat import ContextTooLong, ProviderError
 from ..providers.profiles import ModelProfile
 from ..tools.base import Tool, ToolContext, ToolResult, truncate_middle
+from .checkpoints import Checkpoints, RestoreAction
 from .compaction import CompactionError, Summarizer, compact
 from .context import WARN_RATIO, ContextBudget
-from .permissions import Decision, PermissionPolicy, suggest_rule
+from .permissions import FILE_EDIT_TOOLS, Decision, PermissionPolicy, suggest_rule
 from .sessions import SessionLog
 from .steer import file_work_redirect
 
@@ -145,6 +147,7 @@ class Agent:
         self.session_id = session.session_id if session else str(uuid.uuid4())
         self._session_started = False
         self.turn = 0  # user turns so far in this session
+        self.checkpoints = self._new_checkpoints()
         self.system_prompt = system_prompt
         self.messages: list[Message] = [Message.system(system_prompt)]
         self.usage = Usage()
@@ -181,6 +184,10 @@ class Agent:
             permission_mode=self.policy.mode,
         )
 
+    def _new_checkpoints(self) -> Checkpoints:
+        folder = self.session.path.with_suffix(".checkpoints") if self.session else None
+        return Checkpoints(folder)
+
     def clear(self) -> None:
         """Start a new conversation (the old one stays resumable)."""
         self.messages = [Message.system(self.system_prompt)]
@@ -189,6 +196,39 @@ class Agent:
             self.session = SessionLog(self.ctx.project_root)
             self.session_id = self.session.session_id
             self._session_started = False
+        self.checkpoints = self._new_checkpoints()
+
+    def rewind_points(self) -> list[tuple[int, str, int]]:
+        """Earlier user messages to rewind to: (turn, text, files changed since)."""
+        out = []
+        for m in self.messages:
+            if m.role == "user" and m.turn:
+                out.append((m.turn, m.content, len(self.checkpoints.changes_since(m.turn))))
+        return out
+
+    def rewind(
+        self, turn: int, *, code: bool = True, conversation: bool = True, outside: bool = False
+    ) -> tuple[list[RestoreAction], str | None]:
+        """Go back to just before user message `turn`. Returns the file actions
+        and that message's text (to edit and send again), if the conversation
+        was rewound. Files outside the project are only restored if `outside`."""
+        actions: list[RestoreAction] = []
+        if code:
+            actions = self.checkpoints.restore(
+                turn, include_outside=None if outside else self.ctx.project_root.resolve()
+            )
+        prompt = None
+        if conversation:
+            idx = next(
+                (i for i, m in enumerate(self.messages) if m.role == "user" and m.turn == turn),
+                None,
+            )
+            if idx is not None:
+                prompt = self.messages[idx].content
+                self.messages = self.messages[:idx]
+                self.turn = turn - 1
+                self.save_session()
+        return actions, prompt
 
     def resume(self, messages: list[Message], session: SessionLog | None = None) -> None:
         """Continue a saved conversation (`messages` without the system prompt)."""
@@ -197,6 +237,7 @@ class Agent:
         if session is not None:
             self.session = session
             self.session_id = session.session_id
+            self.checkpoints = self._new_checkpoints()
         if self.session is not None:
             self.session.mark_saved(self.messages)
             self._session_started = True
@@ -615,6 +656,13 @@ class Agent:
                 if self.on_rule_saved:
                     self.on_rule_saved(rule)
 
+        if tool.name in FILE_EDIT_TOOLS:
+            target = tool.permission_target(args, self.ctx)
+            if isinstance(target, Path):
+                try:
+                    self.checkpoints.capture(self.turn, target)  # for /rewind
+                except OSError:
+                    pass
         try:
             res = await tool.run(args, self.ctx)
         except asyncio.CancelledError:

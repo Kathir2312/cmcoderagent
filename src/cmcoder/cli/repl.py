@@ -9,6 +9,7 @@ import asyncio
 import difflib
 from collections.abc import AsyncIterator
 from contextlib import suppress
+from pathlib import Path
 from typing import Any
 
 from prompt_toolkit import PromptSession
@@ -71,6 +72,7 @@ HELP = """\
   /help              show this help
   /clear             start a new conversation (the old one can be resumed)
   /resume [n|id]     list saved conversations in this project, or resume one
+  /rewind            go back to an earlier message: undo file changes, the conversation, or both
   /compact [focus]   summarise the conversation so far to free context
                      (e.g. /compact keep the failing test names)
   /model [name]      show or switch the model (e.g. /model qwen3-27b)
@@ -99,6 +101,7 @@ class Repl:
         self._last_prompt_tokens = 0
         self._turn_task: asyncio.Task[None] | None = None
         self._interrupt: InterruptHandler | None = None
+        self._next_input = ""  # pre-filled prompt text (after /rewind)
 
     # -- rendering helpers ------------------------------------------------
 
@@ -306,6 +309,8 @@ class Repl:
             c.print("[dim]Started a new conversation.[/dim]")
         elif name == "resume":
             await self._resume(arg)
+        elif name == "rewind":
+            await self._rewind()
         elif name == "model":
             if not arg:
                 c.print(
@@ -385,6 +390,80 @@ class Repl:
         self.agent.resume(messages, SessionLog(root, info.session_id))
         self._last_prompt_tokens = 0
         self._show_resumed()
+
+    async def _ask_line(self, prompt: str) -> str:
+        assert self.session is not None
+        try:
+            return (await self.session.prompt_async(prompt)).strip().lower()
+        except (KeyboardInterrupt, EOFError):
+            return ""
+
+    async def _rewind(self) -> None:
+        """/rewind: pick an earlier message, then what to undo."""
+        assert self.agent is not None
+        c = self.console
+        points = self.agent.rewind_points()[-10:]
+        if not points:
+            c.print("[dim]Nothing to rewind to yet.[/dim]")
+            return
+        for i, (_turn, text, changed) in enumerate(points, 1):
+            files = f"  ({changed} file(s) changed since)" if changed else ""
+            c.print(
+                Text.assemble(
+                    (f"  {i:>2} ", "bold"),
+                    clip_preview(" ".join(text.split()), 1)[0][:90],
+                    (files, "dim"),
+                )
+            )
+        pick = await self._ask_line("  rewind to before which message? (Enter to cancel): ")
+        if not pick.isdigit() or not 1 <= int(pick) <= len(points):
+            return
+        turn = points[int(pick) - 1][0]
+        what = await self._ask_line(
+            "  1 code and conversation · 2 conversation only · 3 code only: "
+        )
+        if what not in ("1", "2", "3"):
+            return
+        code, conversation = what in ("1", "3"), what in ("1", "2")
+        outside = False
+        if code:
+            root = self.agent.ctx.project_root.resolve()
+            others = [
+                e.path
+                for e in self.agent.checkpoints.changes_since(turn)
+                if not Path(e.path).is_relative_to(root)
+            ]
+            if others:
+                c.print(
+                    Text(
+                        f"  {len(others)} changed file(s) are outside the project:", style="yellow"
+                    )
+                )
+                for p in others[:10]:
+                    c.print(Text(f"    {p}", style="yellow"))
+                outside = await self._ask_line("  restore those too? [y/N]: ") in ("y", "yes")
+        actions, prompt = self.agent.rewind(
+            turn, code=code, conversation=conversation, outside=outside
+        )
+        for a in actions:
+            c.print(Text(f"  {a.action}: {a.path}", style="dim"))
+        if code:
+            c.print(
+                Text(
+                    f"  Files: {sum(a.action == 'restored' for a in actions)} restored, "
+                    f"{sum(a.action.startswith('deleted') for a in actions)} deleted. "
+                    "Changes made by Bash commands are not undone.",
+                    style="cyan",
+                )
+            )
+        if prompt is not None:
+            self._last_prompt_tokens = 0
+            self._next_input = prompt
+            c.print(
+                Text(
+                    "  Conversation rewound; your message is back in the input line.", style="cyan"
+                )
+            )
 
     def _show_resumed(self) -> None:
         """After resuming: which conversation, and where it left off."""
@@ -494,7 +573,8 @@ class Repl:
             while True:
                 if pending is None:
                     try:
-                        line = await self.session.prompt_async("> ")
+                        default, self._next_input = self._next_input, ""
+                        line = await self.session.prompt_async("> ", default=default)
                         ctrl_c = False
                     except KeyboardInterrupt:
                         if ctrl_c:

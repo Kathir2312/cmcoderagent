@@ -99,7 +99,10 @@ Conversations are saved per project: `cmcoder -c` continues the latest one, `cmc
 specific one, and `/resume` lists them (files under `~/.cmcoder/projects/`, owner-only, deleted after
 `cleanupPeriodDays`, default 30; `"persistSessions": false` turns saving off).
 
-In the interactive session: `/help`, `/model`, `/mode`, `/compact`, `/resume`, `/clear`, `/cost`, `/exit`; Shift+Tab cycles the
+`/rewind` goes back to one of your earlier messages and undoes the agent's file changes since then (Write/Edit;
+not Bash commands), the conversation, or both.
+
+In the interactive session: `/help`, `/model`, `/mode`, `/compact`, `/resume`, `/rewind`, `/clear`, `/cost`, `/exit`; Shift+Tab cycles the
 permission mode; Ctrl+C interrupts the current turn.
 
 ### Permissions

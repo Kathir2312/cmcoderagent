@@ -213,3 +213,41 @@ def test_resume_command(mock_server: Any, project: Path) -> None:
         term.close()
     contents = [m["content"] for m in server.requests[1]["messages"]]
     assert "remember the word apple" in contents
+
+
+def test_rewind_command(mock_server: Any, project: Path) -> None:
+    (project / "app.py").write_text("x = 1\n")
+    server = mock_server(
+        [
+            {"tool_calls": [{"name": "Read", "arguments": {"file_path": "app.py"}}]},
+            {
+                "tool_calls": [
+                    {
+                        "name": "Edit",
+                        "arguments": {
+                            "file_path": "app.py",
+                            "old_string": "x = 1",
+                            "new_string": "x = 2",
+                        },
+                    }
+                ]
+            },
+            {"content": "Set x to 2."},
+        ]
+    )
+    term = Term(project, server, "--permission-mode", "acceptEdits")
+    try:
+        assert term.expect(rb"/help for commands")
+        term.send("set x to 2\r")
+        assert term.expect(rb"Set x to 2\."), term.text()
+        assert (project / "app.py").read_text() == "x = 2\n"
+        term.send("/rewind\r")
+        assert term.expect(rb"rewind to before which message\?"), term.text()
+        term.send("1\r")
+        assert term.expect(rb"1 code and conversation"), term.text()
+        term.send("1\r")
+        assert term.expect(rb"Files: 1 restored"), term.text()
+        assert term.expect(rb"> set x to 2"), term.text()  # the message is back in the input line
+    finally:
+        term.close()
+    assert (project / "app.py").read_text() == "x = 1\n"

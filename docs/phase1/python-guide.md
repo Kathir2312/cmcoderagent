@@ -934,7 +934,115 @@ Windows `%USERPROFILE%\.cmcoder\projects\`); open one to see the JSON Lines.
 
 ## 7. Checkpoints and `/rewind`
 
-*Not started.*
+*Done.* Code: `src/cmcoder/core/checkpoints.py` (new), `Agent.rewind` /
+`Agent.rewind_points` and the capture in `Agent._run_call` (`core/agent.py`),
+`Repl._rewind` (`cli/repl.py`). Tests: `tests/test_checkpoints.py`, plus a
+`/rewind` test in `tests/test_repl_pty.py`.
+
+### The problem
+
+The agent edited five files and went the wrong way. Undoing that by hand (or
+with git, if you hadn't committed in between) is tedious, and the
+conversation still contains the wrong turn, so the model keeps building on
+it.
+
+### The idea
+
+Before Write or Edit changes a file for the **first time in a turn**, cmcoder
+saves what the file looks like (or notes that it doesn't exist yet). That
+saved copy is the **checkpoint**. `/rewind` then lets you pick one of your
+earlier messages and choose:
+
+```
+  1 code and conversation · 2 conversation only · 3 code only
+```
+
+- **code**: every file changed since that message goes back to how it was
+  just before it. Files the agent created since then are deleted.
+- **conversation**: the history is cut back to just before that message, and
+  your message is put back in the input line so you can edit and resend it.
+
+Two limits, both shown on screen:
+- **Changes made by Bash commands aren't tracked**: only Write and Edit go
+  through checkpoints. (Item 4 makes Bash file writes rare.)
+- **Files outside the project** are only restored if you say yes.
+
+### The code
+
+**Storage** (`Checkpoints`). Next to the session file:
+
+```
+<session-id>.checkpoints/index.json         which file was captured in which turn
+<session-id>.checkpoints/blobs/<sha256>     the contents
+```
+
+Contents are stored by their SHA-256 hash (**content-addressed**). Two
+identical versions are stored once, and the file name proves the content is
+intact. The index is written to a temporary file and then renamed with
+`os.replace`, which is **atomic**: a crash leaves either the old index or the
+new one, never half of one. Without a session file (`persistSessions: false`)
+everything is kept in memory.
+
+**Capturing** (`capture`). Called from `Agent._run_call` right before Write or
+Edit runs, after the permission check:
+
+```python
+if any(e.turn == turn and e.path == key for e in self.entries):
+    return                                   # already captured this turn: keep the oldest
+```
+
+Only the first capture per file per turn matters: that's "the file before
+this turn".
+
+**What to restore** (`changes_since(turn)`). For each file changed in that
+turn or later, take its **earliest** capture from that turn on. That's how it
+looked before the chosen message, even if later turns changed it again.
+
+**Restoring** (`restore`). `blob is None` means the file didn't exist, so
+delete it; otherwise write the saved bytes back. Afterwards the undone turns'
+entries are dropped, and new edits are captured fresh.
+
+**The conversation side** (`Agent.rewind`). It finds the user message with
+that `turn` number (item 6 added it), cuts `messages` before it, sets
+`self.turn` back and saves, which writes a `reset` record to the session
+file. If compaction already summarised that message away, only the code can
+be rewound.
+
+### New Python ideas
+
+- **Hashing** with `hashlib.sha256(data).hexdigest()` for content-addressed storage.
+- **Atomic replace**: write `x.tmp`, then `os.replace(x.tmp, x)`.
+- **`Path.is_relative_to(root)`**: is this file inside the project?
+- **`read_bytes` / `write_bytes`**: restoring exact bytes, so line endings
+  and encodings are untouched.
+- **Pre-filled input**: `prompt_async("> ", default=text)` puts the rewound
+  message back for editing.
+
+### The tests
+
+`tests/test_checkpoints.py`:
+- capture and restore, on disk and in memory:
+  - the first capture in a turn wins;
+  - a created file is deleted;
+  - restoring to turn 1 after turn 2 gives the turn-1 state;
+  - the index survives a restart;
+- files over the size limit are skipped, never overwritten;
+- the agent across two turns (edit, then edit again and create):
+  - rewinding to message 2 restores `x = 2` and deletes `notes.md`;
+  - it hands back the message text and rewinds the session file;
+  - rewinding code only to message 1 gives `x = 1`;
+- conversation-only rewind leaves files alone;
+- a file outside the project is left alone unless you agree;
+- checkpoints survive `--resume`.
+
+`tests/test_repl_pty.py::test_rewind_command` drives the real terminal: edit,
+`/rewind`, choose 1 and 1, the file is restored, and "set x to 2" is back in
+the input line.
+
+### Try it
+
+Ask cmcoder to make a change in a scratch project, then `/rewind`, pick that
+message, and choose `3` (code only). Run `git status`: the change is gone.
 
 ## 8. TodoWrite
 

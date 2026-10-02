@@ -400,7 +400,57 @@ does what `sessions.repair` does before the model is called.
 
 ## 7. Checkpoints and `/rewind`
 
-*Not started.*
+*Done.* Code: `src/cmcoder/core/checkpoints.py`, `Agent.rewind`.
+
+### The LangGraph way
+
+LangGraph calls this **time travel**. A checkpointer keeps every state, so
+you can go back and fork:
+
+```python
+history = list(graph.get_state_history(config))        # newest first
+before = next(s for s in history if s.next == ("agent",) and len(s.values["messages"]) == 1)
+graph.invoke(None, before.config)                       # replay from there
+# or edit first:
+graph.update_state(before.config, {"messages": [("user", "do it differently")]})
+```
+
+This rewinds **graph state**. It doesn't touch the **world**: files your
+tools wrote stay written. Undoing side effects is your job.
+
+### The cmcoder way
+
+| | LangGraph | cmcoder |
+|---|---|---|
+| Rewind the conversation | replay from a checkpoint (`get_state_history`, `update_state`) | cut messages before user message N; resend or edit it |
+| Rewind side effects | not covered | file snapshots taken before each Write/Edit, restored on `/rewind` |
+| Granularity | every super-step | per user message (turn) |
+| Choice | – | code and conversation / conversation only / code only |
+
+### Why they differ
+
+A coding agent's important state isn't in the graph, it's **on disk**.
+Rewinding only the conversation leaves the files changed, and the model
+then reads files that don't match the history it was given.
+
+cmcoder records the **inverse of each side effect** (the file before the
+change) just before it happens, at the one choke point all file changes pass
+through (`_run_call`). This "undo log" pattern applies to any agent framework:
+- wrap the side-effecting tool;
+- save what's needed to undo it, keyed by the step;
+- offer the undo next to the state rewind.
+
+The honest limit is the same everywhere: side effects you can't capture
+(arbitrary shell commands, network calls) can't be undone. So say which
+ones aren't tracked, as cmcoder does.
+
+### Exercise
+
+In the [Phase 0 LangGraph sketch](../phase0/langgraph-guide.md#5-cmcoder-written-in-langgraph-sketch),
+add a `write_file` tool that saves the old contents into a `snapshots` key
+of graph state, keyed by the number of human messages so far. Then write a
+`rewind(n)` helper that does both: `update_state` to drop messages after
+human message `n`, and restores the snapshots.
 
 ## 8. TodoWrite
 
