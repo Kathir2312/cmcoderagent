@@ -69,6 +69,53 @@ def find_shell() -> str | None:
     return None
 
 
+# Known Folder IDs (Windows): 64-bit Program Files, then the process's own.
+_FOLDERID_PROGRAM_FILES = (
+    "{6D809377-6AF0-444B-8957-A3773F02200E}",  # FOLDERID_ProgramFilesX64
+    "{905E63B6-C1BF-494E-B29C-65B732D3D21A}",  # FOLDERID_ProgramFiles
+)
+
+
+def program_files_dir() -> Path:
+    """C:\\Program Files, asked from Windows itself (SHGetKnownFolderPath).
+
+    Not taken from %ProgramFiles%, which any user can change for their own
+    processes. Falls back to C:\\Program Files.
+    """
+    if IS_WINDOWS:
+        import ctypes
+        import uuid
+
+        class GUID(ctypes.Structure):
+            _fields_ = [  # noqa: RUF012 - ctypes layout
+                ("Data1", ctypes.c_uint32),
+                ("Data2", ctypes.c_uint16),
+                ("Data3", ctypes.c_uint16),
+                ("Data4", ctypes.c_ubyte * 8),
+            ]
+
+        for folder_id in _FOLDERID_PROGRAM_FILES:
+            u = uuid.UUID(folder_id)
+            guid = GUID(
+                u.time_low,
+                u.time_mid,
+                u.time_hi_version,
+                (ctypes.c_ubyte * 8).from_buffer_copy(u.bytes[8:]),
+            )
+            out = ctypes.c_wchar_p()
+            try:
+                hr = ctypes.windll.shell32.SHGetKnownFolderPath(  # type: ignore[attr-defined]
+                    ctypes.byref(guid), 0, None, ctypes.byref(out)
+                )
+                if hr == 0 and out.value:
+                    path = Path(out.value)
+                    ctypes.windll.ole32.CoTaskMemFree(out)  # type: ignore[attr-defined]
+                    return path
+            except Exception:  # any failure: use the standard location
+                pass
+    return Path("C:/Program Files")
+
+
 def to_shell_path(path: str | Path) -> str:
     """A path as bash sees it: C:\\Users\\me -> /c/Users/me on Windows (Git Bash)."""
     p = str(path)

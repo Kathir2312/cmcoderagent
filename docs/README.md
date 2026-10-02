@@ -37,4 +37,5 @@ git checkout phase0        # read-only snapshot; `git switch -` to go back
 ## Settings example
 
 [settings.example.json](settings.example.json) shows every setting the
-current code understands.
+current code understands; [managed-settings.example.json](managed-settings.example.json)
+is a starting point for administrators.

@@ -620,8 +620,186 @@ and watch which tool Qwen picks.
 
 ## 5. Managed settings
 
-*Not started.* Will cover: per-OS file locations, why the Windows path is
-looked up through the Windows API, merging settings layers, and "failing closed".
+*Done.* Code: `config/settings.py` (`managed_settings_path`,
+`read_managed_settings`, the end of `load_settings`), `compat.py`
+(`program_files_dir`), `core/permissions.py` (the `mode` property,
+`available_modes`, `allow_rules_locked`), `cli/factory.py` (`build_agent`),
+`cli/repl.py` (`/mode`, Shift+Tab, the banner), `cli/doctor.py`
+(`check_managed`). Tests: `tests/test_managed.py`. Example file:
+[`docs/managed-settings.example.json`](../managed-settings.example.json).
+
+### The problem
+
+Your security team wants rules that **developers can't loosen**. Every
+settings file so far belongs to the developer: `~/.cmcoder/settings.json`, the
+project's `.cmcoder/settings.json`, `settings.local.json`. Any of them can turn
+on `bypassPermissions`, add `"allow": ["Bash"]`, or point cmcoder at a
+different server.
+
+### The idea
+
+One more settings file, **owned by administrators**, in a place ordinary
+users can't write:
+
+| OS | Managed settings file |
+|---|---|
+| Windows | `C:\Program Files\cmcoder\managed-settings.json` |
+| macOS | `/Library/Application Support/cmcoder/managed-settings.json` |
+| Linux | `/etc/cmcoder/managed-settings.json` |
+
+It's applied **last**, after every other layer, so it always wins. What it can
+enforce:
+
+| Key | Effect |
+|---|---|
+| `permissions.disableBypassPermissionsMode: "disable"` | `bypassPermissions` can't be chosen: not by `--permission-mode`, `defaultMode`, `/mode` or Shift+Tab |
+| `permissions.highRiskCommands: "deny"` | high-risk commands (`rm -rf`, force push, `curl \| sh` …) never run |
+| `permissions.deny: [...]` | deny rules that always apply (they're added to everyone else's) |
+| `permissions.allowManagedPermissionRulesOnly: true` | only the managed `allow` rules count: other files' allow rules, `--allowedTools` and "always allow" answers are ignored |
+| `lockProviders: true` | only the managed `providers` (gateway URL, CA) can be used; other providers and `CMCODER_BASE_URL` are ignored |
+| `env: {...}` | environment variables that override the user's |
+
+Three security rules shape the code:
+
+1. **It can't be moved.** No environment variable or flag changes where
+   cmcoder looks.
+2. **It fails closed.** If the file exists but is broken or unreadable,
+   cmcoder refuses to start instead of quietly running without the rules.
+3. **Only the managed file can use the managed-only keys.** If a project's
+   `.cmcoder/settings.json` says `lockProviders: true`, that's ignored.
+   Otherwise a downloaded repository could lock you to *its* server.
+
+### The code
+
+**Finding the file** (`managed_settings_path`). `sys.platform` tells the OS:
+`"win32"`, `"darwin"` (macOS) or `"linux"`. On Windows the folder isn't read
+from `%ProgramFiles%`, because any user can change environment variables for
+their own programs. Instead `compat.program_files_dir()` asks Windows itself,
+through the **Known Folders** API, using **ctypes** (Python's way to call C
+functions in system DLLs):
+
+```python
+out = ctypes.c_wchar_p()                                      # will receive a string pointer
+hr = ctypes.windll.shell32.SHGetKnownFolderPath(ctypes.byref(guid), 0, None, ctypes.byref(out))
+if hr == 0:                                                   # 0 means success in Windows APIs
+    path = Path(out.value)
+    ctypes.windll.ole32.CoTaskMemFree(out)                    # Windows allocated it; we free it
+```
+
+The `guid` is a 16-byte ID that names the folder (FOLDERID_ProgramFiles). Why
+not `C:\ProgramData`? Ordinary users can create folders there, so a
+developer could create `C:\ProgramData\cmcoder\` before IT does and own it.
+
+**Reading it** (`read_managed_settings`):
+
+```python
+try:
+    text = path.read_text(encoding="utf-8")
+except FileNotFoundError:
+    return {}                       # no file: nothing is managed
+except OSError as e:
+    raise SettingsError(...)        # exists but can't be read: refuse to start
+```
+
+`FileNotFoundError` is a *subclass* of `OSError`, so it must be caught
+**first**. `except` clauses are tried top to bottom.
+
+**Merging** (end of `load_settings`):
+1. `_strip_managed_only()` removes the managed-only keys from the user,
+   project and local files as they're read.
+2. Under `lockProviders`, the environment's gateway URL is dropped (the
+   model name from `CMCODER_MODEL` still counts).
+3. The managed file is merged last with `deep_merge`, so its values win and
+   its `deny` rules are added.
+4. Under `allowManagedPermissionRulesOnly`, `allow` is reset to the managed
+   list; under `lockProviders`, `providers` is replaced by a copy of the
+   managed ones.
+
+**Enforcing the mode** (`PermissionPolicy.mode` is now a **property**). A
+property looks like a plain attribute (`policy.mode = "plan"`) but runs code
+on every assignment:
+
+```python
+@property
+def mode(self) -> str:
+    return self._mode
+
+@mode.setter
+def mode(self, value: str) -> None:
+    if value == "bypassPermissions" and self.bypass_disabled:
+        raise ModeNotAllowed(BYPASS_DISABLED_MESSAGE)
+    self._mode = value
+```
+
+So *every* way of changing the mode goes through one check:
+- the `--permission-mode` flag;
+- `defaultMode` in a settings file;
+- `/mode bypassPermissions`;
+- Shift+Tab, which cycles through `available_modes()` and skips the
+  disabled one.
+
+`build_agent` creates the policy **before** contacting the gateway, so a
+forbidden mode fails immediately with a clear message.
+
+**"Always allow"** isn't offered while `allow_rules_locked` is set
+(`can_remember=False`), and `add_allow()` ignores rules.
+
+**`doctor`** (`check_managed`) shows the file and what it enforces. It warns
+if the current user can write the file or its folder (`os.access(path,
+os.W_OK)`), because then it protects nothing.
+
+### What it does and doesn't protect against
+
+Managed settings stop **developers and repositories from loosening the
+rules**. They don't protect a machine that's already compromised: an attacker
+with administrator rights can edit the file. That needs the sandbox/VM and
+gateway-side controls from the security discussion.
+
+### New Python ideas
+
+- **`@property` with a setter**: attribute syntax, with a check behind it.
+- **Exception order**: catch the specific subclass (`FileNotFoundError`)
+  before the general one (`OSError`).
+- **ctypes**: calling Windows API functions from Python, including memory
+  the OS allocates and you must free.
+- **`sys.platform`** for OS-specific code paths.
+- **Monkeypatching in tests**: `monkeypatch.setattr(module, "name", value)`
+  temporarily replaces a function. The tests point `managed_settings_path` at
+  a temporary file, and `conftest.py` does it for every test, so a real
+  `/etc/cmcoder` on your machine can't affect the test run.
+
+### The tests
+
+`tests/test_managed.py`:
+
+- **The file:** none present → nothing managed. Broken JSON, a non-object, or
+  an unreadable path → cmcoder refuses to start. `CMCODER_CONFIG_DIR`,
+  `%ProgramFiles%` and `%PROGRAMDATA%` can't move it, and the Windows path
+  comes from Windows.
+- **Deny and high-risk:** managed deny rules and `highRiskCommands: "deny"`
+  win over user and project files.
+- **Managed-only keys:** they're ignored when a project file sets them.
+- **Allow rules:** with managed-only rules, user, project and local allow
+  rules and `--allowedTools` are dropped, `--disallowedTools` still adds, and
+  "always allow" is neither offered nor saved.
+- **Bypass mode:** refused from the flag, user settings or project settings,
+  and can't be switched on later (`/mode`, Shift+Tab).
+- **Providers:** `lockProviders` drops other providers and `CMCODER_BASE_URL`,
+  but keeps the CA path and still lets `CMCODER_MODEL` pick the model. Locking
+  without providers is an error.
+- **Environment:** the managed `env` wins.
+- **doctor:** shows what's enforced and warns when the file is writable.
+
+```bash
+uv run pytest tests/test_managed.py -v
+```
+
+### Try it
+
+On Linux or macOS (as administrator), copy `docs/managed-settings.example.json`
+to the managed path, put in your gateway URL, then run `cmcoder doctor` and
+`cmcoder --permission-mode bypassPermissions`. On Windows, use an
+administrator prompt and `C:\Program Files\cmcoder\`.
 
 ## 6. Sessions and resume
 

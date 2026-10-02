@@ -364,7 +364,7 @@ Tool descriptions are part of the prompt tiers: the `compact` tier uses shorter 
 
 ## 8. Permissions and sandbox
 
-- **Modes:** `default` (ask), `acceptEdits`, `plan` (read-only, then propose a plan), `bypassPermissions`. Shift+Tab cycles through them in the TUI.
+- **Modes:** `default` (ask), `acceptEdits`, `plan` (read-only, then propose a plan), `bypassPermissions`. Shift+Tab cycles through them in the TUI. Managed settings can disable `bypassPermissions` everywhere (§11).
 - **Rules:** `allow` / `ask` / `deny` lists in settings, e.g. `Bash(npm test:*)`, `Edit(src/**)`, `WebFetch(domain:github.com)`, `mcp__server__tool`. Deny wins.
 - **Interactive prompt:** allow once / allow always (saved to `settings.local.json`) / deny with a reason for the model.
 - **Working directory boundary:** writes outside the project and added directories need approval.
@@ -396,7 +396,7 @@ Tool descriptions are part of the prompt tiers: the `compact` tier uses shorter 
 
 Layers 2–5 are merged in order, later ones overriding earlier ones (permission rules accumulate instead). Layer 1 is applied last and cannot be overridden:
 
-1. Managed settings (enterprise policy, Phase 1), admin-only: `/etc/cmcoder/managed-settings.json` (Linux), `/Library/Application Support/cmcoder/managed-settings.json` (macOS), `C:\Program Files\cmcoder\managed-settings.json` (Windows). Always wins; fails closed if broken. Details: [phase1/PLAN.md](phase1/PLAN.md) item 5.
+1. Managed settings (enterprise policy, Phase 1), admin-only: `/etc/cmcoder/managed-settings.json` (Linux), `/Library/Application Support/cmcoder/managed-settings.json` (macOS), `C:\Program Files\cmcoder\managed-settings.json` (Windows). Always wins; fails closed if broken; can't be moved by env var or flag (on Windows the folder comes from the Known Folders API). Keys: `permissions.disableBypassPermissionsMode`, `permissions.highRiskCommands`, `permissions.deny`, `permissions.allowManagedPermissionRulesOnly`, `lockProviders`, `env`; the managed-only keys are ignored in every other file. Example: [managed-settings.example.json](managed-settings.example.json). Implemented in Phase 1 (item 5).
 2. User `~/.cmcoder/settings.json`
 3. Project `.cmcoder/settings.json` (committed)
 4. Local project `.cmcoder/settings.local.json` (git-ignored)

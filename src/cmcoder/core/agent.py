@@ -549,7 +549,7 @@ class Agent:
                     input=args.model_dump(),
                     suggested_rule=rule,
                     reason=check.reason,
-                    can_remember=not check.high_risk,
+                    can_remember=not check.high_risk and not self.policy.allow_rules_locked,
                 )
             )
             if not answer.allow:
@@ -564,7 +564,7 @@ class Agent:
                 if not feedback:
                     yield _StopTurn()
                 return
-            if answer.remember and not check.high_risk:
+            if answer.remember and not check.high_risk and not self.policy.allow_rules_locked:
                 self.policy.add_allow(rule)
                 if self.on_rule_saved:
                     self.on_rule_saved(rule)

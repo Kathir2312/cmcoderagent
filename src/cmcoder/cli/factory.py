@@ -21,7 +21,7 @@ from ..config.settings import (
 )
 from ..core.agent import Agent, AskFn
 from ..core.compaction import Summarizer
-from ..core.permissions import PermissionPolicy
+from ..core.permissions import ModeNotAllowed, PermissionPolicy
 from ..core.prompt import build_system_prompt, load_memory_files
 from ..providers.auth import ApiKeyAuth, AuthProvider, NoAuth
 from ..providers.openai_compat import OpenAICompatProvider, ProviderError
@@ -174,15 +174,27 @@ async def build_agent(settings: Settings, opts: AgentOptions) -> Agent:
     cwd = opts.cwd.resolve()
     root = find_project_root(cwd)
     provider_name, model = settings.resolve_model(opts.model)
+
+    # The permission policy first: a mode the organisation forbids fails
+    # before anything is sent to the gateway.
+    perms = settings.permissions
+    locked = perms.allow_managed_permission_rules_only
+    try:
+        policy = PermissionPolicy(
+            mode=opts.permission_mode or perms.default_mode,
+            # With managed-only rules, --allowedTools is ignored like other allow rules.
+            allow=[*perms.allow, *([] if locked else (opts.allowed_tools or []))],
+            deny=[*perms.deny, *(opts.disallowed_tools or [])],
+            high_risk=perms.high_risk_commands,
+            bypass_disabled=perms.disable_bypass_permissions_mode == "disable",
+            allow_rules_locked=locked,
+        )
+    except ModeNotAllowed as e:
+        where = "--permission-mode" if opts.permission_mode else "defaultMode in your settings"
+        raise SettingsError(f"{e} Remove {where} or choose another mode.") from e
+
     provider = build_provider(settings, provider_name)
     profile = await resolve_model_profile(settings, provider, model)
-
-    policy = PermissionPolicy(
-        mode=opts.permission_mode or settings.permissions.default_mode,
-        allow=[*settings.permissions.allow, *(opts.allowed_tools or [])],
-        deny=[*settings.permissions.deny, *(opts.disallowed_tools or [])],
-        high_risk=settings.permissions.high_risk_commands,
-    )
     memory = load_memory_files(cwd, root)
     system_prompt = build_system_prompt(
         cwd,

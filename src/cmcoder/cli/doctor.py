@@ -11,6 +11,7 @@ import ssl
 import tempfile
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
@@ -18,7 +19,7 @@ from rich.console import Console
 from rich.text import Text
 
 from ..compat import SHELL_HELP, find_shell
-from ..config.settings import Settings
+from ..config.settings import Settings, managed_settings_path
 from ..providers.auth import ApiKeyAuth
 from ..providers.messages import Message, StreamDone, TextDelta, ToolSpec
 from ..providers.openai_compat import OpenAICompatProvider, ProviderError
@@ -57,6 +58,34 @@ class Doctor:
 
     # ------------------------------------------------------------------
 
+    def check_managed(self) -> None:
+        """Report the organisation's managed settings, and whether this user
+        could change them (then they don't protect anything)."""
+        s = self.settings
+        path = Path(s.managed_path) if s.managed_path else managed_settings_path()
+        if not s.managed_path:
+            self.report(INFO, "No managed settings", f"(an administrator can create {path})")
+            return
+        p = s.permissions
+        enforced = [
+            f"bypassPermissions {'disabled' if p.disable_bypass_permissions_mode else 'allowed'}",
+            f"high-risk commands: {p.high_risk_commands}",
+            f"{len(p.deny)} deny rule(s)",
+        ]
+        if p.allow_managed_permission_rules_only:
+            enforced.append("only managed allow rules")
+        if s.lock_providers:
+            enforced.append(f"providers locked to: {', '.join(s.providers)}")
+        self.report(OK, f"Managed settings in effect: {path}", "; ".join(enforced))
+        writable = [q for q in (path, path.parent) if os.access(q, os.W_OK)]
+        if writable:
+            self.report(
+                WARN,
+                "Managed settings can be changed by the current user",
+                f"{writable[0]} is writable without administrator rights here (or you are "
+                "running as an administrator). Restrict it so only administrators can write it.",
+            )
+
     def check_local(self) -> None:
         self.section("Local environment")
         s = self.settings
@@ -65,6 +94,7 @@ class Doctor:
             "Settings loaded from",
             "\n".join(s.sources) or "(no settings files; using defaults)",
         )
+        self.check_managed()
         self.report(
             INFO,
             f"Platform: {platform.system()} {platform.release()}, Python {platform.python_version()}",

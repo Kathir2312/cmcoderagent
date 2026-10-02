@@ -142,6 +142,16 @@ Phase 4).
 **Done when:** tests prove each key cannot be overridden by user/project/local
 settings, flags or env vars, and a broken file stops start-up.
 
+**Status: done.** Example file: `docs/managed-settings.example.json`. Beyond
+the plan:
+- the managed-only keys are ignored in every other file, so a repository
+  can't lock you to its own server;
+- a forbidden mode fails before anything is sent to the gateway;
+- the startup banner shows "policy: managed settings in effect".
+
+The Windows path code runs only on Windows: CI exercises it, and it falls
+back to `C:\Program Files` on any error.
+
 **Limit:** this stops developers loosening the rules; it does not protect a
 compromised machine (an admin-level attacker can edit the file). That needs the
 sandbox/VM and gateway-side controls discussed separately.
@@ -206,7 +216,7 @@ SSO, OpenTelemetry, Windows sandboxing (Phase 4).
 - [x] 2. Permission prompt never scrolls off screen (the Textual dialog follows in item 11)
 - [x] 3. Detect the real context window
 - [x] 4. Steer Qwen away from Bash for file work (real-gateway measurement pending)
-- [ ] 5. Managed settings
+- [x] 5. Managed settings
 - [ ] 6. Sessions and resume
 - [ ] 7. Checkpoints and `/rewind`
 - [ ] 8. TodoWrite

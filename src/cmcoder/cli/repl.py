@@ -26,7 +26,7 @@ from .. import __version__
 from ..compat import InterruptHandler
 from ..config.settings import Settings, config_dir
 from ..core.agent import Agent, PermissionAnswer, PermissionRequest
-from ..core.permissions import MODES
+from ..core.permissions import MODES, ModeNotAllowed
 from ..protocol import events as ev
 from ..providers.messages import Usage
 from ..providers.openai_compat import OpenAICompatProvider
@@ -323,9 +323,13 @@ class Repl:
         elif name == "mode":
             if arg:
                 if arg not in MODES:
-                    c.print(f"[red]Unknown mode. Choose one of: {', '.join(MODES)}[/red]")
+                    modes = ", ".join(self.agent.policy.available_modes())
+                    c.print(f"[red]Unknown mode. Choose one of: {modes}[/red]")
                 else:
-                    self.agent.policy.mode = arg
+                    try:
+                        self.agent.policy.mode = arg
+                    except ModeNotAllowed as e:
+                        c.print(Text(str(e), style="red"))
             c.print(f"Permission mode: [bold]{self.agent.policy.mode}[/bold]")
         elif name == "cost":
             u: Usage = self.agent.usage
@@ -395,7 +399,8 @@ class Repl:
                 f"model    {agent.model}  [dim]({agent.provider.name}: {cfg.base_url})[/dim]\n"
                 f"cwd      {agent.ctx.cwd}\n"
                 f"mode     {agent.policy.mode}\n"
-                "[dim]/help for commands · Ctrl+C interrupts · /exit quits[/dim]",
+                + ("policy   managed settings in effect\n" if self.settings.managed_path else "")
+                + "[dim]/help for commands · Ctrl+C interrupts · /exit quits[/dim]",
                 border_style="cyan",
             )
         )
@@ -404,7 +409,8 @@ class Repl:
         @bindings.add("s-tab")
         def _cycle_mode(event: Any) -> None:
             policy = agent.policy
-            policy.mode = MODES[(MODES.index(policy.mode) + 1) % len(MODES)]
+            modes = policy.available_modes()  # skips bypassPermissions when disabled
+            policy.mode = modes[(modes.index(policy.mode) + 1) % len(modes)]
             event.app.invalidate()
 
         @bindings.add("escape", "enter")

@@ -290,7 +290,56 @@ instead of bash.
 
 ## 5. Managed settings
 
-*Not started.*
+*Done.* Code: `config/settings.py`, `core/permissions.py`, `cli/factory.py`.
+
+### The LangGraph way
+
+There's no direct equivalent. A LangGraph app gets its configuration from
+the code that builds the graph and from `config["configurable"]` at run time,
+and whoever runs the code controls both. Organisation-wide control usually
+lives **outside** the agent:
+- on **LangGraph Platform**, deployment configuration and assistants set by
+  the operators;
+- in an **LLM gateway** (LiteLLM: per-key model access, budgets, guardrails);
+- in the **runtime**: containers, network policy.
+
+### The cmcoder way
+
+cmcoder runs on the developer's machine, under the developer's account, so it
+needs a configuration source that account can't write. It follows Claude
+Code's design: an admin-owned `managed-settings.json` that's merged last and
+can't be overridden.
+
+| Concern | How it's handled |
+|---|---|
+| Can a user point cmcoder at another policy file? | No: fixed per-OS path, no env var or flag; on Windows the folder comes from the Known Folders API, not `%ProgramFiles%` |
+| What if the file is broken? | Fail closed: refuse to start |
+| Can a repository impersonate the organisation? | No: managed-only keys are stripped from every other file |
+| Can a mode be switched on mid-session? | No: `PermissionPolicy.mode` is a property that checks every assignment |
+| Can a user send traffic elsewhere? | Not with `lockProviders`: only the managed gateway (and CA) are used |
+
+### Why they differ
+
+A server-side agent is controlled by whoever deploys it. A **client-side**
+agent runs where users have full control of their own account, so policy has
+to come from a place with *different* ownership (admin-only files) and be
+**checked at the point of use** (the property setter), not only at start-up.
+
+The lesson for any agent design: decide *who* each setting belongs to, and
+make sure lower-trust sources (a cloned repository's config) can't claim the
+authority of higher-trust ones (the organisation).
+
+A client-side policy file still can't protect against someone who already
+controls the machine. For that, combine it with the gateway (keys, budgets,
+allowed models) and the runtime (sandbox or VM).
+
+### Exercise
+
+In the [Phase 0 LangGraph sketch](../phase0/langgraph-guide.md#5-cmcoder-written-in-langgraph-sketch),
+read a `policy.json` and refuse to compile the graph if `"bypass": true` is
+requested while the policy forbids it. Then put the same check in the
+`tools` node, so a mode changed mid-run is also caught. That is the
+difference between checking at start-up and checking at the point of use.
 
 ## 6. Sessions and resume
 

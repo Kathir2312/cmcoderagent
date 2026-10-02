@@ -30,6 +30,13 @@ from ..tools.base import Tool, ToolContext
 from .risk import high_risk_reason
 
 MODES = ("default", "acceptEdits", "plan", "bypassPermissions")
+BYPASS_DISABLED_MESSAGE = "bypassPermissions is disabled by your organisation's managed settings."
+
+
+class ModeNotAllowed(ValueError):
+    pass
+
+
 HIGH_RISK_MODES = ("ask", "deny")
 FILE_EDIT_TOOLS = {"Edit", "Write"}
 _RULE_RE = re.compile(r"^\s*([A-Za-z_][\w-]*)\s*(?:\((.*)\))?\s*$", re.S)
@@ -176,19 +183,43 @@ class PermissionPolicy:
         allow: list[str] | None = None,
         deny: list[str] | None = None,
         high_risk: str = "ask",
+        *,
+        bypass_disabled: bool = False,
+        allow_rules_locked: bool = False,
     ) -> None:
-        if mode not in MODES:
-            raise ValueError(
-                f"Unknown permission mode {mode!r}; expected one of {', '.join(MODES)}"
-            )
         if high_risk not in HIGH_RISK_MODES:
             raise ValueError(f"highRiskCommands must be one of {', '.join(HIGH_RISK_MODES)}")
+        # Managed settings: bypassPermissions can't be chosen in any way
+        # (flag, settings, /mode, Shift+Tab), and only the managed allow rules
+        # apply ("always allow" answers are not offered).
+        self.bypass_disabled = bypass_disabled
+        self.allow_rules_locked = allow_rules_locked
+        self._mode = "default"
         self.mode = mode
         self.high_risk = high_risk
         self.allow = [Rule.parse(r) for r in allow or []]
         self.deny = [Rule.parse(r) for r in deny or []]
 
+    @property
+    def mode(self) -> str:
+        return self._mode
+
+    @mode.setter
+    def mode(self, value: str) -> None:
+        if value not in MODES:
+            raise ValueError(
+                f"Unknown permission mode {value!r}; expected one of {', '.join(MODES)}"
+            )
+        if value == "bypassPermissions" and self.bypass_disabled:
+            raise ModeNotAllowed(BYPASS_DISABLED_MESSAGE)
+        self._mode = value
+
+    def available_modes(self) -> list[str]:
+        return [m for m in MODES if not (m == "bypassPermissions" and self.bypass_disabled)]
+
     def add_allow(self, rule: str) -> None:
+        if self.allow_rules_locked:
+            return
         parsed = Rule.parse(rule)
         if all(str(r) != str(parsed) for r in self.allow):
             self.allow.append(parsed)

@@ -125,6 +125,15 @@ to use instead (Write, Read, Edit, Grep, Glob), with no prompt for you. Pipeline
 usual, and the model can send the same command again if it really needs the shell. Turn it off per model with
 `"modelProfiles": [{"match": "qwen3*", "steerBashFileWork": false}]`.
 
+### Managed settings (for administrators)
+
+An organisation can enforce rules that users and repositories can't loosen, in an admin-only file:
+`C:\Program Files\cmcoder\managed-settings.json` (Windows), `/Library/Application Support/cmcoder/managed-settings.json`
+(macOS), `/etc/cmcoder/managed-settings.json` (Linux). It can disable `bypassPermissions`, deny high-risk commands,
+add deny rules, allow only its own allow rules, lock cmcoder to the company gateway (`lockProviders`) and set
+environment variables. If the file is broken, cmcoder won't start. See
+[docs/managed-settings.example.json](docs/managed-settings.example.json); `cmcoder doctor` shows what's enforced.
+
 ### Context window
 
 Qwen3 is often served with a 32K-token window, which an agent fills quickly. cmcoder sizes each request to the

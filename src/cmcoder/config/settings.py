@@ -6,13 +6,15 @@ Later layers override earlier ones:
   3. local       <project>/.cmcoder/settings.local.json  (git-ignored)
   4. env vars    CMCODER_* (and OPENAI_* fallbacks)
   5. CLI flags   (applied by the CLI)
-Enterprise policy (always wins) is a Phase 4 item.
+and on top of all of them, applied last and impossible to override:
+  0. managed     the admin-only managed-settings.json (see managed_settings_path)
 """
 
 from __future__ import annotations
 
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Any, Literal
 
@@ -45,6 +47,13 @@ class PermissionsConfig(_Model):
     default_mode: PermissionModeName = Field("default", alias="defaultMode")
     # "ask": high-risk shell commands always need approval; "deny": never run.
     high_risk_commands: Literal["ask", "deny"] = Field("ask", alias="highRiskCommands")
+    # Managed settings only (ignored in other files):
+    disable_bypass_permissions_mode: Literal["disable"] | None = Field(
+        None, alias="disableBypassPermissionsMode"
+    )
+    allow_managed_permission_rules_only: bool = Field(
+        False, alias="allowManagedPermissionRulesOnly"
+    )
 
 
 class Settings(_Model):
@@ -60,8 +69,12 @@ class Settings(_Model):
     auto_compact: bool = Field(True, alias="autoCompact")
     auto_compact_threshold: float = Field(0.8, alias="autoCompactThreshold", ge=0.3, le=0.95)
     env: dict[str, str] = Field(default_factory=dict)
+    # Managed settings only: use only the providers the managed file defines.
+    lock_providers: bool = Field(False, alias="lockProviders")
     # Where each layer came from, for `cmcoder doctor`.
     sources: list[str] = Field(default_factory=list, exclude=True)
+    # The managed settings file in force, if any.
+    managed_path: str | None = Field(None, exclude=True)
 
     def resolve_model(self, ref: str | None = None) -> tuple[str, str]:
         """Split "provider:model" into (provider, model).
@@ -94,6 +107,61 @@ class SettingsError(Exception):
 
 def config_dir() -> Path:
     return Path(os.environ.get("CMCODER_CONFIG_DIR", Path.home() / ".cmcoder"))
+
+
+def managed_settings_path() -> Path:
+    """Where the organisation's managed settings live: a location only
+    administrators can write. Deliberately not configurable by environment
+    variable or flag, so a user can't point cmcoder somewhere else."""
+    if sys.platform == "win32":
+        from ..compat import program_files_dir
+
+        # Not C:\\ProgramData: ordinary users can create folders there.
+        return program_files_dir() / "cmcoder" / "managed-settings.json"
+    if sys.platform == "darwin":
+        return Path("/Library/Application Support/cmcoder/managed-settings.json")
+    return Path("/etc/cmcoder/managed-settings.json")
+
+
+# Keys that only count in the managed file: in any other file they would let
+# a project (or a user) speak for the organisation.
+_MANAGED_ONLY_PERMISSIONS = ("disableBypassPermissionsMode", "allowManagedPermissionRulesOnly")
+_MANAGED_ONLY_TOP = ("lockProviders",)
+
+
+def _strip_managed_only(layer: dict[str, Any]) -> dict[str, Any]:
+    layer = {k: v for k, v in layer.items() if k not in _MANAGED_ONLY_TOP}
+    perms = layer.get("permissions")
+    if isinstance(perms, dict):
+        layer["permissions"] = {
+            k: v for k, v in perms.items() if k not in _MANAGED_ONLY_PERMISSIONS
+        }
+    return layer
+
+
+def read_managed_settings(path: Path | None = None) -> dict[str, Any]:
+    """The managed settings, or {} if there is no file. Fails closed: a
+    file that exists but can't be read or parsed stops cmcoder."""
+    path = path or managed_settings_path()
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return {}
+    except OSError as e:
+        raise SettingsError(
+            f"Managed settings {path} exist but can't be read ({e}). cmcoder won't start "
+            "without them; ask your administrator."
+        ) from e
+    try:
+        data = json.loads(text)
+    except ValueError as e:
+        raise SettingsError(
+            f"Managed settings {path} are not valid JSON ({e}). cmcoder won't start until "
+            "your administrator fixes them."
+        ) from e
+    if not isinstance(data, dict):
+        raise SettingsError(f"Managed settings {path} must contain a JSON object.")
+    return data
 
 
 def find_project_root(cwd: Path) -> Path:
@@ -186,16 +254,33 @@ def load_settings(cwd: Path | None = None, environ: dict[str, str] | None = None
         root / ".cmcoder" / "settings.json",
         root / ".cmcoder" / "settings.local.json",
     ):
-        layer = _read_json(path)
+        layer = _strip_managed_only(_read_json(path))
         if layer:
             merged = deep_merge(merged, layer)
             sources.append(str(path))
+    managed_file = managed_settings_path()
+    managed = read_managed_settings(managed_file)
     env = env_layer(environ)
+    if managed.get("lockProviders"):
+        env.pop("providers", None)  # no gateway URL from the environment
     if env:
         # An env base URL on its own (no settings providers) defines "default";
         # with providers configured it overrides only "default" if present.
         merged = deep_merge(merged, env)
         sources.append("environment")
+    if managed:
+        merged = deep_merge(merged, managed)
+        sources.append(f"{managed_file} (managed)")
+        perms = merged.setdefault("permissions", {})
+        managed_perms = managed.get("permissions") or {}
+        if managed_perms.get("allowManagedPermissionRulesOnly"):
+            perms["allow"] = list(managed_perms.get("allow") or [])
+        if managed.get("lockProviders"):
+            if not managed.get("providers"):
+                raise SettingsError(
+                    f"Managed settings {managed_file} set lockProviders but define no providers."
+                )
+            merged["providers"] = json.loads(json.dumps(managed["providers"]))
     raw_headers = (environ if environ is not None else os.environ).get("CMCODER_CUSTOM_HEADERS")
     if raw_headers:
         extra = _parse_headers(raw_headers)
@@ -213,6 +298,8 @@ def load_settings(cwd: Path | None = None, environ: dict[str, str] | None = None
             )
         raise SettingsError(f"Invalid settings: {e}{hint}") from e
     settings.sources = sources
+    if managed:
+        settings.managed_path = str(managed_file)
     return settings
 
 
