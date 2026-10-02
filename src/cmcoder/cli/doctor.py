@@ -22,8 +22,9 @@ from ..compat import SHELL_HELP, find_shell
 from ..config.settings import Settings, managed_settings_path
 from ..providers.auth import ApiKeyAuth
 from ..providers.messages import Message, StreamDone, TextDelta, ToolSpec
-from ..providers.openai_compat import OpenAICompatProvider, ProviderError
+from ..providers.openai_compat import OpenAICompatProvider, ProviderError, no_tool_support
 from ..providers.profiles import ModelProfile, resolve_profile
+from ..providers.text_tools import extract
 from ..providers.transport import TransportOptions, build_ssl_context, proxy_bypassed
 from .factory import PROBE_SOURCE, build_provider, resolve_model_profile, save_learned_window
 
@@ -388,9 +389,11 @@ class Doctor:
                     result = sev
         except ProviderError as e:
             self.report(
-                FAIL,
+                WARN if no_tool_support(e) else FAIL,
                 f"{model}: request with tools rejected",
-                f"{e}\nThe backend may not have tool calling enabled.",
+                f"{e}\nThe backend has no native tool calling. cmcoder switches to prompted tool "
+                'calls automatically; set "toolCalling": "prompted" in modelProfiles to skip the '
+                "retry, or enable tool calling on the backend.",
             )
             return
         calls = result.message.tool_calls if result else []
@@ -398,12 +401,19 @@ class Doctor:
             self.report(
                 OK, f"{model}: native tool calling works", f"{calls[0].name}({calls[0].arguments})"
             )
+        elif result and extract(result.message.content, {"get_weather"})[1]:
+            self.report(
+                WARN,
+                f"{model}: tool calls come back as text (<tool_call> tags)",
+                "cmcoder parses them automatically. Enabling the backend's tool parser is still "
+                "better (vLLM --enable-auto-tool-choice --tool-call-parser hermes).",
+            )
         elif result and "get_weather" in result.message.content:
             self.report(
                 FAIL,
                 f"{model}: model wrote the tool call as text instead of a tool call",
-                "Enable tool calling on the backend behind LiteLLM (e.g. vLLM --enable-auto-tool-choice "
-                "--tool-call-parser hermes). Prompted tool calling arrives in Phase 1.",
+                'Set "toolCalling": "prompted" in modelProfiles, or enable tool calling on the '
+                "backend (vLLM --enable-auto-tool-choice --tool-call-parser hermes).",
             )
         else:
             self.report(

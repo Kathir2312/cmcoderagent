@@ -1250,7 +1250,144 @@ start `cmcoder` again and type `/resume`.
 
 ## 10. Tool-call robustness
 
-*Not started.*
+*Done.* Code: `src/cmcoder/providers/text_tools.py` (new), the prompted
+branch in `OpenAICompatProvider.build_request` and `no_tool_support`
+(`providers/openai_compat.py`), the `Holdback` / `extract` / auto-switch
+code in `Agent.run` and the `ast.literal_eval` fallback in
+`parse_tool_arguments` (`core/agent.py`), `closest_match` (`tools/files.py`),
+and doctor's tool-calling check (`cli/doctor.py`). Tests:
+`tests/test_text_tools.py`.
+
+### The problem
+
+Native tool calling needs the **backend** to cooperate. vLLM only turns
+Qwen's output into `tool_calls` when it's started with
+`--enable-auto-tool-choice --tool-call-parser hermes`. Behind your LiteLLM
+gateway there are three possible setups:
+
+| Backend setup | What cmcoder receives | Before | Now |
+|---|---|---|---|
+| parser on | proper `tool_calls` | works | works |
+| parser off, `tools` accepted | the call as **text**: `<tool_call>{…}</tool_call>` | the agent stopped, showing raw JSON | parsed and run |
+| `tools` rejected (400 "auto tool choice requires --enable-auto-tool-choice") | an error | the turn failed | switches to **prompted** tool calls and retries |
+
+Smaller problems too: models sometimes write Python-style arguments
+(`{'path': 'a', 'all': True}`), and an `Edit` whose `old_string` is slightly
+off made the model guess blindly.
+
+### The code
+
+**Reading text tool calls** (`extract`). Qwen's chat template writes calls
+like this:
+
+```
+<tool_call>
+{"name": "Read", "arguments": {"file_path": "app.py"}}
+</tool_call>
+```
+
+`extract(content, known_tools)` finds these blocks with a regular expression
+and turns each one into a `ToolCall`. It's careful:
+- only **known tool names** with **valid JSON** count, so prose that mentions
+  `<tool_call>` is left alone;
+- a missing closing tag (the model stopped at its stop token), a
+  `"parameters"` key instead of `"arguments"`, and trailing commas are all
+  accepted.
+
+The agent applies it whenever a reply has no native tool calls but contains
+the tag.
+
+**Keeping the JSON off the screen** (`Holdback`). The reply streams in chunk
+by chunk, and the tag can be split across chunks (`"…<to"` + `"ol_call>…"`).
+`Holdback.feed()` passes text through but holds back anything that might be
+the start of `<tool_call>`. Once the tag is confirmed, it holds everything
+after it. `flush()` at the end releases held text that turned out not to be
+a tag (like `"a < b"`), so nothing real is lost.
+
+**Prompted mode** (`to_prompted_wire`). When `toolCalling` is `"prompted"`
+in the model profile, no `tools` parameter is sent at all:
+1. The tool list is added to the system prompt in Qwen's own format: a
+   `<tools>…</tools>` block plus "return a json object … within
+   `<tool_call></tool_call>` XML tags".
+2. Earlier tool calls in the history are written back as `<tool_call>` text.
+3. Tool results become a user message of `<tool_response>…</tool_response>`
+   blocks. Several results from one step go into one message.
+
+The model answers with text tool calls, which `extract` reads, so the rest
+of the agent doesn't know the difference.
+
+**Switching automatically** (`no_tool_support`). If the server rejects the
+request with a "tool choice requires --enable-auto-tool-choice"-style
+error, the agent switches the profile to prompted for the rest of the
+session, warns you once, and retries the step. To skip the failed first try,
+set it in settings:
+
+```json
+"modelProfiles": [{"match": "qwen3*", "toolCalling": "prompted"}]
+```
+
+**Python-style arguments** (`parse_tool_arguments`). If JSON parsing fails,
+`ast.literal_eval` tries reading the text as a Python literal. It's safe:
+it only evaluates literals (strings, numbers, `True`/`False`/`None`, lists,
+dicts), never code.
+
+**Edit hints** (`closest_match`). When `old_string` isn't in the file, the
+error now shows the most similar block of lines:
+
+```
+old_string was not found in m.py. The closest text is at line 3; check
+indentation, quotes and spelling against it:
+def total(items):
+```
+
+It slides a window the size of `old_string` over the file and scores each
+position with `difflib.SequenceMatcher` (with `quick_ratio` as a cheap
+pre-filter). Indentation is ignored in the comparison, and nothing is
+suggested below a similarity of 0.6.
+
+**Edit-format variants.** The plan listed other edit formats (search/replace
+blocks, whole file) "if evals show Edit failures". The evals haven't shown
+any yet, so they aren't built. The closest-match hint covers the usual
+failure: a slightly wrong `old_string`.
+
+**`doctor`** now says which case your gateway is in:
+- tool calls as text: a warning, because cmcoder handles it, but the backend
+  parser is better;
+- `tools` rejected: a warning explaining the automatic switch and the
+  setting.
+
+### New Python ideas
+
+- **`ast.literal_eval`**: safely read Python literals (never `eval` on model output!).
+- **`difflib.SequenceMatcher`**: similarity between two strings (0 to 1).
+- **The walrus operator in conditions**: `if shown := holdback.feed(text):`
+  assigns and tests in one step.
+- **A small state machine**: `Holdback` remembers whether it is `inside` a tag
+  and what it's holding.
+
+### The tests
+
+`tests/test_text_tools.py`:
+- **Parsing:** several calls, prose that mentions the tag, unknown tools,
+  broken JSON, a missing closing tag, `"parameters"`, arguments given as a
+  string;
+- **`Holdback`:** a tag split across chunks; a `<` that isn't a tag;
+- **Arguments:** Python-style dicts;
+- **Prompted wire format:** the tools block, calls written as text, results
+  merged into one message;
+- **End to end with the mock server:**
+  - text tool calls in native mode (the JSON never reaches the screen, and
+    the Read runs);
+  - full prompted mode (no `tools` parameter, `<tool_response>` sent back);
+  - the automatic switch after vLLM's real "requires
+    --enable-auto-tool-choice" error;
+- **`closest_match`** and the Edit error message.
+
+### Try it
+
+Set `"toolCalling": "prompted"` for your model in `modelProfiles` and run the
+evals: `uv run python evals/run.py`. If they pass about as well as with native
+tool calling, you know the fallback works on your gateway.
 
 ## 11. Textual TUI
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import asyncio
 import json
 import re
@@ -25,8 +26,9 @@ from ..providers.messages import (
     ToolSpec,
     Usage,
 )
-from ..providers.openai_compat import ContextTooLong, ProviderError
+from ..providers.openai_compat import ContextTooLong, ProviderError, no_tool_support
 from ..providers.profiles import ModelProfile
+from ..providers.text_tools import Holdback, extract
 from ..tools.base import Tool, ToolContext, ToolResult, truncate_middle
 from .checkpoints import Checkpoints, RestoreAction
 from .compaction import CompactionError, Summarizer, compact
@@ -108,6 +110,13 @@ def parse_tool_arguments(raw: str) -> tuple[dict[str, Any] | None, str | None]:
             break
         except ValueError as e:
             error = str(e)
+    if error is not None:
+        # Python-style dicts ({'path': 'a', 'all': True}) from some small models.
+        try:
+            value = ast.literal_eval(fenced)
+            error = None
+        except (ValueError, SyntaxError, MemoryError, RecursionError):
+            pass
     if error is not None:
         return None, f"arguments are not valid JSON ({error})"
     if isinstance(value, str):  # double-encoded
@@ -374,6 +383,7 @@ class Agent:
         recent_calls: list[str] = []
         warned_context = False
         overflow_retried = False
+        prompted_retried = False
         # Turned off for the rest of the turn if summarising fails, so a
         # broken summariser isn't retried before every model call.
         can_compact = self.auto_compact
@@ -435,6 +445,7 @@ class Agent:
                 request_chars = budget.request_chars(self.messages)
 
                 done: StreamDone | None = None
+                holdback = Holdback()  # keeps <tool_call> text off the screen
                 try:
                     async for sev in self.provider.stream_chat(
                         self.model,
@@ -444,7 +455,8 @@ class Agent:
                         max_tokens=budget.max_tokens(self.messages),
                     ):
                         if isinstance(sev, TextDelta):
-                            yield ev.AssistantDelta(text=sev.text)
+                            if shown := holdback.feed(sev.text):
+                                yield ev.AssistantDelta(text=shown)
                         elif isinstance(sev, ReasoningDelta):
                             yield ev.ReasoningDelta(text=sev.text)
                         elif isinstance(sev, StreamDone):
@@ -497,6 +509,24 @@ class Agent:
                     yield result("error", str(e), is_error=True)
                     return
                 except ProviderError as e:
+                    if (
+                        no_tool_support(e)
+                        and not prompted_retried
+                        and self.profile.tool_calling != "prompted"
+                    ):
+                        # The backend rejects the `tools` parameter: describe the
+                        # tools in the prompt instead, for the rest of the session.
+                        prompted_retried = True
+                        steps -= 1
+                        self.profile = self.profile.model_copy(update={"tool_calling": "prompted"})
+                        yield ev.Warning(
+                            message=f"The server rejected native tool calling for {self.model}; "
+                            "switching to prompted tool calls for this session. Set "
+                            '"toolCalling": "prompted" in modelProfiles to skip this, or enable '
+                            "tool calling on the backend (vLLM --enable-auto-tool-choice "
+                            "--tool-call-parser hermes)."
+                        )
+                        continue
                     yield ev.Error(kind=e.kind, message=str(e).split("\n  hint:")[0], hint=e.hint)
                     # Drop the user message if the model never answered, so retrying works cleanly.
                     if self.messages[-1].role == "user" and steps == 1:
@@ -510,7 +540,12 @@ class Agent:
                     return
 
                 overflow_retried = False  # one retry per model call, not per turn
+                if rest := holdback.flush():
+                    yield ev.AssistantDelta(text=rest)
                 msg = done.message
+                if not msg.tool_calls and "<tool_call>" in msg.content:
+                    # Tool calls written as text (no tool parser on the backend).
+                    msg.content, msg.tool_calls = extract(msg.content, set(self.tools))
                 self.messages.append(msg)
                 self.usage.add(done.usage)
                 turn_usage.add(done.usage)

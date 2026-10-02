@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import difflib
 from pathlib import Path
 
 from pydantic import Field
@@ -137,6 +138,31 @@ class WriteTool(Tool):
         return ToolResult(f"{verb} {ctx.display(path)} ({n} lines).", summary=f"{verb} {n} lines")
 
 
+def closest_match(text: str, old: str, threshold: float = 0.6) -> tuple[int, str] | None:
+    """Where in `text` something like `old` is: (1-based line, those lines).
+
+    Helps the model fix an Edit whose old_string is slightly off (whitespace,
+    a changed word, a stale copy). Skipped for very large files."""
+    lines = text.splitlines()
+    want = old.strip("\n").splitlines()
+    n = len(want)
+    if not n or len(lines) > 5000 or n > 200:
+        return None
+    target = "\n".join(w.strip() for w in want)
+    best, best_at = 0.0, -1
+    for i in range(0, max(1, len(lines) - n + 1)):
+        window = "\n".join(x.strip() for x in lines[i : i + n])
+        m = difflib.SequenceMatcher(None, target, window, autojunk=False)
+        if m.real_quick_ratio() < best or m.quick_ratio() < best:
+            continue
+        r = m.ratio()
+        if r > best:
+            best, best_at = r, i
+    if best < threshold or best_at < 0:
+        return None
+    return best_at + 1, "\n".join(lines[best_at : best_at + n])
+
+
 class EditInput(ToolInput):
     file_path: str = Field(description="Path of the file to edit.")
     old_string: str = Field(
@@ -190,6 +216,12 @@ class EditTool(Tool):
             if old.strip() and old.strip() in text:
                 hint = (
                     " The text exists with different leading/trailing whitespace; copy it exactly."
+                )
+            elif near := closest_match(text, old):
+                start, block = near
+                hint = (
+                    f" The closest text is at line {start}; check indentation, quotes and "
+                    f"spelling against it:\n{block}\n"
                 )
             return ToolResult(
                 f"old_string was not found in {ctx.display(path)}.{hint} Re-read the file and try again.",

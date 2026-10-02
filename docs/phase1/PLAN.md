@@ -213,6 +213,16 @@ summaries and other side jobs, so the main model's window is spent on the task.
 tool calling, more argument repair, and edit-format variants (e.g. search/replace
 blocks) if evals show Edit failures.
 
+**Status: done.**
+- `<tool_call>` text from a backend without a tool parser is parsed and run,
+  and kept off the screen.
+- Prompted mode (`toolCalling: "prompted"`) uses Qwen's own format, and is
+  switched on automatically when the backend rejects `tools`.
+- Python-style arguments are repaired.
+- An Edit with a near-miss `old_string` is told the closest matching lines.
+- Edit-format variants aren't built: no eval has shown Edit failures. Revisit
+  if the real-gateway evals do.
+
 ### 11. Textual TUI
 
 **What:** move the REPL to Textual: fixed input area, scrollable history,
@@ -244,7 +254,7 @@ SSO, OpenTelemetry, Windows sandboxing (Phase 4).
 - [x] 7. Checkpoints and `/rewind`
 - [x] 8. TodoWrite
 - [x] 9. Small/fast model jobs
-- [ ] 10. Tool-call robustness
+- [x] 10. Tool-call robustness
 - [ ] 11. Textual TUI
 - [ ] 12. More evals
 - [ ] Real-gateway run on Windows (`doctor`, evals) and `STATUS.md`

@@ -559,7 +559,53 @@ the first turn.
 
 ## 10. Tool-call robustness
 
-*Not started.*
+*Done.* Code: `src/cmcoder/providers/text_tools.py`, `Agent.run`.
+
+### The LangGraph way
+
+LangChain gives you the pieces:
+- `AIMessage.invalid_tool_calls` collects calls whose arguments didn't parse;
+- `ToolNode(handle_tool_errors=True)` turns exceptions into `ToolMessage`s;
+- `llm.with_retry()` and `llm.with_fallbacks([other_llm])` cover transient
+  errors and failover.
+
+For a model *without* native tool calling, you'd parse the output yourself
+(e.g. a custom output parser for `<tool_call>` blocks), and `bind_tools`
+wouldn't apply.
+
+### The cmcoder way
+
+| Situation | cmcoder |
+|---|---|
+| Native `tool_calls` | used as is |
+| Calls as `<tool_call>` text (backend without a parser) | `extract` turns them into tool calls; `Holdback` keeps the JSON off the screen |
+| Backend rejects `tools` | automatic switch to **prompted** mode (tools in the system prompt in Qwen's format, results as `<tool_response>`), once per session |
+| Python-style arguments | `ast.literal_eval` fallback |
+| Wrong `old_string` in Edit | the error shows the closest matching lines |
+
+### Why they differ
+
+Frameworks treat "the model supports tools" as a property of the model
+class. With a self-hosted model behind a gateway it's really a property of
+the **deployment**: the same Qwen weights give native calls, text calls, or a
+400 error depending on vLLM flags you may not control. cmcoder
+detects which one it got **at run time** and adapts, without settings
+changes.
+
+Two transferable ideas:
+- **Speak the model's native format** when falling back. Qwen was trained on
+  `<tools>`/`<tool_call>`/`<tool_response>`, so prompted mode uses exactly
+  that rather than an invented format.
+- **Make errors actionable for the model.** "old_string not found" alone
+  leads to guessing; "the closest text is at line 3: …" leads to a fix.
+
+### Exercise
+
+Point `ChatOpenAI` at a vLLM started *without* `--enable-auto-tool-choice`
+(or ask your admin which flags the gateway uses), `bind_tools` one tool and
+invoke. Look at what comes back in `content`, then use
+`cmcoder.providers.text_tools.extract` in a `RunnableLambda` after the model
+to turn it into tool calls your `ToolNode` can run.
 
 ## 11. Textual TUI
 

@@ -30,6 +30,7 @@ from .messages import (
     Usage,
 )
 from .profiles import ModelProfile
+from .text_tools import to_prompted_wire
 from .thinking import CLOSE as CLOSE_TAG
 from .thinking import ThinkSplitter
 
@@ -214,6 +215,18 @@ def classify_transport_error(exc: Exception, base_url: str) -> ProviderError:
 
 # --- Wire conversion -----------------------------------------------------------
 
+# A request with tools rejected because the backend has no tool calling
+# (e.g. vLLM without --enable-auto-tool-choice).
+_NO_TOOL_SUPPORT = re.compile(
+    r"enable-auto-tool-choice|tool.?choice.{0,40}(not supported|requires)|"
+    r"does not support (tools|function calling|tool)|tools? (are|is) not supported",
+    re.I,
+)
+
+
+def no_tool_support(err: ProviderError) -> bool:
+    return isinstance(err, BadRequest) and bool(_NO_TOOL_SUPPORT.search(str(err)))
+
 
 def to_wire_messages(messages: list[Message]) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
@@ -377,9 +390,11 @@ class OpenAICompatProvider:
         thinking: bool | None = None,
         max_tokens: int | None = None,
     ) -> dict[str, Any]:
-        wire = to_wire_messages(messages)
+        prompted = profile.tool_calling == "prompted" and bool(tools)
+        # Prompted: tools described in the system prompt, calls and results as text.
+        wire = to_prompted_wire(messages, tools) if prompted else to_wire_messages(messages)
         body: dict[str, Any] = {"model": model, "messages": wire, "stream": True}
-        if tools:
+        if tools and not prompted:
             body["tools"] = to_wire_tools(tools)
             body["tool_choice"] = "auto"
             if not profile.parallel_tool_calls:

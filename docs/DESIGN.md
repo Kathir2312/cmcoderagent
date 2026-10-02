@@ -316,7 +316,7 @@ Notes for the Qwen3 family:
   collapsed in the UI and never sent back to the model. Thinking is switched off
   for small, quick calls (via the `/no_think` switch or the server's
   `enable_thinking` chat-template option, whichever the server supports) to save latency.
-- **Tool calling depends on the server:** vLLM needs tool calling enabled with
+- **Tool calling depends on the server** (Phase 1: cmcoder also parses `<tool_call>` text from a backend without a tool parser, and switches to prompted tool calls in Qwen's format if `tools` is rejected): vLLM needs tool calling enabled with
   the Hermes parser; Ollama supports Qwen3 tools natively. `doctor --probe`
   checks it, and the prompted-tool fallback (§6) covers servers where it is off.
 - **Context window:** Qwen3's native window is 32K tokens, extendable (e.g. with
