@@ -102,7 +102,9 @@ specific one, and `/resume` lists them (files under `~/.cmcoder/projects/`, owne
 `/rewind` goes back to one of your earlier messages and undoes the agent's file changes since then (Write/Edit;
 not Bash commands), the conversation, or both.
 
-In the interactive session: `/help`, `/model`, `/mode`, `/compact`, `/resume`, `/rewind`, `/clear`, `/cost`, `/exit`; Shift+Tab cycles the
+For multi-step work the model keeps a todo list (TodoWrite), shown as a ☑ ◐ ☐ checklist; `/todos` shows it again.
+
+In the interactive session: `/help`, `/model`, `/mode`, `/compact`, `/resume`, `/rewind`, `/todos`, `/clear`, `/cost`, `/exit`; Shift+Tab cycles the
 permission mode; Ctrl+C interrupts the current turn.
 
 ### Permissions

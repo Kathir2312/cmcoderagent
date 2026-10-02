@@ -32,6 +32,7 @@ from ..core.sessions import SessionLog, age, list_sessions, load
 from ..protocol import events as ev
 from ..providers.messages import Usage
 from ..providers.openai_compat import OpenAICompatProvider
+from ..tools.todo import MARKS
 from .factory import AgentOptions, build_agent, resolve_model_profile
 
 # Lines the permission prompt needs besides the preview: panel border and
@@ -73,6 +74,7 @@ HELP = """\
   /clear             start a new conversation (the old one can be resumed)
   /resume [n|id]     list saved conversations in this project, or resume one
   /rewind            go back to an earlier message: undo file changes, the conversation, or both
+  /todos             show the current todo list
   /compact [focus]   summarise the conversation so far to free context
                      (e.g. /compact keep the failing test names)
   /model [name]      show or switch the model (e.g. /model qwen3-27b)
@@ -150,6 +152,9 @@ class Repl:
                 c.print(Markdown(event.text))
         elif isinstance(event, ev.ToolUse):
             self._stop_status()
+            if event.name == "TodoWrite" and isinstance(event.input.get("todos"), list):
+                self._print_todos(event.input["todos"])
+                return
             c.print(Text("● ", style="cyan") + Text(event.label, style="bold"))
         elif isinstance(event, ev.ToolResult):
             if event.is_error:
@@ -187,6 +192,17 @@ class Repl:
         elif isinstance(event, ev.Result):
             self._stop_status()
             self._stop_live()
+
+    def _print_todos(self, todos: list[Any]) -> None:
+        styles = {"completed": "dim strike", "in_progress": "bold cyan", "pending": ""}
+        self.console.print(Text("● Todo list", style="cyan"))
+        for t in todos:
+            if isinstance(t, dict):
+                status = str(t.get("status", "pending"))
+                mark = MARKS.get(status, "☐")
+                self.console.print(
+                    Text(f"  {mark} {t.get('content', '')}", style=styles.get(status, ""))
+                )
 
     # -- permission prompt ---------------------------------------------------
 
@@ -311,6 +327,11 @@ class Repl:
             await self._resume(arg)
         elif name == "rewind":
             await self._rewind()
+        elif name == "todos":
+            if self.agent.ctx.todos:
+                self._print_todos(self.agent.ctx.todos)
+            else:
+                c.print("[dim]No todo list in this conversation.[/dim]")
         elif name == "model":
             if not arg:
                 c.print(

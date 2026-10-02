@@ -1046,7 +1046,114 @@ message, and choose `3` (code only). Run `git status`: the change is gone.
 
 ## 8. TodoWrite
 
-*Not started.*
+*Done.* Code: `src/cmcoder/tools/todo.py` (new), `last_todos` and the
+compaction/resume hooks in `core/agent.py`, `core/compaction.py`,
+`Repl._print_todos` and `/todos` (`cli/repl.py`), the prompt line in
+`core/prompt.py`. Tests: `tests/test_todo.py`, plus a checklist test in
+`tests/test_repl_pty.py`.
+
+### The problem
+
+On a task with many steps (say "add a setting, use it in three places,
+update the docs, run the tests"), a model easily forgets a step, especially
+after compaction has summarised the start of the conversation. You also
+can't see its plan.
+
+### The idea
+
+Give the model a tool whose only job is to keep a **visible task list**. It
+sends the complete list each time it changes:
+
+```json
+{"todos": [
+  {"content": "Read the code", "status": "completed"},
+  {"content": "Fix the bug", "status": "in_progress", "activeForm": "Fixing the bug"},
+  {"content": "Run the tests", "status": "pending"}
+]}
+```
+
+You see it as a checklist:
+
+```
+● Todo list
+  ☑ Read the code
+  ◐ Fix the bug
+  ☐ Run the tests
+```
+
+`/todos` shows it again at any time. It doesn't touch any files, so it never
+needs your permission. It's kept across compaction (added to the summary
+message) and restored by `--resume`, from the last TodoWrite call in the
+saved conversation.
+
+### The code
+
+**The tool** (`TodoTool`). Like every tool it has a pydantic `Input`, here a
+list of `TodoItem`s:
+
+```python
+Status = Literal["pending", "in_progress", "completed"]
+
+class TodoItem(BaseModel):
+    content: str = Field(min_length=1)
+    status: Status
+    active_form: str | None = Field(None, alias="activeForm")
+```
+
+- `Literal[...]` means "one of exactly these strings". pydantic rejects
+  `"done"`, and the model gets the validation error back and fixes its call.
+- `min_length=1` rejects empty tasks.
+- `alias="activeForm"`: the JSON uses camelCase (as Claude Code does), the
+  Python attribute uses snake_case.
+
+`run()` stores the list in `ctx.todos` and returns it as text. It adds a
+note if more than one item is `in_progress`. The REPL draws the checklist
+from the `ToolUse` event's input.
+
+**No permission needed.** `read_only = True`, and the permission policy now
+allows a read-only tool that has **no target** (no file, no command).
+Previously that case fell into "reads outside the project" and asked.
+
+**Kept across compaction.** `compact(..., todos=self.ctx.todos)` appends
+"The current todo list (TodoWrite): ☑ … ◐ … ☐ …" to the summary message, so
+the model still sees its plan even when the TodoWrite calls were summarised
+away.
+
+**Restored on resume.** `last_todos(messages)` walks the conversation
+backwards, finds the latest `TodoWrite` call, and parses its arguments with
+the same repair-tolerant `parse_tool_arguments` the agent uses.
+
+**Telling the model when to use it.** One line in the system prompt: "For
+tasks with 3 or more steps, keep a todo list with TodoWrite …". The tool
+description repeats it, and says not to use it for simple one-step requests.
+
+### New Python ideas
+
+- **`Literal` types** for a fixed set of values, checked by pydantic.
+- **Field aliases** (`alias="activeForm"`) and `model_dump(by_alias=True,
+  exclude_none=True)` to write it back in camelCase without empty fields.
+- **Searching backwards**: `for m in reversed(messages): for c in
+  reversed(m.tool_calls): …` finds the most recent call first.
+
+### The tests
+
+`tests/test_todo.py`:
+- the tool stores the list and returns a summary (`1/3 done · now: Fixing the bug`);
+- it warns about two items in progress;
+- invalid statuses and empty tasks are rejected;
+- no permission is needed in `default` or `plan` mode;
+- in a real agent run there's no prompt, the label is `TodoWrite(1/3 done)`,
+  and after `/compact` the summary contains the list;
+- resume restores the latest list.
+
+`tests/test_repl_pty.py::test_todo_list_is_shown_as_a_checklist` checks
+the ☑ ◐ ☐ display and `/todos` in a real terminal.
+
+### Try it
+
+Ask cmcoder for something with several steps ("add a `--verbose` flag, use
+it in two places, and update the README"), and watch the checklist update.
+Then type `/todos`.
 
 ## 9. Small/fast model jobs
 

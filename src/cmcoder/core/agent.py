@@ -38,6 +38,18 @@ from .steer import file_work_redirect
 MAX_IDENTICAL_CALLS = 3
 
 
+def last_todos(messages: list[Message]) -> list[dict[str, Any]]:
+    """The todo list from the last TodoWrite call (to restore it on resume)."""
+    for m in reversed(messages):
+        for c in reversed(m.tool_calls):
+            if c.name == "TodoWrite":
+                args, _ = parse_tool_arguments(c.arguments)
+                todos = (args or {}).get("todos")
+                if isinstance(todos, list):
+                    return [t for t in todos if isinstance(t, dict)]
+    return []
+
+
 class ChatProvider(Protocol):
     name: str
 
@@ -192,6 +204,7 @@ class Agent:
         """Start a new conversation (the old one stays resumable)."""
         self.messages = [Message.system(self.system_prompt)]
         self.turn = 0
+        self.ctx.todos = []
         if self.session is not None:
             self.session = SessionLog(self.ctx.project_root)
             self.session_id = self.session.session_id
@@ -234,6 +247,7 @@ class Agent:
         """Continue a saved conversation (`messages` without the system prompt)."""
         self.messages = [Message.system(self.system_prompt), *messages]
         self.turn = max((m.turn or 0 for m in messages), default=0)
+        self.ctx.todos = last_todos(messages)
         if session is not None:
             self.session = session
             self.session_id = session.session_id
@@ -292,6 +306,7 @@ class Agent:
                 chars_per_token=budget.chars_per_token,
                 focus=focus,
                 force=trigger == "manual",
+                todos=self.ctx.todos,
             )
         except CompactionError as e:
             yield ev.Warning(message=f"Could not summarise the conversation: {e}")

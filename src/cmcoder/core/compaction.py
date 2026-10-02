@@ -224,6 +224,7 @@ async def compact(
     chars_per_token: float,
     focus: str | None = None,
     force: bool = False,
+    todos: list[dict[str, Any]] | None = None,
 ) -> CompactionResult | None:
     """Return the compacted conversation, or None if there's nothing worth
     summarising. Tries each summariser in turn; raises CompactionError if all
@@ -258,5 +259,9 @@ async def compact(
         request = latest_user_request(head)
         if request:
             text += REQUEST_MARKER + truncate_middle(request, LATEST_REQUEST_CHARS)
+    if todos:
+        from ..tools.todo import format_todos
+
+        text += "\n\nThe current todo list (TodoWrite):\n" + format_todos(todos)
     new = [messages[0], Message.user(text), *tail]
     return CompactionResult(new, len(head), summary, usage, s.model)

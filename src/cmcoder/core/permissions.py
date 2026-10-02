@@ -283,7 +283,8 @@ class PermissionPolicy:
         inside = isinstance(target, Path) and _rel(target, ctx.project_root) is not None
 
         if tool.read_only:
-            if inside or self.mode == "bypassPermissions":
+            # No target (e.g. TodoWrite): nothing on disk is touched.
+            if target is None or inside or self.mode == "bypassPermissions":
                 return PermissionCheck(Decision.ALLOW)
             return PermissionCheck(Decision.ASK, "reads outside the project directory")
 

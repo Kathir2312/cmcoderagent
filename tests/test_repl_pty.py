@@ -251,3 +251,23 @@ def test_rewind_command(mock_server: Any, project: Path) -> None:
     finally:
         term.close()
     assert (project / "app.py").read_text() == "x = 1\n"
+
+
+def test_todo_list_is_shown_as_a_checklist(mock_server: Any, project: Path) -> None:
+    todos = [
+        {"content": "Read the code", "status": "completed"},
+        {"content": "Fix the bug", "status": "in_progress"},
+        {"content": "Run the tests", "status": "pending"},
+    ]
+    server = mock_server(
+        [{"tool_calls": [{"name": "TodoWrite", "arguments": {"todos": todos}}]}, {"content": "ok"}]
+    )
+    term = Term(project, server)
+    try:
+        assert term.expect(rb"/help for commands")
+        term.send("fix it\r")
+        assert term.expect("◐ Fix the bug".encode()), term.text()
+        term.send("/todos\r")
+        assert term.expect("☐ Run the tests[\\s\\S]*☐ Run the tests".encode()), term.text()
+    finally:
+        term.close()

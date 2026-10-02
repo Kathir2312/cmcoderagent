@@ -46,6 +46,8 @@ class ToolContext:
     # Largest tool output kept in the conversation; set from the model's context
     # window (smaller windows get smaller outputs).
     max_output_chars: int = MAX_RESULT_CHARS
+    # The TodoWrite list: [{"content", "status", "activeForm"?}, ...]
+    todos: list[dict[str, Any]] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         # Compare like with like: tool paths are resolved, so the roots must be

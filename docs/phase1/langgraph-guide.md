@@ -454,7 +454,58 @@ human message `n`, and restores the snapshots.
 
 ## 8. TodoWrite
 
-*Not started.*
+*Done.* Code: `src/cmcoder/tools/todo.py`.
+
+### The LangGraph way
+
+Plans usually live in **graph state**, updated by a planner node or by a tool
+that returns a `Command`:
+
+```python
+from langgraph.types import Command
+
+class State(MessagesState):
+    todos: list[dict]
+
+@tool
+def write_todos(todos: list[dict], tool_call_id: Annotated[str, InjectedToolCallId]) -> Command:
+    """Keep the task list for multi-step work."""
+    return Command(update={
+        "todos": todos,
+        "messages": [ToolMessage(f"{len(todos)} tasks", tool_call_id=tool_call_id)],
+    })
+```
+
+LangChain's `deepagents` package ships a `write_todos` tool built this way.
+The "plan-and-execute" tutorials use a separate planner node instead.
+
+### The cmcoder way
+
+| LangGraph | cmcoder |
+|---|---|
+| `todos` key in state | `ToolContext.todos` |
+| tool returning `Command(update=…)` | `TodoTool.run` sets `ctx.todos` |
+| state persisted by the checkpointer | restored from the last TodoWrite call (`last_todos`) |
+| survives `trim_messages`? only if you keep it in state | appended to the compaction summary |
+| rendering in your UI | ☑ ◐ ☐ checklist in the REPL, `/todos` |
+
+### Why they differ
+
+The interesting part is **compaction**. Any memory-management step that
+drops or summarises messages can drop the plan with them. In LangGraph you're
+safe if the plan is a separate state key. In cmcoder the plan is re-attached
+to the summary message explicitly. Either way, keep the plan **outside** the
+part of history that gets trimmed.
+
+Also: the tool is `read_only` with no target, so it needs no human approval.
+Approval prompts are for side effects, and a plan has none.
+
+### Exercise
+
+Add `write_todos` (above) to the
+[Phase 0 LangGraph sketch](../phase0/langgraph-guide.md#5-cmcoder-written-in-langgraph-sketch),
+plus a summarise node (from section 1) that drops old messages. Check that the
+plan survives because it's in state, not in the messages.
 
 ## 9. Small/fast model jobs
 

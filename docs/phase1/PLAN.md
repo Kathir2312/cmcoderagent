@@ -193,6 +193,9 @@ created (rewind deletes it) and one it changed outside the project (asks first).
 **What:** a `TodoWrite` tool that keeps a visible task list for multi-step
 work, shown in the REPL and kept across compaction.
 
+**Status: done.** A ☑ ◐ ☐ checklist in the REPL and `/todos`. No permission
+needed. Kept in the compaction summary and restored on `--resume`.
+
 ### 9. Small/fast model jobs
 
 **What:** use `smallFastModel` (Qwen3 ~7B) for session titles, compaction
@@ -233,7 +236,7 @@ SSO, OpenTelemetry, Windows sandboxing (Phase 4).
 - [x] 5. Managed settings
 - [x] 6. Sessions and resume
 - [x] 7. Checkpoints and `/rewind`
-- [ ] 8. TodoWrite
+- [x] 8. TodoWrite
 - [ ] 9. Small/fast model jobs
 - [ ] 10. Tool-call robustness
 - [ ] 11. Textual TUI
