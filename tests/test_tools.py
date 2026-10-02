@@ -209,6 +209,51 @@ async def test_bash_persists_state_and_reports_exit_codes(ctx: ToolContext, proj
         await ctx.shell.close()
 
 
+async def test_bash_reports_a_failure_hidden_by_a_pipe(ctx: ToolContext) -> None:
+    """Hands-on test on Windows: `pip install x | tail -5` failed, but tail's
+    exit 0 showed as success. The pipe's exit codes are now reported."""
+    bash = BashTool()
+    try:
+        res = await bash.run(BashInput(command="echo nope >&2; false | cat"), ctx)
+        assert not res.is_error and res.summary == "exit 0 · pipe 1 0"
+        assert "Exit codes in the pipe: 1 0" in res.content
+        for fine in ("true | cat", "yes | head -1", "false | cat; true", "echo hi"):
+            res = await bash.run(BashInput(command=fine), ctx)
+            assert "pipe" not in (res.summary or "") and "Exit codes" not in res.content, fine
+        res = await bash.run(BashInput(command="true | false"), ctx)
+        assert res.is_error and res.summary == "exit 1"
+    finally:
+        assert ctx.shell
+        await ctx.shell.close()
+
+
+def test_commands_do_not_inherit_cmcoders_venv(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Hands-on test on Windows: under `uv run cmcoder`, `python` in the Bash
+    tool was cmcoder's venv python, not the user's project's."""
+    import os
+    import sys
+
+    from cmcoder.tools.shell import child_env
+
+    venv, other = tmp_path / "cmcoder" / ".venv", tmp_path / "bin"
+    scripts = venv / ("Scripts" if os.name == "nt" else "bin")
+    scripts.mkdir(parents=True)
+    other.mkdir()
+    monkeypatch.setattr(sys, "prefix", str(venv))
+    monkeypatch.setattr(sys, "base_prefix", str(tmp_path / "python"))
+    monkeypatch.setenv("PATH", os.pathsep.join([str(scripts), str(other)]))
+    monkeypatch.setenv("VIRTUAL_ENV", str(venv))
+
+    env = child_env(tmp_path / "project")
+    path = next(v for k, v in env.items() if k.upper() == "PATH")
+    assert path.split(os.pathsep) == [str(other)] and "VIRTUAL_ENV" not in env
+    # cmcoder installed in the project's own venv: left alone.
+    env = child_env(tmp_path / "cmcoder")
+    assert env.get("VIRTUAL_ENV") == str(venv)
+
+
 async def test_bash_timeout_and_exit_restart(ctx: ToolContext) -> None:
     bash = BashTool()
     try:

@@ -54,6 +54,12 @@ class BashTool(Tool):
         out = truncate_middle(res.output.rstrip("\n"), ctx.max_output_chars)
         if res.exit_code not in (0, None):
             out = f"{out}\n\nExit code {res.exit_code}" if out else f"Exit code {res.exit_code}"
+        hidden = hidden_pipe_failure(res.pipe_status) if res.exit_code == 0 else None
+        if hidden:
+            # e.g. `pip install x | tail -5`: tail's exit 0 hides pip's failure.
+            out = (
+                f"{out}\n\n" if out else ""
+            ) + f"Exit codes in the pipe: {hidden} (a command before the last one exited non-zero; its errors may be hidden)"
         if not out:
             out = "(no output)"
         failed = res.exit_code != 0
@@ -62,5 +68,15 @@ class BashTool(Tool):
         elif res.exit_code is None:
             summary = "shell exited"
         else:
-            summary = f"exit {res.exit_code}"
+            summary = f"exit {res.exit_code}" + (f" · pipe {hidden}" if hidden else "")
         return ToolResult(out, is_error=failed, summary=summary)
+
+
+SIGPIPE_EXIT = 141  # `yes | head -1`: the writer is stopped when the reader quits; not a failure
+
+
+def hidden_pipe_failure(pipe_status: list[int] | None) -> str | None:
+    """The pipe's exit codes as text when a command before the last one failed."""
+    if not pipe_status or all(c in (0, SIGPIPE_EXIT) for c in pipe_status[:-1]):
+        return None
+    return " ".join(map(str, pipe_status))

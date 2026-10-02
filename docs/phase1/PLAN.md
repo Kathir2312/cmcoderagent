@@ -312,3 +312,10 @@ SSO, OpenTelemetry, Windows sandboxing (Phase 4).
       list. Re-checked on Windows: Qwen now calls TodoWrite first (4 steps)
       and marks the current one in progress. The in-progress mark (was ◐)
       showed as a box in cmd.exe's font, so it is now ►.
+    - Found: `pip install pytest-html 2>&1 | tail -5` showed "exit 0" although
+      pip failed (a pipe's exit code is its last command's). Bash results now
+      report the pipe's exit codes when an earlier command failed
+      (`exit 0 · pipe 1 0`). Also, under `uv run cmcoder` the commands used
+      cmcoder's own venv (`python` with cmcoder's pytest, but `pip` from
+      elsewhere). cmcoder's venv is now removed from PATH/VIRTUAL_ENV for
+      commands, unless it lives inside the project.

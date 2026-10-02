@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import sys
 import uuid
 from contextlib import suppress
 from dataclasses import dataclass
@@ -23,6 +24,40 @@ class ShellResult:
     timed_out: bool = False
     # The shell exited (e.g. the command ran `exit`) or was killed and will restart.
     restarted: bool = False
+    # Exit codes of each command in the last pipeline, e.g. [1, 0] for a failed
+    # `pip install x | tail -5` (whose own exit code is tail's 0).
+    pipe_status: list[int] | None = None
+
+
+def child_env(cwd: Path) -> dict[str, str]:
+    """The environment for commands: cmcoder's own virtualenv taken out.
+
+    `uv run cmcoder` (or an activated venv) puts cmcoder's venv first on PATH,
+    so `python`, `pytest` and `pip` would be cmcoder's, not the user's project's.
+    Kept when the venv lives inside the project (cmcoder installed in the
+    project's own venv)."""
+    env = dict(os.environ)
+    venv = Path(sys.prefix).resolve()
+    if venv == Path(sys.base_prefix).resolve():
+        return env  # not in a venv
+    with suppress(ValueError, OSError):
+        cwd.resolve().relative_to(venv.parent)
+        return env  # the project's own venv
+    key = next((k for k in env if k.upper() == "PATH"), "PATH")
+
+    def inside(entry: str) -> bool:
+        try:
+            return Path(entry).resolve().is_relative_to(venv)
+        except (OSError, ValueError):
+            return False
+
+    env[key] = os.pathsep.join(p for p in env.get(key, "").split(os.pathsep) if p and not inside(p))
+    virtual_env = env.get("VIRTUAL_ENV")
+    if virtual_env and inside(virtual_env):
+        del env["VIRTUAL_ENV"]
+    for name in ("PYTHONHOME", "UV_RUN_RECURSION_DEPTH"):
+        env.pop(name, None)
+    return env
 
 
 class PersistentShell:
@@ -36,7 +71,7 @@ class PersistentShell:
         self._lock = asyncio.Lock()
 
     async def _start(self) -> asyncio.subprocess.Process:
-        env = dict(os.environ)
+        env = child_env(self.initial_cwd)
         env.update(
             {
                 "CMCODER": "1",
@@ -99,11 +134,14 @@ class PersistentShell:
             # The command goes through a quoted heredoc + eval: no quoting issues, and a
             # syntax error fails the command instead of killing the shell. stdin is
             # /dev/null so commands that prompt for input fail fast instead of hanging.
+            # The exit codes are read inside the eval, where PIPESTATUS still
+            # describes the command's last pipeline (empty on a syntax error).
             script = (
                 f"__cmc_cmd=$(cat <<'__CMC_EOF_{tag}'\n{command}\n__CMC_EOF_{tag}\n)\n"
-                f'eval "$__cmc_cmd" < /dev/null\n'
-                f"__cmc_rc=$?\n"
-                f"printf '\\n{marker}%d\\n' \"$__cmc_rc\"\n"
+                "__cmc_rc= __cmc_ps=\n"
+                "eval \"$__cmc_cmd\"$'\\n''__cmc_rc=$? __cmc_ps=\"${PIPESTATUS[*]}\"' < /dev/null\n"
+                "__cmc_rc=${__cmc_rc:-$?}\n"
+                f'printf \'\\n{marker}%d %s\\n\' "$__cmc_rc" "$__cmc_ps"\n'
             )
             try:
                 proc.stdin.write(script.encode())
@@ -136,14 +174,18 @@ class PersistentShell:
                         before, _, after = line.partition(marker.encode())
                         if before.strip():
                             chunks.append(before)
+                        code: int | None
                         try:
-                            code = int(after.strip() or b"0")
+                            codes = [int(x) for x in after.split()] or [0]
+                            code, pipe = codes[0], codes[1:]
                         except ValueError:
-                            code = None
+                            code, pipe = None, []
                         output = _decode(chunks)
                         # Drop the newline printf put before the marker.
                         output = output[:-1] if output.endswith("\n") else output
-                        return ShellResult(output, code)
+                        return ShellResult(
+                            output, code, pipe_status=pipe if len(pipe) > 1 else None
+                        )
                     if size < MAX_CAPTURE_BYTES:
                         chunks.append(line)
                         size += len(line)
