@@ -10,6 +10,12 @@ The script is a list of replies, served in order to successive chat requests:
 It also serves GET /v1/models and LiteLLM-style GET /v1/model/info, and can
 require a bearer key. Every request body is recorded in `server.requests`.
 
+Summary requests from auto-compaction (recognised by their system prompt) get
+a canned summary and don't use up the script; they are also recorded in
+`server.summary_requests`. With `enforce_context=True`, a request whose
+prompt plus max_tokens exceeds the model's window is rejected with vLLM's
+"maximum context length" error, as a real server would.
+
 Run standalone:  python -m cmcoder.testing.mock_server --script s.json --port 8765
 """
 
@@ -33,14 +39,24 @@ class MockState:
         api_key: str | None = None,
         context_window: int = 32768,
         think_tags: bool | str = False,
+        context_windows: dict[str, int] | None = None,
+        enforce_context: bool = False,
+        summary: str = "Summary (mock): the user asked for work on the project; files were read.",
     ) -> None:
         self.script = list(script)
         self.models = models or ["qwen3-27b", "qwen3-7b"]
         self.api_key = api_key
         self.context_window = context_window
+        self.context_windows = context_windows or {}
+        self.enforce_context = enforce_context
+        self.summary = summary
         self.think_tags = think_tags
         self.requests: list[dict[str, Any]] = []
+        self.summary_requests: list[dict[str, Any]] = []
         self.lock = threading.Lock()
+
+    def window(self, model: str) -> int:
+        return self.context_windows.get(model, self.context_window)
 
     def next_reply(self) -> dict[str, Any]:
         with self.lock:
@@ -160,7 +176,7 @@ def make_handler(state: MockState) -> type[BaseHTTPRequestHandler]:
                             {
                                 "model_name": m,
                                 "model_info": {
-                                    "max_input_tokens": state.context_window,
+                                    "max_input_tokens": state.window(m),
                                     "max_output_tokens": 8192,
                                     "supports_function_calling": True,
                                 },
@@ -182,14 +198,36 @@ def make_handler(state: MockState) -> type[BaseHTTPRequestHandler]:
                 return
             body = json.loads(raw or b"{}")
             state.requests.append(body)
-            reply = state.next_reply()
+            model = body.get("model", "mock")
+            # Realistic usage (~3.5 chars per token), so context handling is exercised.
+            prompt_tokens = int(
+                len(json.dumps(body.get("messages", [])) + json.dumps(body.get("tools", []))) / 3.5
+            )
+            requested = prompt_tokens + int(body.get("max_tokens") or 0)
+            if state.enforce_context and requested > state.window(model):
+                self._json(
+                    400,
+                    {
+                        "error": {
+                            "message": f"This model's maximum context length is "
+                            f"{state.window(model)} tokens. However, you requested "
+                            f"{requested} tokens. Please reduce the length of the messages."
+                        }
+                    },
+                )
+                return
+            messages = body.get("messages") or [{}]
+            if "<cmcoder-compaction>" in str(messages[0].get("content", "")):
+                state.summary_requests.append(body)
+                reply: dict[str, Any] = {"content": state.summary}
+            else:
+                reply = state.next_reply()
             if "error" in reply:
                 err = reply["error"]
                 self._json(
                     int(err.get("status", 500)), {"error": {"message": err.get("message", "error")}}
                 )
                 return
-            model = body.get("model", "mock")
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
             self.send_header("Cache-Control", "no-cache")
@@ -197,10 +235,6 @@ def make_handler(state: MockState) -> type[BaseHTTPRequestHandler]:
             if "cost" in reply:
                 self.send_header("x-litellm-response-cost", str(reply["cost"]))
             self.end_headers()
-            # Realistic usage (~3.5 chars per token), so context handling is exercised.
-            prompt_tokens = int(
-                len(json.dumps(body.get("messages", [])) + json.dumps(body.get("tools", []))) / 3.5
-            )
             for c in _chunks(reply, model, state.think_tags, prompt_tokens):
                 self.wfile.write(f"data: {json.dumps(c)}\n\n".encode())
                 self.wfile.flush()

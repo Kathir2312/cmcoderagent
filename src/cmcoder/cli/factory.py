@@ -20,6 +20,7 @@ from ..config.settings import (
     find_project_root,
 )
 from ..core.agent import Agent, AskFn
+from ..core.compaction import Summarizer
 from ..core.permissions import PermissionPolicy
 from ..core.prompt import build_system_prompt, load_memory_files
 from ..providers.auth import ApiKeyAuth, AuthProvider, NoAuth
@@ -141,6 +142,8 @@ async def build_agent(settings: Settings, opts: AgentOptions) -> Agent:
         if opts.persist_rules:
             add_local_allow_rule(root, rule)
 
+    summarizer = await build_summarizer(settings, provider)
+
     return Agent(
         provider,
         model,
@@ -156,4 +159,22 @@ async def build_agent(settings: Settings, opts: AgentOptions) -> Agent:
         max_turns=opts.max_turns or settings.max_turns,
         ask=opts.ask,
         on_rule_saved=save_rule,
+        summarizer=summarizer,
+        auto_compact=settings.auto_compact,
+        compact_threshold=settings.auto_compact_threshold,
     )
+
+
+async def build_summarizer(
+    settings: Settings, main_provider: OpenAICompatProvider
+) -> Summarizer | None:
+    """The small/fast model, used to write compaction summaries."""
+    if not settings.small_fast_model:
+        return None
+    try:
+        name, model = settings.resolve_model(settings.small_fast_model)
+    except SettingsError:
+        return None  # summaries fall back to the main model
+    provider = main_provider if name == main_provider.name else build_provider(settings, name)
+    profile = await resolve_model_profile(settings, provider, model)
+    return Summarizer(provider, model, profile)

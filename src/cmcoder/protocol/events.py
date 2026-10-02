@@ -92,6 +92,17 @@ class Error(_Event):
     hint: str | None = None
 
 
+class Compacted(_Event):
+    """The older part of the conversation was replaced by a summary."""
+
+    type: Literal["compacted"] = "compacted"
+    trigger: Literal["auto", "manual"]
+    summarized_messages: int
+    tokens_before: int  # estimates
+    tokens_after: int
+    model: str
+
+
 class Result(_Event):
     type: Literal["result"] = "result"
     subtype: Literal["success", "error", "max_turns", "interrupted"]
@@ -114,6 +125,7 @@ Event = Annotated[
     | UsageUpdate
     | Warning
     | Error
+    | Compacted
     | Result,
     Field(discriminator="type"),
 ]

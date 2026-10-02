@@ -167,3 +167,25 @@ def test_long_preview_keeps_options_on_screen(mock_server: Any, project: Path) -
     finally:
         term.close()
     assert not (project / "big.txt").exists()
+
+
+def test_compact_command(mock_server: Any, project: Path) -> None:
+    (project / "a.txt").write_text("hello\n")
+    server = mock_server(
+        [
+            {"tool_calls": [{"name": "Read", "arguments": {"file_path": "a.txt"}}]},
+            {"content": "It says hello."},
+        ]
+    )
+    term = Term(project, server)
+    try:
+        assert term.expect(rb"/help for commands")
+        term.send("/compact\r")
+        assert term.expect(rb"Nothing to compact yet"), term.text()
+        term.send("what is in a.txt?\r")
+        assert term.expect(rb"It says hello\."), term.text()
+        term.send("/compact keep the file name\r")
+        assert term.expect(rb"Compacted the conversation: summarised \d+ earlier"), term.text()
+    finally:
+        term.close()
+    assert "keep the file name" in json.dumps(server.state.summary_requests)

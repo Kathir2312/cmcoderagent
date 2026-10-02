@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import difflib
+from collections.abc import AsyncIterator
 from contextlib import suppress
 from typing import Any
 
@@ -68,6 +69,8 @@ HELP = """\
 [bold]Commands[/bold]
   /help              show this help
   /clear             start a new conversation
+  /compact [focus]   summarise the conversation so far to free context
+                     (e.g. /compact keep the failing test names)
   /model [name]      show or switch the model (e.g. /model qwen3-27b)
   /mode [mode]       show or set the permission mode: default, acceptEdits, plan, bypassPermissions
   /cost              token usage for this session
@@ -164,6 +167,18 @@ class Repl:
             c.print(Text(f"✗ {event.message}", style="bold red"))
             if event.hint:
                 c.print(Text(f"  {event.hint}", style="red"))
+        elif isinstance(event, ev.Compacted):
+            self._stop_status()
+            how = "Compacted" if event.trigger == "manual" else "Context nearly full: compacted"
+            c.print(
+                Text(
+                    f"✻ {how} the conversation: summarised {event.summarized_messages} earlier "
+                    f"messages with {event.model} (≈{event.tokens_before:,} → "
+                    f"{event.tokens_after:,} tokens).",
+                    style="cyan",
+                )
+            )
+            self._last_prompt_tokens = 0
         elif isinstance(event, ev.Result):
             self._stop_status()
             self._stop_live()
@@ -277,6 +292,12 @@ class Repl:
             return False
         if name == "help":
             c.print(HELP)
+        elif name == "compact":
+            await self._run_stream(
+                self.agent.compact(arg or None),
+                status="Compacting…",
+                interrupted="└ Compaction cancelled; the conversation is unchanged.",
+            )
         elif name == "clear":
             self.agent.clear()
             self._last_prompt_tokens = 0
@@ -331,11 +352,19 @@ class Repl:
 
     async def _run_turn(self, prompt: str) -> None:
         assert self.agent is not None
-        agent = self.agent
+        await self._run_stream(self.agent.run(prompt))
+
+    async def _run_stream(
+        self,
+        events: AsyncIterator[ev.Event],
+        status: str = "Waiting for model…",
+        interrupted: str = "└ Interrupted. What should cmcoder do instead?",
+    ) -> None:
+        """Render an agent event stream, with Ctrl+C cancelling it."""
 
         async def consume() -> None:
-            self._start_status()
-            async for event in agent.run(prompt):
+            self._start_status(status)
+            async for event in events:
                 self._render(event)
 
         task = asyncio.create_task(consume())
@@ -347,9 +376,7 @@ class Repl:
         except asyncio.CancelledError:
             self._stop_status()
             self._stop_live()
-            self.console.print(
-                Text("└ Interrupted. What should cmcoder do instead?", style="yellow")
-            )
+            self.console.print(Text(interrupted, style="yellow"))
         finally:
             self._turn_task = None
             self._interrupt.disarm()

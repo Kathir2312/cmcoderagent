@@ -37,7 +37,84 @@ Status of each section follows [PLAN.md](PLAN.md).
 
 ## 1. Auto-compaction
 
-*Not started.*
+*Done.* Code: `src/cmcoder/core/compaction.py`, `Agent.compact` and the
+checks in `Agent.run` (`core/agent.py`).
+
+### The LangGraph way
+
+LangGraph's how-to on managing conversation history suggests a
+**summarise node** that runs when the message list gets long. It writes a
+summary into state and deletes the old messages with `RemoveMessage`:
+
+```python
+from langchain_core.messages import HumanMessage, RemoveMessage
+from langgraph.graph import MessagesState
+
+
+class State(MessagesState):
+    summary: str
+
+
+def summarize(state: State):
+    old = state["messages"][:-4]                       # keep the last 4 messages
+    prompt = f"Summary so far: {state.get('summary', '')}\nExtend it with the conversation above."
+    summary = small_llm.invoke([*old, HumanMessage(prompt)]).content
+    return {"summary": summary, "messages": [RemoveMessage(id=m.id) for m in old]}
+
+
+def should_summarize(state: State):
+    return "summarize" if count_tokens(state["messages"]) > 0.8 * WINDOW else "agent"
+```
+
+The other common tools are `trim_messages` (drop old messages) and, in
+`create_react_agent`, a `pre_model_hook` that rewrites the messages before each
+model call. The `langmem` library also ships a `SummarizationNode`.
+
+### The cmcoder way
+
+The same idea, done inside the agent loop:
+
+| LangGraph | cmcoder |
+|---|---|
+| `should_summarize` conditional edge | `if budget.estimate(...) >= window * compact_threshold` in `Agent.run` |
+| `summarize` node | `Agent.compact()` → `compaction.compact()` |
+| `state["summary"]` | a user message starting with `SUMMARY_HEADER` |
+| `RemoveMessage(id=…)` for old messages | `self.messages = [system, summary, *tail]` (one swap) |
+| "keep the last 4 messages" | keep the newest ~25% of the window, cut at a step boundary |
+| a cheaper `small_llm` | `smallFastModel`, with the main model as fallback |
+
+### Why they differ
+
+The naive "keep the last N messages" in the sketch above has a bug that bites
+tool-using agents. If message `-4` is a `ToolMessage`, its `AIMessage` with
+the tool call gets removed and the next model call fails ("tool result
+without a tool call"). LangChain's `trim_messages` has `start_on="human"` /
+`end_on=(...)` options for exactly this. cmcoder's `split_index` only cuts at
+user/assistant boundaries.
+
+cmcoder also handles things the sketch doesn't:
+
+- **The summariser's own window.** The text to summarise can be bigger than
+  the small model's window, so it is summarised in chunks with a running
+  summary.
+- **The user's request, word for word.** It's copied verbatim, not left to
+  the model, and carried over across repeated compactions.
+- **Prompt injection.** The summary goes back as a *user* message, so the
+  summariser is told that file contents and tool output are data and must
+  never be written as user requests. The `create_react_agent` +
+  `pre_model_hook` approach needs the same care.
+- **Failure.** If summarising fails, it falls back to the next model, then to
+  dropping old output. It's never retried before every step.
+- **Wrong estimates.** A server "context too long" error triggers compaction
+  and a retry, and cmcoder stops trusting the estimate that failed.
+
+### Exercise
+
+Add the `summarize` node above to the
+[Phase 0 LangGraph sketch](../phase0/langgraph-guide.md#5-cmcoder-written-in-langgraph-sketch),
+using your gateway's Qwen3-7B as `small_llm`. Make it fail by keeping the
+last 3 messages when message `-3` is a `ToolMessage`, then fix it the way
+`split_index` does.
 
 ## 2. Permission prompt never scrolls off screen
 

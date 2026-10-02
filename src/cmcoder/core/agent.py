@@ -27,6 +27,7 @@ from ..providers.messages import (
 from ..providers.openai_compat import ContextTooLong, ProviderError
 from ..providers.profiles import ModelProfile
 from ..tools.base import Tool, ToolContext, ToolResult, truncate_middle
+from .compaction import CompactionError, Summarizer, compact
 from .context import WARN_RATIO, ContextBudget
 from .permissions import Decision, PermissionPolicy, suggest_rule
 
@@ -122,6 +123,9 @@ class Agent:
         max_turns: int = 50,
         ask: AskFn | None = None,
         on_rule_saved: Callable[[str], None] | None = None,
+        summarizer: Summarizer | None = None,
+        auto_compact: bool = True,
+        compact_threshold: float = 0.8,
     ) -> None:
         self.provider = provider
         self.model = model
@@ -137,6 +141,10 @@ class Agent:
         self.messages: list[Message] = [Message.system(system_prompt)]
         self.usage = Usage()
         self._budget: ContextBudget | None = None
+        # The small/fast model for summaries; the main model is the fallback.
+        self.summarizer = summarizer
+        self.auto_compact = auto_compact
+        self.compact_threshold = compact_threshold
 
     def budget(self) -> ContextBudget:
         """Context budget for the current model profile (rebuilt after /model)."""
@@ -146,6 +154,7 @@ class Agent:
             nb = ContextBudget(p.context_window, p.max_output, self.tool_specs())
             if b is not None:
                 nb.chars_per_token = b.chars_per_token
+                nb.max_chars_per_token = b.max_chars_per_token
             self._budget = nb
         assert self._budget is not None
         return self._budget
@@ -169,9 +178,53 @@ class Agent:
     async def close(self) -> None:
         if self.ctx.shell:
             await self.ctx.shell.close()
-        aclose = getattr(self.provider, "aclose", None)
-        if aclose is not None:
-            await aclose()
+        providers = [self.provider]
+        if self.summarizer is not None and self.summarizer.provider is not self.provider:
+            providers.append(self.summarizer.provider)
+        for p in providers:
+            aclose = getattr(p, "aclose", None)
+            if aclose is not None:
+                await aclose()
+
+    def _summarizers(self) -> list[Summarizer]:
+        main = Summarizer(self.provider, self.model, self.profile)
+        if self.summarizer is None or self.summarizer.model == self.model:
+            return [main]
+        return [self.summarizer, main]
+
+    async def compact(
+        self, focus: str | None = None, *, trigger: str = "manual"
+    ) -> AsyncIterator[ev.Event]:
+        """Summarise the older part of the conversation (`/compact`, or
+        automatically when the window fills). The conversation is only
+        replaced once the summary is ready, so cancelling leaves it intact."""
+        budget = self.budget()
+        before = budget.estimate(self.messages)
+        try:
+            res = await compact(
+                self.messages,
+                self._summarizers(),
+                window=budget.window,
+                chars_per_token=budget.chars_per_token,
+                focus=focus,
+                force=trigger == "manual",
+            )
+        except CompactionError as e:
+            yield ev.Warning(message=f"Could not summarise the conversation: {e}")
+            return
+        if res is None:
+            if trigger == "manual":
+                yield ev.Warning(message="Nothing to compact yet.")
+            return
+        self.messages = res.messages
+        self.usage.add(res.usage)
+        yield ev.Compacted(
+            trigger=trigger,  # type: ignore[arg-type]
+            summarized_messages=res.summarized,
+            tokens_before=before,
+            tokens_after=budget.estimate(self.messages),
+            model=res.model,
+        )
 
     # ------------------------------------------------------------------
 
@@ -185,6 +238,9 @@ class Agent:
         recent_calls: list[str] = []
         warned_context = False
         overflow_retried = False
+        # Turned off for the rest of the turn if summarising fails, so a
+        # broken summariser isn't retried before every model call.
+        can_compact = self.auto_compact
 
         def result(subtype: str, text: str, is_error: bool = False) -> ev.Result:
             return ev.Result(
@@ -213,12 +269,21 @@ class Agent:
                 steps += 1
 
                 budget = self.budget()
+                if (
+                    can_compact
+                    and budget.estimate(self.messages) >= budget.window * self.compact_threshold
+                ):
+                    async for e in self.compact(trigger="auto"):
+                        if isinstance(e, ev.Warning):
+                            can_compact = False
+                        yield e
+                    warned_context = False
                 if not budget.fits(self.messages):
                     removed = budget.free_space(self.messages)
                     if removed:
                         yield ev.Warning(
                             message=f"Context window nearly full: removed {removed} older tool "
-                            "output(s). Use /clear to start fresh (summarisation arrives in Phase 1)."
+                            "output(s). /compact summarises the conversation; /clear starts fresh."
                         )
                     if not budget.fits(self.messages):
                         yield ev.Error(
@@ -252,12 +317,20 @@ class Agent:
                     if not overflow_retried:
                         overflow_retried = True
                         steps -= 1
-                        budget.chars_per_token *= 0.75
-                        removed = budget.free_space(self.messages, keep_recent=1)
-                        yield ev.Warning(
-                            message=f"The server reported the context window was exceeded; "
-                            f"removed {removed} older tool output(s) and retrying."
-                        )
+                        budget.distrust()
+                        compacted = False
+                        if can_compact:
+                            async for e in self.compact(trigger="auto"):
+                                compacted = compacted or isinstance(e, ev.Compacted)
+                                if isinstance(e, ev.Warning):
+                                    can_compact = False
+                                yield e
+                        if not compacted or not budget.fits(self.messages):
+                            removed = budget.free_space(self.messages, keep_recent=1)
+                            yield ev.Warning(
+                                message=f"The server reported the context window was exceeded; "
+                                f"removed {removed} older tool output(s) and retrying."
+                            )
                         continue
                     yield ev.Error(
                         kind=e.kind,
@@ -280,6 +353,7 @@ class Agent:
                     yield result("error", "stream ended unexpectedly", is_error=True)
                     return
 
+                overflow_retried = False  # one retry per model call, not per turn
                 msg = done.message
                 self.messages.append(msg)
                 self.usage.add(done.usage)

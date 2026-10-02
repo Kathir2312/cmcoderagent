@@ -8,6 +8,8 @@
   },
   "model": "corp:qwen3-27b",
   "smallFastModel": "corp:qwen3-7b",
+  "autoCompact": true,
+  "autoCompactThreshold": 0.8,
   "permissions": {
     "allow": ["Bash(npm test:*)", "Bash(pytest:*)"],
     "deny": [],

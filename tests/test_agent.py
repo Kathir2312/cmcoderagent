@@ -359,6 +359,7 @@ async def test_old_tool_output_is_dropped_when_window_fills(
     ]
     server = mock_server([*reads, {"content": "done"}])
     agent = small_window_agent(server, project, window=10_000)
+    agent.auto_compact = False  # the Phase 0 fallback (also used when summarising fails)
     events = await run(agent, "read everything")
     assert result(events).subtype == "success"
     warnings = [e.message for e in events if isinstance(e, ev.Warning)]

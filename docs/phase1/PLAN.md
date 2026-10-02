@@ -38,6 +38,16 @@ context (DESIGN.md §9, §16.2).
 **Done when:** a scripted 60-step session in the mock server runs to the end
 inside a 32K window; `/compact` works; the summary prompt is covered by tests.
 
+**Status: done.** The 60-step session runs against a mock server that enforces
+the 32K limit. Found and fixed on the way:
+- the user's request was lost on a second compaction (it's now carried word
+  for word);
+- a long turn could only recover from one server "context too long" error
+  (the retry is now per model call, and an estimate that failed is never
+  trusted again);
+- summaries could turn instructions found in files into "user requests" (the
+  summariser is told tool output is data).
+
 ### 2. Permission prompt never scrolls off screen
 
 **Why:** user-trial bug (§16.3 item 1): long previews push the 1/2/3 options
@@ -173,7 +183,7 @@ SSO, OpenTelemetry, Windows sandboxing (Phase 4).
 
 ## Checklist
 
-- [ ] 1. Auto-compaction
+- [x] 1. Auto-compaction
 - [x] 2. Permission prompt never scrolls off screen (the Textual dialog follows in item 11)
 - [ ] 3. Detect the real context window
 - [ ] 4. Steer Qwen away from Bash for file work

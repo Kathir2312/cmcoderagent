@@ -37,6 +37,12 @@ async def run_headless(
                 print(f"error: {event.message}{hint}", file=sys.stderr)
             elif isinstance(event, ev.Warning):
                 print(f"warning: {event.message}", file=sys.stderr)
+            elif isinstance(event, ev.Compacted) and output_format != "stream-json":
+                print(
+                    f"note: context nearly full; summarised {event.summarized_messages} earlier "
+                    f"messages with {event.model}",
+                    file=sys.stderr,
+                )
             elif verbose and isinstance(event, ev.ToolUse):
                 print(f"● {event.label}", file=sys.stderr)
             elif verbose and isinstance(event, ev.ToolResult):

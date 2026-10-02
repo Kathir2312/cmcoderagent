@@ -95,7 +95,7 @@ git diff | cmcoder -p "review this diff"
 cmcoder -p "..." --output-format json         # or stream-json (one event per line)
 ```
 
-In the interactive session: `/help`, `/model`, `/mode`, `/clear`, `/cost`, `/exit`; Shift+Tab cycles the
+In the interactive session: `/help`, `/model`, `/mode`, `/compact`, `/clear`, `/cost`, `/exit`; Shift+Tab cycles the
 permission mode; Ctrl+C interrupts the current turn.
 
 ### Permissions
@@ -120,8 +120,11 @@ approved by allow rules; `-p` runs refuse them. To block them entirely set
 ### Context window
 
 Qwen3 is often served with a 32K-token window, which an agent fills quickly. cmcoder sizes each request to the
-room left, pages long files, and drops the oldest tool outputs when the window fills (you'll see a warning).
-`/clear` starts fresh. If you can, have the gateway serve a longer context; `cmcoder doctor` reports the window.
+room left and pages long files. When the conversation reaches 80% of the window it **summarises the older
+part** (with `smallFastModel` if set) and keeps the recent messages; `/compact [what to keep]` does this on
+demand, and `/clear` starts fresh. Settings: `"autoCompact": true`, `"autoCompactThreshold": 0.8`. If
+summarising fails, the oldest tool outputs are dropped instead. If you can, have the gateway serve a longer
+context; `cmcoder doctor` reports the window.
 
 **Privacy:** each turn sends your prompt, file contents the agent reads and command output to the configured model
 endpoint. LiteLLM admins may be able to see that traffic in gateway logs.

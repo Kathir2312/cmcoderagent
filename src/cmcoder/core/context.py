@@ -40,6 +40,9 @@ class ContextBudget:
             len(t.name) + len(t.description) + len(json.dumps(t.parameters)) + 40 for t in tools
         )
         self.chars_per_token = DEFAULT_CHARS_PER_TOKEN
+        # Lowered when the server rejects a request as too long, so later
+        # calibration can't return to an estimate that already failed.
+        self.max_chars_per_token = 6.0
 
     def request_chars(self, messages: list[Message]) -> int:
         return sum(message_chars(m) for m in messages) + self.tools_chars
@@ -51,7 +54,12 @@ class ContextBudget:
         """Learn this model's chars-per-token from a server-reported count."""
         if reported_prompt_tokens > 0:
             ratio = request_chars / reported_prompt_tokens
-            self.chars_per_token = min(6.0, max(1.5, ratio))
+            self.chars_per_token = min(self.max_chars_per_token, max(1.5, ratio))
+
+    def distrust(self) -> None:
+        """The server said a request was too long: estimate more tokens from now on."""
+        self.chars_per_token = max(1.5, self.chars_per_token * 0.75)
+        self.max_chars_per_token = self.chars_per_token
 
     def max_tokens(self, messages: list[Message]) -> int:
         """Output tokens to request: the profile maximum, or what still fits."""

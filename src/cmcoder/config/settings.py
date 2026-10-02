@@ -56,6 +56,9 @@ class Settings(_Model):
         default_factory=lambda: PermissionsConfig.model_validate({})
     )
     max_turns: int = Field(50, alias="maxTurns")
+    # Summarise older turns when the prompt reaches this share of the window.
+    auto_compact: bool = Field(True, alias="autoCompact")
+    auto_compact_threshold: float = Field(0.8, alias="autoCompactThreshold", ge=0.3, le=0.95)
     env: dict[str, str] = Field(default_factory=dict)
     # Where each layer came from, for `cmcoder doctor`.
     sources: list[str] = Field(default_factory=list, exclude=True)
