@@ -199,3 +199,13 @@ def test_settings_env_reaches_bash_commands(mock_server: Any, project: Path) -> 
     assert r.returncode == 0, r.stderr
     tool_msg = [m for m in server.requests[1]["messages"] if m["role"] == "tool"][0]
     assert tool_msg["content"] == "from-settings"
+
+
+def test_login_rejects_paste_mistakes() -> None:
+    from cmcoder.cli.main import key_problem
+
+    assert key_problem("sk-abc123") is None
+    assert key_problem("") == "empty key"
+    assert "right-click" in (key_problem("\x16") or "")  # Ctrl+V typed into hidden input on Windows
+    assert "right-click" in (key_problem("sk-abc\x16") or "")
+    assert "spaces" in (key_problem("sk-abc def") or "")

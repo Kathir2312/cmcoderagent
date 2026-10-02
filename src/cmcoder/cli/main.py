@@ -41,6 +41,20 @@ def _load(cwd: Path | None = None) -> Settings:
         raise typer.Exit(2) from e
 
 
+def key_problem(key: str) -> str | None:
+    """Catch common paste mistakes before saving a key."""
+    if not key:
+        return "empty key"
+    if any(ord(c) < 32 or ord(c) == 127 for c in key):
+        return (
+            "the key contains control characters. In Command Prompt, Ctrl+V does not paste into "
+            "hidden input: paste with a right-click (or Ctrl+Shift+V in Windows Terminal)."
+        )
+    if any(c.isspace() for c in key):
+        return "the key contains spaces; paste only the key itself."
+    return None
+
+
 def _split_rules(values: list[str] | None) -> list[str]:
     """Accept --allowedTools "Read,Bash(git diff:*)" as well as repeated flags."""
     out: list[str] = []
@@ -188,12 +202,17 @@ def login(
     settings = _load()
     name = _provider_name(settings, provider)
     console.print(f"Provider [bold]{name}[/bold] ({settings.providers[name].base_url})")
-    key = getpass.getpass("API key (input hidden): ").strip()
-    if not key:
-        err_console.print("[red]error:[/red] empty key")
+    key = getpass.getpass("API key (input hidden; paste with right-click): ").strip()
+    if problem := key_problem(key):
+        err_console.print(f"[red]error:[/red] {problem}")
         raise typer.Exit(2)
     where = store_api_key(name, key)
-    console.print(f"[green]Saved[/green] {mask_key(key)} to {where}.")
+    console.print(f"[green]Saved[/green] {mask_key(key)} ({len(key)} characters) to {where}.")
+    if not key.startswith("sk-"):
+        console.print(
+            "[yellow]Note:[/yellow] LiteLLM keys usually start with `sk-`; this one doesn't. "
+            "Check that you pasted the whole key."
+        )
     env_key, env_var = env_api_key_source()
     if env_key and env_key != key:
         console.print(
