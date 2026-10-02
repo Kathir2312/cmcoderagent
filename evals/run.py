@@ -42,6 +42,9 @@ def run_task(
     work = run_dir / task_dir.name
     shutil.copytree(task_dir / "repo", work)
     subprocess.run(["git", "init", "-q"], cwd=work, check=True)
+    # Keep task files byte-for-byte (and quiet "LF will be replaced by CRLF"
+    # warnings on Windows), whatever the user's global core.autocrlf is.
+    subprocess.run(["git", "config", "core.autocrlf", "false"], cwd=work, check=True)
     subprocess.run(["git", "add", "-A"], cwd=work, check=True)
     subprocess.run(
         [
