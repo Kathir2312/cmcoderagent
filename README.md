@@ -4,7 +4,8 @@ An agentic coding assistant for the terminal (and, from Phase 2, VS Code), in th
 that works with **any OpenAI-compatible endpoint**, such as a LiteLLM gateway serving Qwen3 models on your network.
 
 The agent runs on your machine (it reads and edits files and runs commands there); the model always runs on a
-remote server. See [docs/DESIGN.md](docs/DESIGN.md) for the architecture and roadmap.
+remote server. See [docs/DESIGN.md](docs/DESIGN.md) for the architecture and roadmap, and
+[docs/WALKTHROUGH.md](docs/WALKTHROUGH.md) for a beginner-friendly tour of the code.
 
 > Status: **Phase 0** (Windows, macOS and Linux). Working agent loop, tools, permissions, LiteLLM/OpenAI-compatible provider,
 > basic interactive terminal UI, headless mode, `doctor` and `login`.
