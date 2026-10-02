@@ -107,6 +107,9 @@ not Bash commands), the conversation, or both.
 
 For multi-step work the model keeps a todo list (TodoWrite), shown as a ☑ ◐ ☐ checklist; `/todos` shows it again.
 
+`cmcoder --tui` (or `"ui": "textual"`) opens a full-screen UI with a status bar and a fixed-size permission dialog;
+it's opt-in until it has been tried on Windows terminals (`/resume` and `/rewind` are classic-only for now).
+
 In the interactive session: `/help`, `/model`, `/mode`, `/compact`, `/resume`, `/rewind`, `/todos`, `/clear`, `/cost`, `/exit`; Shift+Tab cycles the
 permission mode; Ctrl+C interrupts the current turn.
 

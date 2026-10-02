@@ -609,7 +609,53 @@ to turn it into tool calls your `ToolNode` can run.
 
 ## 11. Textual TUI
 
-*Not started.*
+*Done (opt-in).* Code: `src/cmcoder/cli/tui.py`.
+
+### The LangGraph way
+
+A UI consumes the graph's stream and answers interrupts:
+
+```python
+async for mode, chunk in graph.astream(inputs, config, stream_mode=["messages", "updates"]):
+    if mode == "messages":
+        render_token(chunk[0])
+    elif "__interrupt__" in chunk:
+        answer = await show_dialog(chunk["__interrupt__"][0].value)
+        # ...then resume: graph.astream(Command(resume=answer), config, ...)
+```
+
+The interrupt **ends the stream**. You show the dialog, then start a new
+stream with `Command(resume=...)`. That's how LangGraph Studio and Agent Chat
+UI work.
+
+### The cmcoder way
+
+| | LangGraph UI | cmcoder TUI |
+|---|---|---|
+| Event source | `graph.astream(stream_mode=[…])` | `Agent.run()` events (same as the REPL and `-p`) |
+| Human approval | stream ends at `__interrupt__`, resume with `Command(resume=…)` | the agent awaits `ask()`; the TUI's `ask` awaits a modal (`push_screen_wait`) |
+| Long work next to the UI | your app's concurrency | a Textual **worker**; Ctrl+C cancels it |
+| Two UIs, one engine | LangGraph Server + any client | REPL and TUI both drive the same `Agent` |
+
+### Why they differ
+
+Both designs separate **engine** from **UI** through an event stream, and
+that's the transferable lesson. Here it's what let a second UI be added
+without touching `core/`.
+
+The approval mechanics differ because of where the human is. LangGraph's
+interrupt/resume survives process restarts (the UI might be a web page that
+answers tomorrow), so it needs a checkpointer. cmcoder's human is at the
+same terminal, so the agent can simply `await` an answer. The same `ask`
+interface will be served by the VS Code extension in Phase 2.
+
+### Exercise
+
+Write a 40-line Textual app around the
+[Phase 0 LangGraph sketch](../phase0/langgraph-guide.md#5-cmcoder-written-in-langgraph-sketch).
+Stream `messages` into a `Markdown` widget from a worker, and on
+`__interrupt__` open a `ModalScreen`, then resume with `Command(resume=...)`.
+Compare it with cmcoder's `ask()`, which needs no resume step.
 
 ## 12. More evals
 

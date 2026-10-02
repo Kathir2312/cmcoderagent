@@ -230,6 +230,15 @@ permission dialog as a fixed-height panel with a scrollable preview (completes
 item 2), status bar with context usage. The prompt_toolkit REPL stays as a
 fallback (`--simple-ui`) until the Textual one is proven on Windows.
 
+**Status: done, opt-in.** `cmcoder --tui` or `"ui": "textual"`.
+- The classic REPL stays the default (instead of a `--simple-ui` flag) until
+  the TUI is verified on Windows terminals.
+- The permission dialog is a fixed-size modal with a scrollable preview,
+  which completes item 2.
+- `/resume` and `/rewind` are still classic-only.
+- Tested headlessly with Textual's pilot (on all OSes) and in a
+  pseudo-terminal.
+
 ### 12. More evals
 
 **What:** grow from 5 to about 20 tasks (multi-file edits, test fixing, search,
@@ -255,6 +264,6 @@ SSO, OpenTelemetry, Windows sandboxing (Phase 4).
 - [x] 8. TodoWrite
 - [x] 9. Small/fast model jobs
 - [x] 10. Tool-call robustness
-- [ ] 11. Textual TUI
+- [x] 11. Textual TUI (opt-in until verified on Windows)
 - [ ] 12. More evals
 - [ ] Real-gateway run on Windows (`doctor`, evals) and `STATUS.md`

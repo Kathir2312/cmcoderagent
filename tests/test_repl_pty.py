@@ -271,3 +271,17 @@ def test_todo_list_is_shown_as_a_checklist(mock_server: Any, project: Path) -> N
         assert term.expect("☐ Run the tests[\\s\\S]*☐ Run the tests".encode()), term.text()
     finally:
         term.close()
+
+
+def test_tui_starts_and_answers(mock_server: Any, project: Path) -> None:
+    server = mock_server([{"content": "Hello from the TUI."}])
+    term = Term(project, server, "--tui")
+    try:
+        assert term.expect(rb"Ask cmcoder", timeout=20), term.text()
+        term.send("hi\r")
+        assert term.expect(rb"Hello from the TUI", timeout=20), term.text()[-2000:]
+        term.send("\x04")  # Ctrl+D quits
+        time.sleep(1)
+    finally:
+        term.close()
+    assert server.requests and server.requests[0]["messages"][-1]["content"] == "hi"

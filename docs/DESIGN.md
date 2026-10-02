@@ -416,6 +416,8 @@ Keys: `model`, `providers`, `modelProfiles`, `permissions`, `hooks`, `env`, `mcp
 ## 13. Front ends
 
 ### 13.1 CLI / TUI (`cmcoder`)
+
+*Phase 1: the classic prompt_toolkit REPL is the default; the full-screen Textual UI is available with `cmcoder --tui` or `"ui": "textual"` (fixed-size permission dialog with a scrollable preview) and becomes the default once verified on Windows.*
 - Textual-based: streaming Markdown, tool-call cards, permission dialogs, diff previews, todo panel, Esc to interrupt, history, `!` to run a shell command directly.
 - `cmcoder -p "…" [--output-format text|json|stream-json] [--max-turns N] [--allowedTools …]` for scripts and CI.
 

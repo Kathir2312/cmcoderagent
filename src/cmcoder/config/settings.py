@@ -69,6 +69,8 @@ class Settings(_Model):
     auto_compact: bool = Field(True, alias="autoCompact")
     auto_compact_threshold: float = Field(0.8, alias="autoCompactThreshold", ge=0.3, le=0.95)
     env: dict[str, str] = Field(default_factory=dict)
+    # "classic": the prompt_toolkit REPL; "textual": the full-screen UI (also --tui).
+    ui: Literal["classic", "textual"] = "classic"
     # Save conversations for --continue / --resume, and delete them after N days.
     persist_sessions: bool = Field(True, alias="persistSessions")
     cleanup_period_days: int = Field(30, alias="cleanupPeriodDays", ge=1)

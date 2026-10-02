@@ -1391,8 +1391,137 @@ tool calling, you know the fallback works on your gateway.
 
 ## 11. Textual TUI
 
-*Not started.* Will cover: event-driven UIs, Textual widgets and screens, and
-running the agent alongside the UI with `asyncio`.
+*Done (opt-in).* Code: `src/cmcoder/cli/tui.py` (new), `--tui` in
+`cli/main.py`, the `ui` setting. Tests: `tests/test_tui.py` (Textual's
+headless pilot), plus a start-up test in `tests/test_repl_pty.py`.
+
+### The problem
+
+The classic REPL prints line after line into your terminal's scrollback. That
+works, but:
+- a long permission preview can still push things around;
+- there's no fixed place for status (model, mode, how full the context is);
+- the input line and the output share one stream of text.
+
+### The idea
+
+A **full-screen** terminal app, like `htop` or `vim`, with three fixed areas:
+
+```
+┌──────────────────────────────────────────────────────┐
+│ conversation (scrolls)                               │
+│ > fix the failing test                               │
+│ ● Read(tests/test_calc.py)                           │
+│   └ Read 40 lines                                    │
+│ The test expects …                                   │
+├──────────────────────────────────────────────────────┤
+│ Ask cmcoder…  (/help for commands)                   │  input
+├──────────────────────────────────────────────────────┤
+│ Qwen3.6-27B · mode: default · context 41% · Shift+Tab│  status bar
+└──────────────────────────────────────────────────────┘
+```
+
+Permission requests open a **dialog** of fixed size. The preview has its own
+scrollbar, and the buttons (`1 Yes`, `2 Always`, `3 No`) are always at the
+bottom. This finishes item 2: however long the command, the options can't be
+pushed off screen.
+
+Start it with `cmcoder --tui`, or set `"ui": "textual"` in settings. It's
+**opt-in for now**: the classic REPL stays the default until the TUI has
+been tried on your Windows terminals. `/resume` and `/rewind` are classic-only
+for the moment; everything else (`/help`, `/clear`, `/compact`, `/mode`,
+`/model`, `/cost`, `/todos`, Ctrl+C, Shift+Tab) works in both.
+
+### The code
+
+[Textual](https://textual.textualize.io/) builds terminal apps out of
+**widgets** (`Input`, `Static`, `Markdown`, `Button`), arranges them with
+**containers** (`VerticalScroll`, `Horizontal`), styles them with a CSS-like
+language, and runs on `asyncio`, like cmcoder.
+
+**The app** (`CmcoderApp`):
+
+```python
+def compose(self) -> ComposeResult:
+    yield VerticalScroll(id="log")       # the conversation
+    yield Input(placeholder="Ask cmcoder…", id="prompt")
+    yield Static(id="status")            # the status bar
+```
+
+`compose` describes the screen once; widgets are added to `#log` as events
+arrive (`log.mount(Static(...))`).
+
+**Event-driven.** Nothing runs in a `while True` loop that waits for input.
+Instead, Textual calls your methods when things happen:
+- `@on(Input.Submitted, "#prompt")` → you pressed Enter;
+- `Binding("ctrl+c", "interrupt", priority=True)` → calls `action_interrupt`
+  (`priority=True` so it wins over Textual's own Ctrl+C);
+- `@on(Button.Pressed)` in the dialog.
+
+**Running the agent without freezing the screen** (`run_worker`). A turn can
+take a minute, and the UI must stay responsive meanwhile (scrolling, Ctrl+C).
+So each turn runs as a **worker**, a background task Textual manages:
+
+```python
+self.turn = self.run_worker(self.stream(self.agent.run(prompt)), exclusive=True, group="turn")
+```
+
+`stream()` loops over the agent's events (the same events the classic REPL
+and `-p` use) and renders each one. Ctrl+C calls `self.turn.cancel()`, which
+raises `CancelledError` inside the agent, exactly like the classic REPL.
+
+**Asking permission from inside the worker** (`ask`):
+
+```python
+async def ask(self, req):
+    return await self.push_screen_wait(PermissionScreen(req, source, lexer))
+```
+
+`push_screen_wait` shows the dialog on top and **waits** until it's closed
+with `self.dismiss(PermissionAnswer(...))`. The agent simply awaits its `ask`
+callback, as before, and has no idea a different UI is answering.
+
+**The dialog layout** is the CSS that fixes item 2 for good:
+
+```css
+#dialog  { width: 92%; height: 85%; }
+#preview { height: 1fr; }          /* takes the space that's left, scrolls inside */
+#buttons { height: auto; }         /* always fully shown */
+```
+
+**Streaming Markdown.** Replies arrive in small pieces. Re-rendering Markdown
+for every piece would be slow, so the `Markdown` widget is updated at most
+every 0.08 s (`UPDATE_EVERY`), plus once at the end.
+
+### New Python ideas
+
+- **Event-driven programming**: handlers (`@on`, `action_*`) instead of a main loop.
+- **Workers**: long-running async work next to a live UI, with cancellation.
+- **`push_screen_wait`**: a modal dialog that you can `await` like a function call.
+- **Testing a UI headlessly**: `async with app.run_test(size=(80, 24)) as
+  pilot:` runs the app without a real terminal; `pilot.press("1")` types keys.
+
+### The tests
+
+`tests/test_tui.py` (Textual's pilot, no terminal needed, runs on every OS):
+- a reply is shown, and the status bar shows the mode;
+- **the item 2 case**: a 500-line command at 80×24. The buttons lie inside
+  the 24 rows, the preview scrolls through all of it, and `3` + feedback
+  sends "use pytest" back to the model;
+- `1` allows and the file is written;
+- Shift+Tab cycles the mode, Ctrl+C interrupts `sleep 30`, and `/help` and
+  `/mode plan` work;
+- the TodoWrite checklist.
+
+`tests/test_repl_pty.py::test_tui_starts_and_answers` starts the real
+`cmcoder --tui` in a pseudo-terminal.
+
+### Try it
+
+`cmcoder --tui` in Windows Terminal. Try a long command, the permission
+dialog, Ctrl+C and Shift+Tab. If it works well for a while, set `"ui":
+"textual"` to make it your default and tell me: then it can become the
+default for everyone.
 
 ## 12. More evals
 

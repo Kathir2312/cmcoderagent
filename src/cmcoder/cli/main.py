@@ -125,6 +125,9 @@ def main(
             "--resume", "-r", help="Resume a saved conversation by id (or the start of its id)."
         ),
     ] = None,
+    tui: Annotated[
+        bool, typer.Option("--tui", help="Use the full-screen terminal UI (Textual).")
+    ] = False,
     version: Annotated[bool, typer.Option("--version", help="Print the version and exit.")] = False,
 ) -> None:
     from .factory import AgentOptions
@@ -163,6 +166,10 @@ def main(
                 err_console.print("[red]error:[/red] -p needs a prompt (argument or stdin)")
                 raise typer.Exit(2)
             code = asyncio.run(run_headless(settings, opts, text, output_format, verbose))  # type: ignore[arg-type]
+        elif tui or settings.ui == "textual":
+            from .tui import run_tui
+
+            code = asyncio.run(run_tui(settings, opts, prompt))
         else:
             from .repl import Repl
 

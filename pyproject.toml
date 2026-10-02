@@ -13,6 +13,7 @@ dependencies = [
     "truststore>=0.9",
     "keyring>=25",
     "pathspec>=0.12",
+    "textual>=0.80",
 ]
 
 [project.scripts]
