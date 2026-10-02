@@ -34,14 +34,27 @@ events on stdout, one per line. One conversation per process.
 
 - Client → agent: `user_message`, `interrupt`, `permission_response`,
   `set_mode`, `set_model`, `shutdown`.
-- Agent → client (added to the existing events): `ready`,
-  `permission_request`, `todo_update`, `mode_changed`, `model_changed`.
-- Versioned (`protocol_version` in `ready`), no VS Code-specific types.
+- Agent → client (added to the existing events): `permission_request`,
+  `todo_update`, `mode_changed`, `model_changed`. The first event,
+  `system_init`, is the handshake.
+- Versioned (`protocol_version` in `system_init`), no VS Code-specific types.
 - Logs and stray prints go to stderr only, never stdout.
 
 **Done when:** tests drive a full conversation over a pipe: a turn,
 a permission request answered both ways, an interrupt, a mode switch, a
 second turn, and a clean shutdown on EOF.
+
+**Status: done.** `src/cmcoder/cli/stdio.py`, `src/cmcoder/protocol/messages.py`,
+`tests/test_stdio.py` (the real CLI as a subprocess against the mock server):
+
+- one turn at a time (`busy` error otherwise);
+- a permission answer can deny with feedback for the model, or allow with
+  "always" (saved like the CLI's);
+- `interrupt` cancels a pending permission request too;
+- a resumed conversation (`--continue`, `--resume`) sends its todo list;
+- startup errors are an `error` event with kind `startup`;
+- stdin is read in a thread, because asyncio's stdin readers don't work with
+  Windows pipes.
 
 ### 2. Generated TypeScript protocol types
 
@@ -117,7 +130,7 @@ OpenTelemetry, standalone binary, platform-specific VSIX, Windows sandboxing
 
 ## Checklist
 
-- [ ] 1. `cmcoder --protocol stdio`
+- [x] 1. `cmcoder --protocol stdio`
 - [ ] 2. Generated TypeScript protocol types
 - [ ] 3. Extension skeleton
 - [ ] 4. Chat panel

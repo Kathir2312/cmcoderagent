@@ -128,6 +128,13 @@ def main(
     tui: Annotated[
         bool, typer.Option("--tui", help="Use the full-screen terminal UI (Textual).")
     ] = False,
+    protocol: Annotated[
+        str | None,
+        typer.Option(
+            "--protocol",
+            help="Run as a long-lived agent speaking the Agent Protocol (stdio), for IDEs.",
+        ),
+    ] = None,
     version: Annotated[bool, typer.Option("--version", help="Print the version and exit.")] = False,
 ) -> None:
     from .factory import AgentOptions
@@ -137,6 +144,14 @@ def main(
         raise typer.Exit()
     if permission_mode and permission_mode not in MODES:
         err_console.print(f"[red]error:[/red] --permission-mode must be one of {', '.join(MODES)}")
+        raise typer.Exit(2)
+    if protocol not in (None, "stdio"):
+        err_console.print("[red]error:[/red] --protocol must be stdio")
+        raise typer.Exit(2)
+    if protocol and (print_mode or prompt):
+        err_console.print(
+            "[red]error:[/red] --protocol takes its prompts on stdin, not -p or arguments"
+        )
         raise typer.Exit(2)
     if output_format not in ("text", "json", "stream-json"):
         err_console.print("[red]error:[/red] --output-format must be text, json or stream-json")
@@ -155,7 +170,11 @@ def main(
         resume=resume,
     )
     try:
-        if print_mode:
+        if protocol:
+            from .stdio import run_stdio
+
+            code = asyncio.run(run_stdio(settings, opts))
+        elif print_mode:
             from .headless import run_headless
 
             text = prompt or ""

@@ -1,8 +1,9 @@
 """Agent Protocol events: what the agent core emits to front ends.
 
-Used by `-p --output-format stream-json` now, and by the VS Code extension
-(`--protocol stdio`) in Phase 2. These pydantic models are the single source of
-truth; TypeScript types are generated from `protocol_json_schema()`.
+Used by `-p --output-format stream-json` and by `--protocol stdio` (the VS
+Code extension), whose client messages are in `messages.py`. These pydantic
+models are the single source of truth; TypeScript types are generated from
+`protocol_json_schema()`.
 """
 
 from __future__ import annotations
@@ -103,6 +104,41 @@ class Compacted(_Event):
     model: str
 
 
+class PermissionRequest(_Event):
+    """The agent needs the user's approval for a tool call (stdio protocol).
+
+    Answer with a `permission_response` carrying the same `request_id`."""
+
+    type: Literal["permission_request"] = "permission_request"
+    request_id: str
+    tool_use_id: str
+    name: str
+    label: str
+    input: dict[str, Any]
+    suggested_rule: str
+    reason: str = ""
+    # False for high-risk commands: offer "allow once" only, never "always".
+    can_remember: bool = True
+
+
+class TodoUpdate(_Event):
+    """The todo list changed (stdio protocol)."""
+
+    type: Literal["todo_update"] = "todo_update"
+    todos: list[dict[str, Any]]
+
+
+class ModeChanged(_Event):
+    type: Literal["mode_changed"] = "mode_changed"
+    mode: str
+
+
+class ModelChanged(_Event):
+    type: Literal["model_changed"] = "model_changed"
+    model: str
+    context_window: int | None = None
+
+
 class Result(_Event):
     type: Literal["result"] = "result"
     subtype: Literal["success", "error", "max_turns", "interrupted"]
@@ -126,6 +162,10 @@ Event = Annotated[
     | Warning
     | Error
     | Compacted
+    | PermissionRequest
+    | TodoUpdate
+    | ModeChanged
+    | ModelChanged
     | Result,
     Field(discriminator="type"),
 ]
