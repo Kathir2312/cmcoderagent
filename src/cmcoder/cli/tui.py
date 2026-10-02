@@ -32,7 +32,7 @@ from ..core.permissions import MODES, ModeNotAllowed
 from ..protocol import events as ev
 from ..tools.todo import MARKS
 from .factory import AgentOptions, build_agent
-from .repl import Repl, short_rule
+from .repl import Repl, output_preview, short_rule
 
 HELP = """\
 /help              show this help
@@ -272,6 +272,8 @@ class CmcoderApp(App[int]):
                 )
             else:
                 self.write(f"  └ {event.summary or 'done'}", "dim")
+                if preview := output_preview(event, 3):
+                    self.write(preview, "dim")
         elif isinstance(event, ev.PermissionDenied):
             self.write(f"  └ denied: {event.reason}", "warn")
         elif isinstance(event, ev.UsageUpdate):

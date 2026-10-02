@@ -58,8 +58,9 @@ class BashTool(Tool):
         if hidden:
             # e.g. `pip install x | tail -5`: tail's exit 0 hides pip's failure.
             out = (
-                f"{out}\n\n" if out else ""
-            ) + f"Exit codes in the pipe: {hidden} (a command before the last one exited non-zero; its errors may be hidden)"
+                (f"{out}\n\n" if out else "")
+                + f"Exit codes in the pipe: {hidden} (a command before the last one exited non-zero; its errors may be hidden)"
+            )
         if not out:
             out = "(no output)"
         failed = res.exit_code != 0

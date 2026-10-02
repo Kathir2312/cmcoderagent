@@ -42,6 +42,18 @@ MAX_PREVIEW_LINES = 30
 MAX_PREVIEW_LINE_CHARS = 400
 
 
+def output_preview(event: ev.ToolResult, keep: int) -> str | None:
+    """The start of a successful command's output, indented under its summary.
+
+    Like Claude Code, so what the model saw is visible (e.g. a pip error that a
+    pipe hid behind exit 0)."""
+    lines = event.content.strip().splitlines()
+    if event.name != "Bash" or not lines or lines == ["(no output)"]:
+        return None
+    more = f"\n    … {len(lines) - keep} more lines" if len(lines) > keep else ""
+    return "    " + "\n    ".join(lines[:keep]) + more
+
+
 def clip_preview(text: str, max_lines: int) -> tuple[str, int]:
     """Keep the first and last lines of a long preview so the permission
     options always fit on screen. Returns (shown text, hidden line count)."""
@@ -163,6 +175,8 @@ class Repl:
                 c.print(Text(f"  └ {preview}", style="red"))
             else:
                 c.print(Text(f"  └ {event.summary or 'done'}", style="dim"))
+                if preview := output_preview(event, 20 if self.verbose else 3):
+                    c.print(Text(preview, style="dim"))
             self._start_status()
         elif isinstance(event, ev.PermissionDenied):
             c.print(Text(f"  └ denied: {event.reason}", style="yellow"))

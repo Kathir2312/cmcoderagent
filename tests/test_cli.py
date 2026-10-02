@@ -209,3 +209,21 @@ def test_login_rejects_paste_mistakes() -> None:
     assert "right-click" in (key_problem("\x16") or "")  # Ctrl+V typed into hidden input on Windows
     assert "right-click" in (key_problem("sk-abc\x16") or "")
     assert "spaces" in (key_problem("sk-abc def") or "")
+
+
+def test_command_output_preview() -> None:
+    """Hands-on test on Windows: a successful command showed only "exit 0",
+    so a failure hidden by a pipe couldn't be seen. Its output's start is shown."""
+    from cmcoder.cli.repl import output_preview
+    from cmcoder.protocol import events as ev
+
+    def res(content: str, name: str = "Bash") -> ev.ToolResult:
+        return ev.ToolResult(id="1", name=name, content=content, is_error=False)
+
+    out = "ERROR: Could not find a version\nline 2\nline 3\nline 4\nline 5"
+    assert output_preview(res(out), 3) == (
+        "    ERROR: Could not find a version\n    line 2\n    line 3\n    … 2 more lines"
+    )
+    assert output_preview(res("ok"), 3) == "    ok"
+    assert output_preview(res("(no output)"), 3) is None
+    assert output_preview(res("x = 1", name="Read"), 3) is None
