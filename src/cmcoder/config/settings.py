@@ -170,9 +170,24 @@ def read_managed_settings(path: Path | None = None) -> dict[str, Any]:
 
 
 def find_project_root(cwd: Path) -> Path:
-    """Nearest ancestor with a .git or .cmcoder folder; else cwd."""
+    """Nearest ancestor with a .git or .cmcoder folder; else cwd.
+
+    The project root sets what counts as "inside the project" (reads there
+    need no approval), where "always allow" rules are saved, and how
+    conversations are grouped, so it must never grow too wide:
+    - a drive or filesystem root (E:\\, /) and the home folder never count,
+      so a stray E:\\.cmcoder can't make the whole drive one project;
+    - the user's own config folder (~/.cmcoder) is not a project marker.
+    """
+    config = config_dir().resolve()
+    stop = {Path.home().resolve()}
     for d in [cwd, *cwd.parents]:
-        if (d / ".git").exists() or (d / ".cmcoder").is_dir():
+        if d.parent == d or d.resolve() in stop:
+            break
+        if (d / ".git").exists():
+            return d
+        marker = d / ".cmcoder"
+        if marker.is_dir() and marker.resolve() != config:
             return d
     return cwd
 

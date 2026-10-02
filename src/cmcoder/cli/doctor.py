@@ -19,7 +19,7 @@ from rich.console import Console
 from rich.text import Text
 
 from ..compat import SHELL_HELP, find_shell
-from ..config.settings import Settings, managed_settings_path
+from ..config.settings import Settings, find_project_root, managed_settings_path
 from ..providers.auth import ApiKeyAuth
 from ..providers.messages import Message, StreamDone, TextDelta, ToolSpec
 from ..providers.openai_compat import OpenAICompatProvider, ProviderError, no_tool_support
@@ -96,6 +96,17 @@ class Doctor:
             "\n".join(s.sources) or "(no settings files; using defaults)",
         )
         self.check_managed()
+        cwd = Path.cwd().resolve()
+        root = find_project_root(cwd)
+        self.report(
+            INFO,
+            f"Project root: {root}",
+            "the current folder"
+            if root == cwd
+            else "found by a .git or .cmcoder folder above "
+            "the current one; reads inside it need no approval, so check it is the project "
+            "you mean",
+        )
         self.report(
             INFO,
             f"Platform: {platform.system()} {platform.release()}, Python {platform.python_version()}",

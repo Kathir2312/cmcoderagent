@@ -290,6 +290,15 @@ SSO, OpenTelemetry, Windows sandboxing (Phase 4).
       unittest. It now accepts both.
     - Effectively 20/20.
   - [ ] hands-on check (checklist, `/rewind`, `-c`/`/resume`, `--tui`)
+    - `/resume` and small-model titles work ("Ping for connection test").
+    - `--tui` works on Windows: the fixed dialog, buttons visible, status bar.
+    - Found: the "2 Always" rule was relative to `E:\`, so cmcoder took the
+      whole drive as the project root, probably because of a stray
+      `E:\.cmcoder` (created by an earlier "Always" answer while running in
+      `E:\`). Fixed: a drive root or the home folder is never a project root,
+      and `~/.cmcoder` (the user's config) is not a project marker. The
+      banner and `doctor` show the project root when it isn't the current
+      folder.
     - `/rewind` works: the created file was deleted and the message put back.
       Found: rewinding to message 1 left an empty conversation, so `-c` had
       nothing to continue. Fixed: the pre-rewind conversation is now kept as a

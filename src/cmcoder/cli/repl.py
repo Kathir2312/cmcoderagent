@@ -562,7 +562,12 @@ class Repl:
                 f"[bold]cmcoder[/bold] {__version__}\n"
                 f"model    {agent.model}  [dim]({agent.provider.name}: {cfg.base_url})[/dim]\n"
                 f"cwd      {agent.ctx.cwd}\n"
-                f"mode     {agent.policy.mode}\n"
+                + (
+                    f"project  {agent.ctx.project_root}\n"
+                    if agent.ctx.project_root != agent.ctx.cwd
+                    else ""
+                )
+                + f"mode     {agent.policy.mode}\n"
                 + ("policy   managed settings in effect\n" if self.settings.managed_path else "")
                 + "[dim]/help for commands · Ctrl+C interrupts · /exit quits[/dim]",
                 border_style="cyan",

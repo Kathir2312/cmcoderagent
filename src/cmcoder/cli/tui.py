@@ -163,6 +163,10 @@ class CmcoderApp(App[int]):
                 f"{__version__}  ·  {a.model} ({a.provider.name}: {cfg.base_url})\n",
                 (f"cwd {a.ctx.cwd}", "dim"),
                 (
+                    f"\nproject {a.ctx.project_root}" if a.ctx.project_root != a.ctx.cwd else "",
+                    "dim",
+                ),
+                (
                     "\npolicy: managed settings in effect" if self.settings.managed_path else "",
                     "dim",
                 ),

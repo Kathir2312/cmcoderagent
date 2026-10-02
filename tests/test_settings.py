@@ -130,3 +130,29 @@ def test_high_risk_deny_cannot_be_relaxed_by_project(
     assert load_settings(project, environ={}).permissions.high_risk_commands == "deny"
     write(user / "settings.json", {"providers": {"corp": {"baseUrl": "https://ai.example/v1"}}})
     assert load_settings(project, environ={}).permissions.high_risk_commands == "ask"
+
+
+def test_project_root_never_grows_too_wide(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Hands-on test on Windows: a stray .cmcoder high up made E:\\ the project
+    root, so the whole drive counted as "inside the project"."""
+    from cmcoder.config.settings import find_project_root
+
+    home = tmp_path / "home"
+    work = home / "work" / "app" / "src"
+    work.mkdir(parents=True)
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
+    monkeypatch.setenv("CMCODER_CONFIG_DIR", str(home / ".cmcoder"))
+    (home / ".cmcoder").mkdir()  # the user's own config folder
+    assert find_project_root(work) == work  # not the home folder
+
+    (home / "work" / ".cmcoder").mkdir()  # a real project marker still counts
+    assert find_project_root(work) == home / "work"
+    (home / "work" / "app" / ".git").mkdir()  # the nearest marker wins
+    assert find_project_root(work) == home / "work" / "app"
+
+
+def test_drive_root_is_never_the_project_root() -> None:
+    from cmcoder.config.settings import find_project_root
+
+    root = Path(Path.cwd().anchor)
+    assert find_project_root(root) == root  # stays where you are, never wider
