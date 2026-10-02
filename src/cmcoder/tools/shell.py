@@ -74,10 +74,14 @@ class PersistentShell:
         self._kill()
         procs, self._killed = self._killed, []
         for proc in procs:
-            # communicate() closes stdin and drains stdout to EOF, so both pipe
-            # transports close (not just the process exit, as wait() does).
-            with suppress(TimeoutError, ProcessLookupError, OSError, ValueError):
-                await asyncio.wait_for(proc.communicate(), 5)
+            with suppress(TimeoutError, ProcessLookupError):
+                await asyncio.wait_for(proc.wait(), 5)
+            # Close the pipes ourselves rather than waiting for EOF: on Windows,
+            # programs started by Git Bash (e.g. a `sleep`) can keep stdout open
+            # after the shell is killed. asyncio has no public API for this.
+            transport = getattr(proc, "_transport", None)
+            if transport is not None:
+                transport.close()
         if procs:
             # Let the pipes' close callbacks run before the caller may close the
             # event loop; otherwise Windows warns about unclosed transports.
