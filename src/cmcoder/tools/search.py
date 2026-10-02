@@ -72,7 +72,9 @@ async def _run(argv: list[str], cwd: Path, timeout: float = SEARCH_TIMEOUT) -> t
 
 def _strip_prefix(line: str, base: Path) -> str:
     """Show paths relative to the working directory (ripgrep prints them as given)."""
-    for prefix in (f"{base}{os.sep}", f"{base.as_posix()}/"):
+    # ripgrep may echo the root with either separator (--path-separator applies
+    # to what it appends), so try every combination.
+    for prefix in (f"{base}{os.sep}", f"{base.as_posix()}/", f"{base}/"):
         if line.startswith(prefix):
             return line[len(prefix) :]
     return line
@@ -192,9 +194,9 @@ def python_grep(
 
     def show(p: Path) -> str:
         try:
-            return str(p.relative_to(cwd))
+            return p.relative_to(cwd).as_posix()
         except ValueError:
-            return str(p)
+            return p.as_posix()
 
     out: list[str] = []
     for f in files:
@@ -269,7 +271,9 @@ class GlobTool(Tool):
         paths: list[Path] = []
         try:
             if rg:
-                code, out, err = await _run([rg, "--files", "--glob", args.pattern], root)
+                code, out, err = await _run(
+                    [rg, "--files", "--path-separator", "/", "--glob", args.pattern], root
+                )
                 if code not in (0, 1):
                     return ToolResult(f"Glob failed: {err.strip()}", is_error=True)
                 paths = [root / line for line in out.splitlines() if line]
@@ -358,7 +362,7 @@ class GrepTool(Tool):
     async def _ripgrep(
         self, rg: str, args: GrepInput, target: Path, ctx: ToolContext
     ) -> tuple[list[str], str | None]:
-        argv = [rg, "--color=never", "--no-heading"]
+        argv = [rg, "--color=never", "--no-heading", "--path-separator", "/"]
         if args.output_mode == "files_with_matches":
             argv.append("--files-with-matches")
         elif args.output_mode == "count":

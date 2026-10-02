@@ -62,10 +62,12 @@ class ToolContext:
         return p.resolve()
 
     def display(self, path: Path) -> str:
+        """Paths as the model sees them: relative when possible, always with
+        "/" (Windows accepts it, and answers stay the same on every OS)."""
         try:
-            return str(path.relative_to(self.cwd))
+            return path.relative_to(self.cwd).as_posix()
         except ValueError:
-            return str(path)
+            return path.as_posix()
 
     def mark_read(self, path: Path) -> None:
         try:

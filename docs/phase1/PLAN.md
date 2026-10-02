@@ -113,6 +113,9 @@ used for file work in most runs (target agreed after the first measurement).
 Run `uv run python evals/run.py` on the gateway and agree a target from the
 "Tool choice" line.
 
+**Measured on the real gateway (Windows, Qwen3.6-27B): 100%**: 58 file-tool
+calls, 0 attempts at file work through Bash. Target set at **≥ 95%**.
+
 ### 5. Managed settings (enterprise policy)
 
 **Why:** the security team wants rules developers can't loosen (moved from
@@ -274,3 +277,16 @@ SSO, OpenTelemetry, Windows sandboxing (Phase 4).
 - [x] 11. Textual TUI (opt-in until verified on Windows)
 - [x] 12. More evals (20 tasks)
 - [ ] Real-gateway run on Windows (`doctor`, evals) and `STATUS.md`
+  - [x] `pytest` on Windows: 390 passed, 14 skipped, 0 failed
+  - [x] `doctor`: all checks passed. Both models (Qwen3.6-27B, and
+    Qwen3.5-35B-A3B as the small model) stream, switch thinking off and do
+    native tool calling. The server doesn't state its context limit, so
+    `contextWindow` is set in settings.
+  - [x] evals: 18/20 at first; both failures were check/display issues, not
+    the model's answers:
+    - `inspect-files`: the right answer, but with a Windows `\`. Tools now
+      always show `/`.
+    - `add-test`: valid pytest-style tests that the check only ran with
+      unittest. It now accepts both.
+    - Effectively 20/20.
+  - [ ] hands-on check (checklist, `/rewind`, `-c`/`/resume`, `--tui`)

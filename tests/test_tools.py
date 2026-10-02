@@ -294,3 +294,19 @@ def test_output_budget_scales_with_context() -> None:
 
     assert output_budget_chars(32_768) < output_budget_chars(131_072) == 30_000
     assert output_budget_chars(4_096) >= 4_000
+
+
+async def test_paths_use_forward_slashes_on_every_os(ctx: ToolContext, project: Path) -> None:
+    """Real-model eval on Windows: Grep showed orders\\store.py and the model
+    answered with the backslash. Tools now always show "/" (Windows accepts it)."""
+    (project / "orders").mkdir()
+    (project / "orders" / "store.py").write_text("def load_orders(path, limit=250):\n    pass\n")
+    assert ctx.display(project / "orders" / "store.py") == "orders/store.py"
+    for mode in ("files_with_matches", "content"):
+        res = await GrepTool().run(
+            GrepInput(pattern="def load_orders", output_mode=mode),
+            ctx,  # type: ignore[arg-type]
+        )
+        assert "orders/store.py" in res.content and "\\" not in res.content, res.content
+    res = await GlobTool().run(GlobInput(pattern="**/*.py"), ctx)
+    assert "orders/store.py" in res.content and "\\" not in res.content

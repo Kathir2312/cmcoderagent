@@ -1,6 +1,6 @@
 {
   "prompt": "Which file defines the function load_orders, and what is the default value of its limit parameter? Answer as 'file:value'.",
-  "check": "grep -q 'orders/store.py:250' \"$CMCODER_EVAL_OUTPUT\"",
+  "check": "grep -Eq 'orders[/\\\\]store\\.py:250' \"$CMCODER_EVAL_OUTPUT\"",
   "permission_mode": "plan",
   "max_turns": 10
 }
