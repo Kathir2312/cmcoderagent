@@ -169,6 +169,6 @@ async def test_todo_checklist(mock_server: Any, project: Path) -> None:
     try:
         async with app.run_test(size=(100, 30)) as pilot:
             await send(pilot, app, "go")
-            await until(pilot, lambda: "◐ Fix it" in log_text(app) and "☐ Test it" in log_text(app))
+            await until(pilot, lambda: "► Fix it" in log_text(app) and "☐ Test it" in log_text(app))
     finally:
         await app.agent.close()  # type: ignore[union-attr]

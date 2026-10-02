@@ -196,7 +196,7 @@ created (rewind deletes it) and one it changed outside the project (asks first).
 **What:** a `TodoWrite` tool that keeps a visible task list for multi-step
 work, shown in the REPL and kept across compaction.
 
-**Status: done.** A ☑ ◐ ☐ checklist in the REPL and `/todos`. No permission
+**Status: done.** A ☑ ► ☐ checklist in the REPL and `/todos`. No permission
 needed. Kept in the compaction summary and restored on `--resume`.
 Models may skip the optional tool, so after 3 tool calls in one turn without
 an open todo list, the agent adds a one-time reminder to the latest tool
@@ -306,7 +306,9 @@ SSO, OpenTelemetry, Windows sandboxing (Phase 4).
       Found: rewinding to message 1 left an empty conversation, so `-c` had
       nothing to continue. Fixed: the pre-rewind conversation is now kept as a
       resumable "Before rewind: …" session, and the `-c` error is clearer.
-    - Found: the ☑ ◐ ☐ checklist never appeared. Qwen didn't call the
+    - Found: the ☑ ► ☐ checklist never appeared. Qwen didn't call the
       optional TodoWrite tool. Fixed: a firmer prompt rule with an example,
       and a one-time reminder after 3 tool calls in a turn without a todo
-      list. To re-check on Windows.
+      list. Re-checked on Windows: Qwen now calls TodoWrite first (4 steps)
+      and marks the current one in progress. The in-progress mark (was ◐)
+      showed as a box in cmd.exe's font, so it is now ►.

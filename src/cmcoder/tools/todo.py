@@ -15,7 +15,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from .base import Tool, ToolContext, ToolInput, ToolResult
 
 Status = Literal["pending", "in_progress", "completed"]
-MARKS = {"pending": "☐", "in_progress": "◐", "completed": "☑"}
+# ► (not ◐): every Windows console font has it; ◐ showed as a box in cmd.exe.
+MARKS = {"pending": "☐", "in_progress": "►", "completed": "☑"}
 
 
 class TodoItem(BaseModel):
@@ -35,7 +36,7 @@ class TodoInput(ToolInput):
 
 
 def format_todos(todos: list[dict[str, Any]]) -> str:
-    """The list as plain text: one '☐/◐/☑ task' line per item."""
+    """The list as plain text: one '☐/►/☑ task' line per item."""
     return "\n".join(f"{MARKS.get(t.get('status', ''), '☐')} {t.get('content', '')}" for t in todos)
 
 

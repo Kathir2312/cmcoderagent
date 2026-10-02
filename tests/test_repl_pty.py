@@ -266,7 +266,7 @@ def test_todo_list_is_shown_as_a_checklist(mock_server: Any, project: Path) -> N
     try:
         assert term.expect(rb"/help for commands")
         term.send("fix it\r")
-        assert term.expect("◐ Fix the bug".encode()), term.text()
+        assert term.expect("► Fix the bug".encode()), term.text()
         term.send("/todos\r")
         assert term.expect("☐ Run the tests[\\s\\S]*☐ Run the tests".encode()), term.text()
     finally:

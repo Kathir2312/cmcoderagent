@@ -1083,7 +1083,7 @@ You see it as a checklist:
 ```
 ● Todo list
   ☑ Read the code
-  ◐ Fix the bug
+  ► Fix the bug
   ☐ Run the tests
 ```
 
@@ -1121,7 +1121,7 @@ allows a read-only tool that has **no target** (no file, no command).
 Previously that case fell into "reads outside the project" and asked.
 
 **Kept across compaction.** `compact(..., todos=self.ctx.todos)` appends
-"The current todo list (TodoWrite): ☑ … ◐ … ☐ …" to the summary message, so
+"The current todo list (TodoWrite): ☑ … ► … ☐ …" to the summary message, so
 the model still sees its plan even when the TodoWrite calls were summarised
 away.
 
@@ -1168,7 +1168,7 @@ finished" and "don't mention this reminder", so it doesn't leak into replies.
 - resume restores the latest list.
 
 `tests/test_repl_pty.py::test_todo_list_is_shown_as_a_checklist` checks
-the ☑ ◐ ☐ display and `/todos` in a real terminal.
+the ☑ ► ☐ display and `/todos` in a real terminal.
 
 ### Try it
 

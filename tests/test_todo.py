@@ -50,7 +50,7 @@ def test_todo_needs_no_permission(ctx: ToolContext) -> None:
 
 
 def test_format() -> None:
-    assert format_todos(PLAN) == "☑ Read the code\n◐ Fix the bug\n☐ Run the tests"
+    assert format_todos(PLAN) == "☑ Read the code\n► Fix the bug\n☐ Run the tests"
 
 
 async def test_todos_survive_compaction_and_resume(mock_server: Any, project: Path) -> None:
@@ -86,7 +86,7 @@ async def test_todos_survive_compaction_and_resume(mock_server: Any, project: Pa
 
         [e async for e in agent.compact()]
         summary = agent.messages[1].content
-        assert "current todo list" in summary and "◐ Fix the bug" in summary
+        assert "current todo list" in summary and "► Fix the bug" in summary
 
         messages, _ = load(agent.session.path)  # type: ignore[union-attr]
     finally:

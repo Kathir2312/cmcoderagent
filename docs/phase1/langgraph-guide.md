@@ -487,7 +487,7 @@ The "plan-and-execute" tutorials use a separate planner node instead.
 | tool returning `Command(update=…)` | `TodoTool.run` sets `ctx.todos` |
 | state persisted by the checkpointer | restored from the last TodoWrite call (`last_todos`) |
 | survives `trim_messages`? only if you keep it in state | appended to the compaction summary |
-| rendering in your UI | ☑ ◐ ☐ checklist in the REPL, `/todos` |
+| rendering in your UI | ☑ ► ☐ checklist in the REPL, `/todos` |
 
 ### Why they differ
 
