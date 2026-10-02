@@ -1,5 +1,8 @@
 # cmcoder code walkthrough, as of Phase 0 (for a day-1 Python developer)
 
+> Frozen at the end of Phase 0 (commit `ba6669f`, tag `phase0`). For later
+> phases see [docs/README.md](../README.md).
+
 This guide explains how cmcoder works, file by file, assuming you know basic
 Python (variables, functions, `if`/`for`, lists and dicts) and nothing else.
 Every new idea is explained the first time it appears. Read it from top to
@@ -190,7 +193,8 @@ cmcoderagent/
 ├── README.md               how to install and use cmcoder
 ├── docs/
 │   ├── DESIGN.md           why things are built this way (decisions, roadmap)
-│   └── asofphase0.md       this file
+│   └── phase0/
+│       └── python-guide.md this file
 ├── src/cmcoder/            ← the application
 │   ├── __main__.py         lets you run `python -m cmcoder`
 │   ├── cli/                the commands you type: cmcoder, login, doctor…
@@ -735,5 +739,5 @@ automatically.
 | **Tool call** | The model's request for cmcoder to run one of its tools |
 | **Turn** | One user message and everything until the agent answers |
 
-Where to go next: `docs/DESIGN.md` explains *why* things are built this way,
+Where to go next: [`docs/DESIGN.md`](../DESIGN.md) explains *why* things are built this way,
 and the tests are the best examples of how each piece is used.

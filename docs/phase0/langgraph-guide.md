@@ -1,5 +1,8 @@
 # cmcoder through LangChain / LangGraph eyes (as of Phase 0)
 
+> Frozen at the end of Phase 0 (commit `ba6669f`, tag `phase0`). For later
+> phases see [docs/README.md](../README.md).
+
 You are learning agentic AI with LangChain and LangGraph. cmcoder does **not**
 use either library, but it is built from exactly the same ideas: a chat model
 that can call tools, a loop, state, human approval, streaming and memory
@@ -7,7 +10,7 @@ management. This guide maps every cmcoder piece to the LangChain/LangGraph
 concept you already know (or are learning), so reading the code teaches you how
 those libraries work underneath.
 
-Read [asofphase0.md](asofphase0.md) first if you are new to Python; this
+Read [python-guide.md](python-guide.md) first if you are new to Python; this
 guide assumes you know what a class, `async` and a generator are.
 
 Contents:
@@ -407,7 +410,7 @@ tests against a mock server. That gap is most of cmcoder's code.
 
 ## 6. Why cmcoder doesn't use LangGraph
 
-This was a deliberate choice (DESIGN.md D1, D6), not a rejection of
+This was a deliberate choice ([DESIGN.md](../DESIGN.md) D1, D6), not a rejection of
 LangGraph:
 
 1. **The graph is tiny.** A coding agent is one loop with two nodes. A

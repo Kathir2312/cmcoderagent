@@ -112,6 +112,7 @@ cmcoderagent/
 │   ├── config/               # layered settings
 │   └── cli/                  # typer entry point, Textual TUI, headless and stdio modes
 ├── tests/
+├── docs/                     # DESIGN.md (living) + one folder per phase: PLAN, guides, STATUS
 ├── vscode/                   # TypeScript extension + React webview
 └── evals/                    # benchmark tasks, runner, mock model server
 ```
@@ -390,9 +391,9 @@ Tool descriptions are part of the prompt tiers: the `compact` tier uses shorter 
 
 ## 11. Configuration
 
-Layered, with later layers overriding earlier ones:
+Layers 2–5 are merged in order, later ones overriding earlier ones (permission rules accumulate instead). Layer 1 is applied last and cannot be overridden:
 
-1. Enterprise policy (`/etc/cmcoder/managed-settings.json`) — always wins
+1. Managed settings (enterprise policy, Phase 1), admin-only: `/etc/cmcoder/managed-settings.json` (Linux), `/Library/Application Support/cmcoder/managed-settings.json` (macOS), `C:\Program Files\cmcoder\managed-settings.json` (Windows). Always wins; fails closed if broken. Details: [phase1/PLAN.md](phase1/PLAN.md) item 5.
 2. User `~/.cmcoder/settings.json`
 3. Project `.cmcoder/settings.json` (committed)
 4. Local project `.cmcoder/settings.local.json` (git-ignored)
@@ -451,12 +452,17 @@ Started early, because quality depends heavily on the model:
 | Phase | Scope | Done when |
 |---|---|---|
 | **0 — Foundations** | Python package skeleton (uv, ruff, pyright, pytest), protocol types, provider layer + OpenAI-compatible adapter (TLS, headers, retries), model profiles, agent loop, Read/Write/Edit/Glob/Grep/Bash, basic TUI, `-p`, `doctor`, mock server, first ~20 eval tasks | Fixes a simple bug end-to-end against the LiteLLM gateway with the reference Qwen3 models |
-| **1 — Daily driver** | **Auto-compaction first** (the 32K default window is the binding constraint, §16.2), **the user-trial fixes in §16.3**, Textual TUI, sessions/resume, small/fast model jobs (titles, summaries), prompted-tool fallback and repair, edit-format variants, TodoWrite, checkpoints | Comfortable for daily use on a real repo |
+| **1 — Daily driver** | **Auto-compaction first** (the 32K default window is the binding constraint, §16.2), **the user-trial fixes in §16.3**, Textual TUI, sessions/resume, small/fast model jobs (titles, summaries), prompted-tool fallback and repair, edit-format variants, TodoWrite, checkpoints, **managed settings** (moved from Phase 4, see [phase1/PLAN.md](phase1/PLAN.md) item 5) | Comfortable for daily use on a real repo |
 | **2 — VS Code** | `--protocol stdio`, generated TS protocol types, extension, webview chat, native diffs, IDE context and tools | Same task behaves the same in CLI and VS Code |
 | **3 — Extensibility** | MCP client, hooks, custom slash commands, subagents (`Task`) with per-role models, skills, Bash sandbox | Teams can customise it without forking |
-| **4 — Hardening** | SSO auth provider (e.g. Okta/OIDC) if needed, Responses API / Anthropic adapters, OpenTelemetry, enterprise policy, standalone binary + platform-specific VSIX, Windows sandboxing | Release candidate |
+| **4 — Hardening** | SSO auth provider (e.g. Okta/OIDC) if needed, Responses API / Anthropic adapters, OpenTelemetry, standalone binary + platform-specific VSIX, Windows sandboxing | Release candidate |
+
+Per-phase plans, guides and status reports live in [docs/README.md](README.md) (`docs/phase0/`, `docs/phase1/`, …). Finished phases are frozen as git snapshots (Phase 0: commit `ba6669f`, tag `phase0`).
 
 ### 16.1 Phase 0 status
+
+**Phase 0 is complete**; see [phase0/STATUS.md](phase0/STATUS.md). Phase 1 is in progress: [phase1/PLAN.md](phase1/PLAN.md).
+
 
 Delivered:
 - **Provider:** OpenAI-compatible streaming adapter on httpx (tool-call assembly, `reasoning_content` and
