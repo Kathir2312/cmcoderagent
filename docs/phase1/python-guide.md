@@ -1002,6 +1002,12 @@ looked before the chosen message, even if later turns changed it again.
 delete it; otherwise write the saved bytes back. Afterwards the undone turns'
 entries are dropped, and new edits are captured fresh.
 
+**Nothing is lost** (`Agent._keep_before_rewind`). Before the conversation is
+cut, the whole conversation as it was is saved as its own session, titled
+"Before rewind: …", so `/resume` or `cmcoder -c` can get it back. This was
+added after the hands-on test on Windows: rewinding to the very first message
+left an empty conversation, and `-c` then had nothing to continue.
+
 **The conversation side** (`Agent.rewind`). It finds the user message with
 that `turn` number (item 6 added it), cuts `messages` before it, sets
 `self.turn` back and saves, which writes a `reset` record to the session

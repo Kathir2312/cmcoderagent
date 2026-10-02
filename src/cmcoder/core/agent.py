@@ -254,10 +254,25 @@ class Agent:
             )
             if idx is not None:
                 prompt = self.messages[idx].content
+                self._keep_before_rewind(prompt)
                 self.messages = self.messages[:idx]
                 self.turn = turn - 1
                 self.save_session()
         return actions, prompt
+
+    def _keep_before_rewind(self, prompt: str) -> None:
+        """A rewind never loses history: the whole conversation as it was is
+        kept as a separate resumable session ("Before rewind: …")."""
+        if self.session is None or len(self.messages) <= 1:
+            return
+        try:
+            backup = SessionLog(self.ctx.project_root)
+            backup.start(self.ctx.cwd, self.model)
+            backup.save(self.messages)
+            first = next((m.content for m in self.messages if m.role == "user"), prompt)
+            backup.set_title("Before rewind: " + " ".join(first.split())[:45])
+        except OSError:
+            pass
 
     def resume(self, messages: list[Message], session: SessionLog | None = None) -> None:
         """Continue a saved conversation (`messages` without the system prompt)."""

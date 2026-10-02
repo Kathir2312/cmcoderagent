@@ -260,7 +260,10 @@ def resume_session(agent: Agent, settings: Settings, root: Path, ref: str | None
     else:
         sessions = list_sessions(root)
         if not sessions:
-            raise SettingsError("No saved session in this project to continue.")
+            raise SettingsError(
+                "No saved conversation with messages in this project to continue. "
+                "(A conversation that was cleared or rewound to its first message is empty.)"
+            )
         info = sessions[0]
     messages, _meta = load(info.path)
     agent.resume(messages, SessionLog(root, info.session_id))

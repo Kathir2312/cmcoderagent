@@ -177,3 +177,41 @@ async def test_checkpoints_survive_resume(mock_server: Any, project: Path) -> No
     finally:
         await second.close()
     assert (project / "app.py").read_text() == "x = 1\n"
+
+
+async def test_rewind_to_the_first_message_keeps_a_resumable_copy(
+    mock_server: Any, project: Path
+) -> None:
+    """Hands-on test on Windows: rewinding to message 1 left an empty
+    conversation, so `cmcoder -c` found nothing. The conversation as it was
+    before the rewind is now kept as its own session."""
+    from cmcoder.cli.factory import resume_session
+    from cmcoder.config.settings import Settings
+    from cmcoder.core.sessions import list_sessions
+
+    server = mock_server(
+        [
+            {
+                "tool_calls": [
+                    {"name": "Write", "arguments": {"file_path": "m.py", "content": "x=1\n"}}
+                ]
+            },
+            {"content": "Created m.py."},
+        ]
+    )
+    agent = make_agent(server, project, SessionLog(project))
+    try:
+        [e async for e in agent.run("add a math file")]
+        agent.rewind(1)  # code and conversation, to before the first message
+        assert not (project / "m.py").exists() and len(agent.messages) == 1
+    finally:
+        await agent.close()
+
+    sessions = list_sessions(project)
+    assert [s.title for s in sessions] == ["Before rewind: add a math file"]
+    fresh = make_agent(server, project, SessionLog(project))
+    try:
+        resume_session(fresh, Settings.model_validate({}), project, None)  # what `-c` does
+        assert any(m.content == "add a math file" for m in fresh.messages)
+    finally:
+        await fresh.close()

@@ -290,3 +290,7 @@ SSO, OpenTelemetry, Windows sandboxing (Phase 4).
       unittest. It now accepts both.
     - Effectively 20/20.
   - [ ] hands-on check (checklist, `/rewind`, `-c`/`/resume`, `--tui`)
+    - `/rewind` works: the created file was deleted and the message put back.
+      Found: rewinding to message 1 left an empty conversation, so `-c` had
+      nothing to continue. Fixed: the pre-rewind conversation is now kept as a
+      resumable "Before rewind: …" session, and the `-c` error is clearer.
