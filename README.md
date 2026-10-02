@@ -95,6 +95,9 @@ git diff | cmcoder -p "review this diff"
 cmcoder -p "..." --output-format json         # or stream-json (one event per line)
 ```
 
+With `"smallFastModel"` set (e.g. your Qwen3 7B), side jobs go to the small model: compaction summaries and
+conversation titles (shown by `/resume`).
+
 Conversations are saved per project: `cmcoder -c` continues the latest one, `cmcoder -r <id>` resumes a
 specific one, and `/resume` lists them (files under `~/.cmcoder/projects/`, owner-only, deleted after
 `cleanupPeriodDays`, default 30; `"persistSessions": false` turns saving off).

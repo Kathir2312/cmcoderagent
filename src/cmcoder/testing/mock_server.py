@@ -10,9 +10,9 @@ The script is a list of replies, served in order to successive chat requests:
 It also serves GET /v1/models and LiteLLM-style GET /v1/model/info, and can
 require a bearer key. Every request body is recorded in `server.requests`.
 
-Summary requests from auto-compaction (recognised by their system prompt) get
-a canned summary and don't use up the script; they are also recorded in
-`server.summary_requests`. With `enforce_context=True`, a request whose
+Summary requests from auto-compaction and session-title requests
+(recognised by their system prompts) get canned replies and don't use up the
+script; they are recorded in `state.summary_requests` / `state.title_requests`. With `enforce_context=True`, a request whose
 prompt plus max_tokens exceeds the model's window is rejected with vLLM's
 "maximum context length" error, as a real server would.
 
@@ -43,6 +43,7 @@ class MockState:
         enforce_context: bool = False,
         summary: str = "Summary (mock): the user asked for work on the project; files were read.",
         model_info: bool = True,
+        title: str = "Fix the login bug",
     ) -> None:
         self.script = list(script)
         self.models = models or ["qwen3-27b", "qwen3-7b"]
@@ -52,6 +53,8 @@ class MockState:
         self.enforce_context = enforce_context
         self.summary = summary
         self.model_info = model_info  # False: no /model/info, like many gateways
+        self.title = title
+        self.title_requests: list[dict[str, Any]] = []
         self.think_tags = think_tags
         self.requests: list[dict[str, Any]] = []
         self.summary_requests: list[dict[str, Any]] = []
@@ -227,6 +230,9 @@ def make_handler(state: MockState) -> type[BaseHTTPRequestHandler]:
             if "<cmcoder-compaction>" in str(messages[0].get("content", "")):
                 state.summary_requests.append(body)
                 reply: dict[str, Any] = {"content": state.summary}
+            elif "<cmcoder-title>" in str(messages[0].get("content", "")):
+                state.title_requests.append(body)
+                reply = {"content": state.title}
             else:
                 reply = state.next_reply()
             if "error" in reply:

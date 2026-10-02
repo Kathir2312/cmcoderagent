@@ -201,6 +201,12 @@ needed. Kept in the compaction summary and restored on `--resume`.
 **What:** use `smallFastModel` (Qwen3 ~7B) for session titles, compaction
 summaries and other side jobs, so the main model's window is spent on the task.
 
+**Status: done.**
+- Compaction summaries (item 1) and session titles: a background job after
+  the first turn, with thinking off and 40 tokens.
+- Each falls back cleanly (main model / first message).
+- The title never delays or fails a turn.
+
 ### 10. Tool-call robustness
 
 **What:** a prompted tool-call fallback for models or gateways without native
@@ -237,7 +243,7 @@ SSO, OpenTelemetry, Windows sandboxing (Phase 4).
 - [x] 6. Sessions and resume
 - [x] 7. Checkpoints and `/rewind`
 - [x] 8. TodoWrite
-- [ ] 9. Small/fast model jobs
+- [x] 9. Small/fast model jobs
 - [ ] 10. Tool-call robustness
 - [ ] 11. Textual TUI
 - [ ] 12. More evals

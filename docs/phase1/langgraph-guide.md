@@ -509,7 +509,53 @@ plan survives because it's in state, not in the messages.
 
 ## 9. Small/fast model jobs
 
-*Not started.*
+*Done.* Code: `src/cmcoder/core/titles.py`, `core/compaction.py`.
+
+### The LangGraph way
+
+Use several chat models in one app, picking the cheap one per node:
+
+```python
+big = ChatOpenAI(base_url=GATEWAY, model="Qwen3.6-27B")
+small = ChatOpenAI(base_url=GATEWAY, model="Qwen3-7B",
+                   extra_body={"chat_template_kwargs": {"enable_thinking": False}})
+
+def summarize(state): ...small.invoke(...)      # side job on the small model
+def agent(state): ...big.bind_tools(tools).invoke(...)
+```
+
+Fire-and-forget work (a title nobody waits for) is done outside the graph,
+e.g. `asyncio.create_task(...)` in your app, or a separate background run on
+LangGraph Platform.
+
+### The cmcoder way
+
+| Job | Model | Waits? | Fallback |
+|---|---|---|---|
+| Agent turns | `model` | yes | – |
+| Compaction summary | `smallFastModel` | yes (the next request needs it) | main model, then dropping old output |
+| Session title | `smallFastModel` | no (background task, ≤ 2 s grace on exit) | first message |
+
+### Why they differ
+
+The pattern is the same; the details that matter are the **fallbacks** and
+the **blocking behaviour**:
+- A job the next step depends on (a summary) must have a fallback that
+  always works.
+- A cosmetic job (a title) must never block or fail the user's work. Run it
+  in the background, swallow its errors, and give it a short grace period on
+  exit.
+
+Also turn off "thinking" for small side jobs (`enable_thinking: false`).
+Otherwise a reasoning model spends most of its token budget thinking about a
+6-word title.
+
+### Exercise
+
+In your LangGraph app, add a `title` key to state and a node that fills it
+from the first human message with the small model. Then move the same call
+into an `asyncio.create_task` outside the graph, and compare the latency of
+the first turn.
 
 ## 10. Tool-call robustness
 

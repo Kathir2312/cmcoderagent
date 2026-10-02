@@ -34,6 +34,9 @@ from .context import WARN_RATIO, ContextBudget
 from .permissions import FILE_EDIT_TOOLS, Decision, PermissionPolicy, suggest_rule
 from .sessions import SessionLog
 from .steer import file_work_redirect
+from .titles import make_title
+
+TITLE_WAIT_ON_CLOSE = 2.0  # seconds a pending title may still take when closing
 
 MAX_IDENTICAL_CALLS = 3
 
@@ -160,6 +163,9 @@ class Agent:
         self._session_started = False
         self.turn = 0  # user turns so far in this session
         self.checkpoints = self._new_checkpoints()
+        # Background jobs for the small model (session titles).
+        self._background: set[asyncio.Task[None]] = set()
+        self._titled = False
         self.system_prompt = system_prompt
         self.messages: list[Message] = [Message.system(system_prompt)]
         self.usage = Usage()
@@ -205,6 +211,7 @@ class Agent:
         self.messages = [Message.system(self.system_prompt)]
         self.turn = 0
         self.ctx.todos = []
+        self._titled = False
         if self.session is not None:
             self.session = SessionLog(self.ctx.project_root)
             self.session_id = self.session.session_id
@@ -248,6 +255,7 @@ class Agent:
         self.messages = [Message.system(self.system_prompt), *messages]
         self.turn = max((m.turn or 0 for m in messages), default=0)
         self.ctx.todos = last_todos(messages)
+        self._titled = True  # a resumed session keeps its title
         if session is not None:
             self.session = session
             self.session_id = session.session_id
@@ -273,7 +281,32 @@ class Agent:
     def tool_specs(self) -> list[ToolSpec]:
         return [t.spec() for t in self.tools.values()]
 
+    def _start_title(self, first_message: str) -> None:
+        """After the first turn: ask the small model for a session title,
+        in the background (nothing waits for it)."""
+        self._titled = True
+        summarizer, session = self.summarizer, self.session
+        if summarizer is None or session is None:
+            return
+
+        async def job() -> None:
+            try:
+                title, usage = await make_title(summarizer, first_message)
+                self.usage.add(usage)
+                if title:
+                    session.set_title(title)
+            except Exception:  # a title is a nicety: never disturb the session
+                pass
+
+        task = asyncio.get_running_loop().create_task(job())
+        self._background.add(task)
+        task.add_done_callback(self._background.discard)
+
     async def close(self) -> None:
+        if self._background:  # let a title finish briefly, then stop waiting
+            _done, pending = await asyncio.wait(self._background, timeout=TITLE_WAIT_ON_CLOSE)
+            for t in pending:
+                t.cancel()
         if self.ctx.shell:
             await self.ctx.shell.close()
         providers = [self.provider]
@@ -543,6 +576,8 @@ class Agent:
             raise
         finally:
             self.save_session()
+            if self.turn == 1 and not self._titled and self._session_started:
+                self._start_title(prompt)
 
     async def _run_call(
         self, call: ToolCall, repeated: bool

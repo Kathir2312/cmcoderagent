@@ -1157,7 +1157,96 @@ Then type `/todos`.
 
 ## 9. Small/fast model jobs
 
-*Not started.*
+*Done.* Code: `src/cmcoder/core/titles.py` (new), `Agent._start_title` and
+`Agent.close` (`core/agent.py`); compaction summaries from item 1
+(`core/compaction.py`, `build_summarizer` in `cli/factory.py`). Tests:
+`tests/test_titles.py`, plus the small-model tests in `tests/test_compaction.py`.
+
+### The problem
+
+Some jobs don't need the big model: writing a conversation title, or a
+summary for compaction. Sending them to Qwen3-27B wastes GPU time on the
+gateway, and the main model's capacity is better spent on the coding task.
+
+### The idea
+
+Your gateway also serves a small model (Qwen3 ~7B). Set it once:
+
+```json
+{ "model": "corp:Qwen3.6-27B", "smallFastModel": "corp:Qwen3-7B" }
+```
+
+and cmcoder uses it for side jobs:
+
+| Job | When | Fallback if it fails |
+|---|---|---|
+| Compaction summary (item 1) | the window is 80% full, or `/compact` | the main model, then dropping old tool output |
+| Session title | after the first turn | the start of your first message |
+
+Titles appear in `/resume` instead of a cut-off first message: "Fix the login
+bug" instead of "the login page rejects valid passwords, please fix…".
+
+### The code
+
+**Running a job in the background** (`Agent._start_title`). The title isn't
+needed right away, so nothing should wait for it:
+
+```python
+task = asyncio.get_running_loop().create_task(job())
+self._background.add(task)
+task.add_done_callback(self._background.discard)
+```
+
+- `create_task` starts the coroutine running **alongside** whatever happens
+  next. In the REPL that's you typing your next message.
+- The task is kept in a `set` so Python doesn't garbage-collect it before it
+  finishes. When it's done, `add_done_callback` removes it.
+- `job()` catches every exception: a title is a nicety, and a failure must
+  never disturb the session.
+
+**Finishing up** (`Agent.close`). With `cmcoder -p` the program ends right
+after the answer, so `close()` gives a pending title a moment to finish:
+
+```python
+_done, pending = await asyncio.wait(self._background, timeout=TITLE_WAIT_ON_CLOSE)
+for t in pending:
+    t.cancel()
+```
+
+`asyncio.wait(..., timeout=2.0)` returns after 2 seconds at most, with the
+tasks split into finished and pending. Pending ones are cancelled.
+
+**Asking for a title** (`make_title`). A tiny request: a system prompt
+("Write a short title (3 to 7 words)… Reply with the title only"), your first
+message (at most 2,000 characters), `thinking=False` so Qwen doesn't think
+first, and `max_tokens=40`. Small models still add quotes, "Title:" labels or
+a full stop, so `clean_title` strips those with a regular expression. The
+title is saved as a `title` record in the session file (item 6).
+
+### New Python ideas
+
+- **Background tasks**: `create_task`, keeping a reference, `add_done_callback`.
+- **`asyncio.wait(tasks, timeout=…)`**: wait for several tasks with a time limit.
+- **Closures**: `job()` is defined inside `_start_title` and uses its
+  `summarizer`, `session` and `first_message` variables. They were copied to
+  local names first, so a later `/clear` can't swap the session underneath.
+
+### The tests
+
+`tests/test_titles.py`:
+- `clean_title` on real-world model output: quotes, "Title:", markdown bold,
+  a blank reply, an over-long one;
+- with a small model: exactly one title request after two turns, to the
+  small model, with thinking off and `max_tokens` 40, and `/resume` shows the
+  title;
+- without a small model: no title request, and the first message is the title;
+- a failing small model: the turn still succeeds, with the fallback title;
+- no session (`persistSessions: false`): no title request.
+
+### Try it
+
+Add `"smallFastModel"` to your settings, have a short conversation, `/exit`,
+start `cmcoder` again and type `/resume`.
 
 ## 10. Tool-call robustness
 
