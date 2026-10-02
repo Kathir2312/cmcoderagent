@@ -43,6 +43,8 @@ class PermissionsConfig(_Model):
     allow: list[str] = Field(default_factory=list)
     deny: list[str] = Field(default_factory=list)
     default_mode: PermissionModeName = Field("default", alias="defaultMode")
+    # "ask": high-risk shell commands always need approval; "deny": never run.
+    high_risk_commands: Literal["ask", "deny"] = Field("ask", alias="highRiskCommands")
 
 
 class Settings(_Model):
@@ -104,6 +106,9 @@ def deep_merge(base: dict[str, Any], over: dict[str, Any]) -> dict[str, Any]:
     for k, v in over.items():
         if isinstance(v, dict) and isinstance(out.get(k), dict):
             out[k] = deep_merge(out[k], v)
+        elif k == "highRiskCommands" and out.get(k) == "deny":
+            # The strictest layer wins: a project cannot relax a user's "deny".
+            continue
         elif k in ("allow", "deny") and isinstance(v, list) and isinstance(out.get(k), list):
             # Permission rules accumulate across layers.
             out[k] = [*out[k], *[x for x in v if x not in out[k]]]

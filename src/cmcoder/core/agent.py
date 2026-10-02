@@ -56,6 +56,8 @@ class PermissionRequest:
     input: dict[str, Any]
     suggested_rule: str
     reason: str = ""
+    # False for high-risk commands: approve this once only, never "always".
+    can_remember: bool = True
 
 
 @dataclass
@@ -413,10 +415,16 @@ class Agent:
         if check.decision == Decision.ASK:
             rule = suggest_rule(tool, args, self.ctx)
             if self.ask is None:
-                reason = (
-                    f"{label} needs approval, which is not available in non-interactive mode. "
-                    f'Allow it with --allowedTools "{rule}" or a less strict --permission-mode.'
-                )
+                if check.high_risk:
+                    reason = (
+                        f"{label} is a high-risk command ({check.reason}) and needs a person's "
+                        "approval each time; it cannot run in non-interactive mode."
+                    )
+                else:
+                    reason = (
+                        f"{label} needs approval, which is not available in non-interactive mode. "
+                        f'Allow it with --allowedTools "{rule}" or a less strict --permission-mode.'
+                    )
                 yield ev.PermissionDenied(id=call.id, name=tool.name, reason=reason)
                 yield finish(ToolResult(f"Permission denied: {reason}", is_error=True))
                 return
@@ -428,6 +436,7 @@ class Agent:
                     input=args.model_dump(),
                     suggested_rule=rule,
                     reason=check.reason,
+                    can_remember=not check.high_risk,
                 )
             )
             if not answer.allow:
@@ -442,7 +451,7 @@ class Agent:
                 if not feedback:
                     yield _StopTurn()
                 return
-            if answer.remember:
+            if answer.remember and not check.high_risk:
                 self.policy.add_allow(rule)
                 if self.on_rule_saved:
                     self.on_rule_saved(rule)

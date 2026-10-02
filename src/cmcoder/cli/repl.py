@@ -170,9 +170,12 @@ class Repl:
         if req.reason:
             c.print(Text(f"  ({req.reason})", style="dim"))
         c.print("  [bold]1[/bold] Yes")
-        c.print(
-            f"  [bold]2[/bold] Yes, and don't ask again for [cyan]{req.suggested_rule}[/cyan] in this project"
-        )
+        if req.can_remember:
+            c.print(
+                f"  [bold]2[/bold] Yes, and don't ask again for [cyan]{req.suggested_rule}[/cyan] in this project"
+            )
+        else:
+            c.print("  [dim]2 (not offered: high-risk commands are approved one at a time)[/dim]")
         c.print("  [bold]3[/bold] No, and tell cmcoder what to do differently")
         assert self.session is not None
         while True:
@@ -184,7 +187,7 @@ class Repl:
             if choice in ("1", "y", "yes"):
                 answer = PermissionAnswer(allow=True)
                 break
-            if choice in ("2", "a", "always"):
+            if choice in ("2", "a", "always") and req.can_remember:
                 answer = PermissionAnswer(allow=True, remember=True)
                 break
             if choice in ("3", "n", "no"):

@@ -112,3 +112,21 @@ def test_model_inside_providers_gets_a_hint(project: Path) -> None:
     )
     with pytest.raises(SettingsError, match="go at the top level"):
         load_settings(project, environ={})
+
+
+def test_high_risk_deny_cannot_be_relaxed_by_project(
+    project: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    user = tmp_path / "user"
+    monkeypatch.setenv("CMCODER_CONFIG_DIR", str(user))
+    write(
+        user / "settings.json",
+        {
+            "providers": {"corp": {"baseUrl": "https://ai.example/v1"}},
+            "permissions": {"highRiskCommands": "deny"},
+        },
+    )
+    write(project / ".cmcoder/settings.json", {"permissions": {"highRiskCommands": "ask"}})
+    assert load_settings(project, environ={}).permissions.high_risk_commands == "deny"
+    write(user / "settings.json", {"providers": {"corp": {"baseUrl": "https://ai.example/v1"}}})
+    assert load_settings(project, environ={}).permissions.high_risk_commands == "ask"

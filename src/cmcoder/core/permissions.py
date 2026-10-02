@@ -7,7 +7,8 @@ Rule syntax:
   Edit(src/**)         file tools on paths matching a gitignore-style pattern,
                        relative to the project root. Edit rules also cover Write.
 
-Order of evaluation: deny rules > protected paths (always ask before editing
+Order of evaluation: deny rules > high-risk shell commands (always ask, in
+every mode; see core/risk.py) > protected paths (always ask before editing
 cmcoder settings or .git, except in bypassPermissions) > allow rules > built-in
 secret-file protection > the permission mode's defaults.
 """
@@ -26,8 +27,10 @@ import pathspec
 from ..config.settings import config_dir
 from ..sensitive import is_secret
 from ..tools.base import Tool, ToolContext
+from .risk import high_risk_reason
 
 MODES = ("default", "acceptEdits", "plan", "bypassPermissions")
+HIGH_RISK_MODES = ("ask", "deny")
 FILE_EDIT_TOOLS = {"Edit", "Write"}
 _RULE_RE = re.compile(r"^\s*([A-Za-z_][\w-]*)\s*(?:\((.*)\))?\s*$", re.S)
 
@@ -93,6 +96,8 @@ class Decision(Enum):
 class PermissionCheck:
     decision: Decision
     reason: str = ""
+    # High-risk commands need a fresh approval every time: no "always allow".
+    high_risk: bool = False
 
 
 @dataclass
@@ -170,12 +175,16 @@ class PermissionPolicy:
         mode: str = "default",
         allow: list[str] | None = None,
         deny: list[str] | None = None,
+        high_risk: str = "ask",
     ) -> None:
         if mode not in MODES:
             raise ValueError(
                 f"Unknown permission mode {mode!r}; expected one of {', '.join(MODES)}"
             )
+        if high_risk not in HIGH_RISK_MODES:
+            raise ValueError(f"highRiskCommands must be one of {', '.join(HIGH_RISK_MODES)}")
         self.mode = mode
+        self.high_risk = high_risk
         self.allow = [Rule.parse(r) for r in allow or []]
         self.deny = [Rule.parse(r) for r in deny or []]
 
@@ -202,6 +211,21 @@ class PermissionPolicy:
         for rule in self.deny:
             if self._rule_matches(rule, tool, target, ctx):
                 return PermissionCheck(Decision.DENY, f"denied by rule {rule}")
+        if tool.name == "Bash" and (risk := high_risk_reason(str(target or ""))):
+            # Before allow rules and modes: no rule, acceptEdits or
+            # bypassPermissions approves these on a person's behalf.
+            if self.high_risk == "deny":
+                return PermissionCheck(
+                    Decision.DENY,
+                    f"high-risk command ({risk}) is blocked by policy. "
+                    "Ask the user to run it themselves if it is really needed.",
+                    high_risk=True,
+                )
+            if self.mode == "plan":
+                return PermissionCheck(
+                    Decision.DENY, "plan mode is read-only; propose a plan instead", high_risk=True
+                )
+            return PermissionCheck(Decision.ASK, f"high-risk: {risk}", high_risk=True)
         if (
             tool.name in FILE_EDIT_TOOLS
             and isinstance(target, Path)

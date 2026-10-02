@@ -113,16 +113,57 @@ async def test_bad_tool_calls_become_errors_for_the_model(mock_server: Any, proj
 async def test_headless_denies_with_hint(mock_server: Any, project: Path) -> None:
     server = mock_server(
         [
-            {"tool_calls": [{"name": "Bash", "arguments": {"command": "rm -rf build"}}]},
+            {"tool_calls": [{"name": "Bash", "arguments": {"command": "rm build/out.o"}}]},
             {"content": "I could not run it."},
         ]
     )
     events = await run(make_agent(server, project), "clean")
     denied = [e for e in events if isinstance(e, ev.PermissionDenied)]
-    assert (
-        denied and "--allowedTools" in denied[0].reason and "Bash(rm -rf:*)" not in denied[0].reason
-    )
+    assert denied and "--allowedTools" in denied[0].reason
     assert "Bash(rm:*)" in denied[0].reason
+
+
+async def test_headless_never_runs_high_risk_even_in_bypass(
+    mock_server: Any, project: Path
+) -> None:
+    (project / "build").mkdir()
+    server = mock_server(
+        [
+            {"tool_calls": [{"name": "Bash", "arguments": {"command": "rm -rf build"}}]},
+            {"content": "I could not run it."},
+        ]
+    )
+    events = await run(make_agent(server, project, mode="bypassPermissions"), "clean")
+    denied = [e for e in events if isinstance(e, ev.PermissionDenied)]
+    assert denied and "high-risk" in denied[0].reason
+    assert "--allowedTools" not in denied[0].reason
+    assert (project / "build").is_dir()
+
+
+async def test_high_risk_approval_is_never_remembered(mock_server: Any, project: Path) -> None:
+    for d in ("a", "b"):
+        (project / d).mkdir()
+    server = mock_server(
+        [
+            {"tool_calls": [{"name": "Bash", "arguments": {"command": "rm -rf a"}}]},
+            {"tool_calls": [{"name": "Bash", "arguments": {"command": "rm -rf b"}}]},
+            {"content": "done"},
+        ]
+    )
+    asked: list[PermissionRequest] = []
+    saved: list[str] = []
+
+    async def ask(req: PermissionRequest) -> PermissionAnswer:
+        asked.append(req)
+        # Even if a client sends "always", nothing is saved.
+        return PermissionAnswer(allow=True, remember=True)
+
+    agent = make_agent(server, project, ask=ask, on_rule_saved=saved.append)
+    await run(agent, "clean")
+    assert len(asked) == 2
+    assert all(not r.can_remember and "high-risk" in r.reason for r in asked)
+    assert saved == []
+    assert not (project / "a").exists() and not (project / "b").exists()
 
 
 async def test_ask_allow_always_saves_rule(mock_server: Any, project: Path) -> None:

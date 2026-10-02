@@ -125,6 +125,7 @@ async def build_agent(settings: Settings, opts: AgentOptions) -> Agent:
         mode=opts.permission_mode or settings.permissions.default_mode,
         allow=[*settings.permissions.allow, *(opts.allowed_tools or [])],
         deny=[*settings.permissions.deny, *(opts.disallowed_tools or [])],
+        high_risk=settings.permissions.high_risk_commands,
     )
     memory = load_memory_files(cwd, root)
     system_prompt = build_system_prompt(

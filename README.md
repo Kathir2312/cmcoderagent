@@ -111,6 +111,11 @@ Deny rules win over allow rules. Prefix rules never approve chained commands (`;
 Files such as `.env`, `*.pem`, `*.key` and `secrets/` are never read (or shown in Grep results) unless an allow
 rule names them. Editing `.cmcoder/`, `.git/` or `~/.cmcoder/` always asks, except in `bypassPermissions`.
 
+High-risk commands (`rm -rf`, `git clean`, `git reset --hard`, force push, `sudo`, `curl … | sh`, `del /s`,
+`Remove-Item -Recurse`, …) always ask, in every mode including `bypassPermissions`, and are never remembered or
+approved by allow rules; `-p` runs refuse them. To block them entirely set
+`"permissions": {"highRiskCommands": "deny"}` in `~/.cmcoder/settings.json`.
+
 ### Context window
 
 Qwen3 is often served with a 32K-token window, which an agent fills quickly. cmcoder sizes each request to the
