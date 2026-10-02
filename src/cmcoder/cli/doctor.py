@@ -18,7 +18,7 @@ from rich.console import Console
 from rich.text import Text
 
 from ..compat import SHELL_HELP, find_shell
-from ..config.settings import Settings, env_api_key
+from ..config.settings import Settings
 from ..providers.auth import ApiKeyAuth
 from ..providers.messages import Message, StreamDone, TextDelta, ToolSpec
 from ..providers.openai_compat import OpenAICompatProvider, ProviderError
@@ -193,8 +193,7 @@ class Doctor:
                 auth = provider.auth
                 assert isinstance(auth, ApiKeyAuth)
                 if auth.resolve_key():
-                    source = "CMCODER_API_KEY" if env_api_key() else "stored credentials"
-                    self.report(OK, f"API key found ({source})")
+                    self.report(OK, f"API key found: {auth.describe()}")
                 else:
                     self.report(FAIL, "No API key", "Run `cmcoder login` or set CMCODER_API_KEY.")
                     return

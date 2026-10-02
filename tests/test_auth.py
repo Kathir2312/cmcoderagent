@@ -34,3 +34,18 @@ async def test_api_key_auth_precedence() -> None:
     }
     with pytest.raises(AuthError, match="cmcoder login"):
         await ApiKeyAuth("other").get_headers()
+
+
+def test_masked_key_and_description() -> None:
+    from cmcoder.providers.auth import mask_key
+
+    assert mask_key("sk-1234567890abc6cd") == "sk-...6cd"
+    assert mask_key("short") == "***"
+    store_api_key("corp", "sk-stored-key-0001")
+    assert ApiKeyAuth("corp").describe() == "stored key sk-...001"
+    assert (
+        ApiKeyAuth(
+            "corp", explicit_key="sk-env-key-0002", explicit_source="CMCODER_API_KEY"
+        ).describe()
+        == "CMCODER_API_KEY sk-...002"
+    )

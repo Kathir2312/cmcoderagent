@@ -243,6 +243,18 @@ class OpenAICompatProvider:
     async def aclose(self) -> None:
         await self.client.aclose()
 
+    def _with_key_hint(self, err: ProviderError) -> ProviderError:
+        """For auth failures, say which key was sent (masked), so a key from
+        the wrong place (e.g. an environment variable) is easy to spot."""
+        describe = getattr(self.auth, "describe", None)
+        if isinstance(err, AuthFailed) and describe is not None:
+            err.hint = (
+                f"cmcoder sent the {describe()}. If that's not the key you expect, check "
+                "CMCODER_API_KEY, then run `cmcoder login`; if it is, ask the gateway admin "
+                "whether the key is valid there."
+            )
+        return err
+
     # -- simple GET endpoints --
 
     async def _get_json(self, url: str) -> Any:
@@ -255,7 +267,9 @@ class OpenAICompatProvider:
         except httpx.HTTPError as e:
             raise classify_transport_error(e, self.base_url) from e
         if resp.status_code != 200:
-            raise classify_http_error(resp.status_code, resp.content, resp.headers)
+            raise self._with_key_hint(
+                classify_http_error(resp.status_code, resp.content, resp.headers)
+            )
         return resp.json()
 
     async def list_models(self) -> list[str]:
@@ -345,8 +359,8 @@ class OpenAICompatProvider:
                     raise AuthFailed(str(e), hint="Run `cmcoder login`.") from e
                 async with self.client.stream("POST", url, json=body, headers=headers) as resp:
                     if resp.status_code != 200:
-                        err = classify_http_error(
-                            resp.status_code, await resp.aread(), resp.headers
+                        err = self._with_key_hint(
+                            classify_http_error(resp.status_code, await resp.aread(), resp.headers)
                         )
                         if (
                             resp.status_code == 401

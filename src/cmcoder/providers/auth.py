@@ -103,18 +103,37 @@ def _read_credentials_file() -> dict[str, str]:
         return {}
 
 
+def mask_key(key: str) -> str:
+    """Show just enough of a key to tell keys apart: "sk-...6cd"."""
+    if len(key) <= 8:
+        return "***"
+    prefix = key[:3] if key.startswith("sk-") else ""
+    return f"{prefix}...{key[-3:]}"
+
+
 class ApiKeyAuth:
     """Static API key (e.g. a LiteLLM virtual key) sent as a Bearer token.
 
     Lookup order: explicit key (env var) > OS keychain / credentials file.
     """
 
-    def __init__(self, provider: str, explicit_key: str | None = None) -> None:
+    def __init__(
+        self, provider: str, explicit_key: str | None = None, explicit_source: str = "environment"
+    ) -> None:
         self.provider = provider
         self._explicit = explicit_key
+        self._explicit_source = explicit_source
 
     def resolve_key(self) -> str | None:
         return self._explicit or load_stored_api_key(self.provider)
+
+    def describe(self) -> str:
+        """Which key is sent, safe to show: e.g. "stored key sk-...6cd"."""
+        key = self.resolve_key()
+        if not key:
+            return "no key"
+        source = self._explicit_source if self._explicit else "stored key"
+        return f"{source} {mask_key(key)}"
 
     async def get_headers(self) -> dict[str, str]:
         key = self.resolve_key()

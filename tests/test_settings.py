@@ -79,3 +79,36 @@ def test_add_local_allow_rule(project: Path) -> None:
     add_local_allow_rule(project, "Bash(pytest:*)")
     data = json.loads((project / ".cmcoder/settings.local.json").read_text())
     assert data == {"permissions": {"allow": ["Bash(pytest:*)"]}}
+
+
+def test_openai_api_key_is_not_sent_to_other_gateways() -> None:
+    from cmcoder.config.settings import env_api_key_source
+
+    # An unrelated OpenAI key must not go to the company gateway.
+    assert env_api_key_source({"OPENAI_API_KEY": "sk-openai"}) == (None, None)
+    assert env_api_key_source(
+        {"OPENAI_API_KEY": "sk-openai", "CMCODER_BASE_URL": "https://gw/v1"}
+    ) == (None, None)
+    # Only when the endpoint itself comes from OPENAI_BASE_URL.
+    assert env_api_key_source(
+        {"OPENAI_API_KEY": "sk-o", "OPENAI_BASE_URL": "https://api.openai.com/v1"}
+    ) == ("sk-o", "OPENAI_API_KEY")
+    assert env_api_key_source({"CMCODER_API_KEY": "sk-c", "OPENAI_API_KEY": "sk-o"}) == (
+        "sk-c",
+        "CMCODER_API_KEY",
+    )
+
+
+def test_model_inside_providers_gets_a_hint(project: Path) -> None:
+    write(
+        project / ".cmcoder/settings.json",
+        {
+            "providers": {
+                "corp": {"baseUrl": "https://gw/v1"},
+                "model": "corp:x",
+                "smallFastModel": "corp:y",
+            },
+        },
+    )
+    with pytest.raises(SettingsError, match="go at the top level"):
+        load_settings(project, environ={})

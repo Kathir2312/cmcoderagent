@@ -182,7 +182,7 @@ Later, optional adapters: OpenAI **Responses API**, native **Anthropic** (for pr
 | Setting | Env var | Meaning |
 |---|---|---|
 | `baseUrl` | `CMCODER_BASE_URL` (falls back to `OPENAI_BASE_URL`) | OpenAI-compatible endpoint |
-| `apiKey` / `apiKeyHelper` | `CMCODER_API_KEY` (falls back to `OPENAI_API_KEY`) | Static key, or a command that prints one |
+| `apiKey` / `apiKeyHelper` | `CMCODER_API_KEY` (`OPENAI_API_KEY` only with `OPENAI_BASE_URL`) | Static key, or a command that prints one |
 | `headers` | `CMCODER_CUSTOM_HEADERS` | Extra HTTP headers (e.g. a gateway token) |
 | `model` | `CMCODER_MODEL` | Main model; `/model` switches it in a session |
 | `smallFastModel` | `CMCODER_SMALL_FAST_MODEL` | Used for titles, summaries, quick classification |

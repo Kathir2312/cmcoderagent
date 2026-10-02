@@ -226,3 +226,13 @@ def test_litellm_auth_error_with_status_400() -> None:
 
     body = b'{"error": {"message": "Authentication Error, Invalid proxy server token passed", "type": "auth_error"}}'
     assert isinstance(classify_http_error(400, body), AuthFailed)
+
+
+async def test_auth_error_says_which_key_was_sent(mock_server: Any) -> None:
+    server = mock_server([{"content": "never"}])
+    provider = make_provider(server, key="sk-wrong-key-xyz9")
+    with pytest.raises(AuthFailed) as e:
+        await provider.list_models()
+    await provider.aclose()
+    assert e.value.hint and "sk-...yz9" in e.value.hint and "CMCODER_API_KEY" in e.value.hint
+    assert "sk-wrong-key-xyz9" not in str(e.value)  # never the full key

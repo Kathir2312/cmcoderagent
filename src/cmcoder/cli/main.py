@@ -14,10 +14,10 @@ from rich.console import Console
 
 from .. import __version__
 from ..compat import stdin_has_data, use_utf8_stdio
-from ..config.settings import Settings, SettingsError, load_settings
+from ..config.settings import Settings, SettingsError, env_api_key_source, load_settings
 from ..core.permissions import MODES
 from ..protocol.events import protocol_json_schema
-from ..providers.auth import delete_api_key, store_api_key
+from ..providers.auth import ApiKeyAuth, delete_api_key, mask_key, store_api_key
 from ..providers.openai_compat import ProviderError
 
 SUBCOMMANDS = {"doctor", "login", "logout", "models", "protocol-schema", "version"}
@@ -193,12 +193,21 @@ def login(
         err_console.print("[red]error:[/red] empty key")
         raise typer.Exit(2)
     where = store_api_key(name, key)
-    console.print(f"[green]Saved[/green] to {where}.")
+    console.print(f"[green]Saved[/green] {mask_key(key)} to {where}.")
+    env_key, env_var = env_api_key_source()
+    if env_key and env_key != key:
+        console.print(
+            f"[yellow]Note:[/yellow] {env_var} is set ({mask_key(env_key)}) and overrides the "
+            f"stored key. Clear it (`set {env_var}=` on Windows, `unset {env_var}` elsewhere) "
+            "to use the key you just entered."
+        )
 
     async def verify() -> None:
         from .factory import build_provider
 
         p = build_provider(settings, name)
+        # Check the key that was just entered, whatever the environment says.
+        p.auth = ApiKeyAuth(name, explicit_key=key, explicit_source="entered key")
         try:
             models = await p.list_models()
             console.print(f"[green]Key works[/green]: {len(models)} models available.")

@@ -16,7 +16,7 @@ from ..config.settings import (
     SettingsError,
     add_local_allow_rule,
     config_dir,
-    env_api_key,
+    env_api_key_source,
     find_project_root,
 )
 from ..core.agent import Agent, AskFn
@@ -35,7 +35,8 @@ MODEL_INFO_TTL = 24 * 3600
 def build_auth(name: str, cfg: ProviderConfig) -> AuthProvider:
     if cfg.auth.type == "none":
         return NoAuth()
-    return ApiKeyAuth(name, explicit_key=env_api_key())
+    key, source = env_api_key_source()
+    return ApiKeyAuth(name, explicit_key=key, explicit_source=source or "environment")
 
 
 def build_provider(settings: Settings, name: str) -> OpenAICompatProvider:

@@ -149,9 +149,23 @@ def env_layer(environ: dict[str, str] | None = None) -> dict[str, Any]:
     return layer
 
 
-def env_api_key(environ: dict[str, str] | None = None) -> str | None:
+def env_api_key_source(environ: dict[str, str] | None = None) -> tuple[str | None, str | None]:
+    """(key, variable name) of an API key set in the environment.
+
+    OPENAI_API_KEY is only used when the endpoint also comes from
+    OPENAI_BASE_URL, so an unrelated OpenAI key is never sent to the
+    company gateway.
+    """
     env = os.environ if environ is None else environ
-    return env.get("CMCODER_API_KEY") or env.get("OPENAI_API_KEY") or None
+    if env.get("CMCODER_API_KEY"):
+        return env["CMCODER_API_KEY"], "CMCODER_API_KEY"
+    if env.get("OPENAI_API_KEY") and env.get("OPENAI_BASE_URL") and not env.get("CMCODER_BASE_URL"):
+        return env["OPENAI_API_KEY"], "OPENAI_API_KEY"
+    return None, None
+
+
+def env_api_key(environ: dict[str, str] | None = None) -> str | None:
+    return env_api_key_source(environ)[0]
 
 
 def load_settings(cwd: Path | None = None, environ: dict[str, str] | None = None) -> Settings:
@@ -183,7 +197,13 @@ def load_settings(cwd: Path | None = None, environ: dict[str, str] | None = None
     try:
         settings = Settings.model_validate(merged)
     except ValueError as e:
-        raise SettingsError(f"Invalid settings: {e}") from e
+        hint = ""
+        if any(f"providers.{k}" in str(e) for k in ("model", "smallFastModel", "permissions")):
+            hint = (
+                "\nhint: `model` and `smallFastModel` go at the top level of settings.json, "
+                'next to "providers", not inside it (see docs/settings.example.json).'
+            )
+        raise SettingsError(f"Invalid settings: {e}{hint}") from e
     settings.sources = sources
     return settings
 

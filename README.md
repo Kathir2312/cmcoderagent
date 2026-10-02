@@ -75,7 +75,8 @@ Later layers override earlier ones; permission rules from all layers are combine
 Environment variables: `CMCODER_BASE_URL`, `CMCODER_API_KEY`, `CMCODER_MODEL`, `CMCODER_SMALL_FAST_MODEL`,
 `CMCODER_CA_CERT`, `CMCODER_CUSTOM_HEADERS` (`"Name: value; Other: value"`), `CMCODER_CONFIG_DIR`,
 `CMCODER_GIT_BASH_PATH` (Windows).
-`OPENAI_BASE_URL` / `OPENAI_API_KEY` are used as fallbacks.
+`OPENAI_BASE_URL` is used if `CMCODER_BASE_URL` isn't set; `OPENAI_API_KEY` is used only together with `OPENAI_BASE_URL`, so an
+unrelated OpenAI key is never sent to your gateway. `CMCODER_API_KEY` overrides the key stored by `cmcoder login`.
 
 ### Project memory
 
