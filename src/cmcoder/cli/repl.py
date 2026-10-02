@@ -114,12 +114,12 @@ class Repl:
             if event.is_error:
                 lines = event.content.strip().splitlines()
                 preview = "\n    ".join(lines[:4]) + ("\n    …" if len(lines) > 4 else "")
-                c.print(Text(f"  ⎿ {preview}", style="red"))
+                c.print(Text(f"  └ {preview}", style="red"))
             else:
-                c.print(Text(f"  ⎿ {event.summary or 'done'}", style="dim"))
+                c.print(Text(f"  └ {event.summary or 'done'}", style="dim"))
             self._start_status()
         elif isinstance(event, ev.PermissionDenied):
-            c.print(Text(f"  ⎿ denied: {event.reason}", style="yellow"))
+            c.print(Text(f"  └ denied: {event.reason}", style="yellow"))
         elif isinstance(event, ev.UsageUpdate):
             self._last_prompt_tokens = event.prompt_tokens
         elif isinstance(event, ev.Warning):
@@ -285,7 +285,7 @@ class Repl:
             self._stop_status()
             self._stop_live()
             self.console.print(
-                Text("⎿ Interrupted. What should cmcoder do instead?", style="yellow")
+                Text("└ Interrupted. What should cmcoder do instead?", style="yellow")
             )
         finally:
             self._turn_task = None

@@ -41,7 +41,7 @@ async def run_headless(
                 print(f"● {event.label}", file=sys.stderr)
             elif verbose and isinstance(event, ev.ToolResult):
                 status = "error" if event.is_error else (event.summary or "done")
-                print(f"  ⎿ {status}", file=sys.stderr)
+                print(f"  └ {status}", file=sys.stderr)
             elif isinstance(event, ev.PermissionDenied) and output_format != "stream-json":
                 print(f"permission denied: {event.reason}", file=sys.stderr)
     finally:
