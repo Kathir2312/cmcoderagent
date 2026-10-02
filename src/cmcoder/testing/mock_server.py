@@ -42,6 +42,7 @@ class MockState:
         context_windows: dict[str, int] | None = None,
         enforce_context: bool = False,
         summary: str = "Summary (mock): the user asked for work on the project; files were read.",
+        model_info: bool = True,
     ) -> None:
         self.script = list(script)
         self.models = models or ["qwen3-27b", "qwen3-7b"]
@@ -50,6 +51,7 @@ class MockState:
         self.context_windows = context_windows or {}
         self.enforce_context = enforce_context
         self.summary = summary
+        self.model_info = model_info  # False: no /model/info, like many gateways
         self.think_tags = think_tags
         self.requests: list[dict[str, Any]] = []
         self.summary_requests: list[dict[str, Any]] = []
@@ -168,7 +170,7 @@ def make_handler(state: MockState) -> type[BaseHTTPRequestHandler]:
                         "data": [{"id": m, "object": "model"} for m in state.models],
                     },
                 )
-            elif path.endswith("/model/info"):
+            elif path.endswith("/model/info") and state.model_info:
                 self._json(
                     200,
                     {
@@ -203,8 +205,13 @@ def make_handler(state: MockState) -> type[BaseHTTPRequestHandler]:
             prompt_tokens = int(
                 len(json.dumps(body.get("messages", [])) + json.dumps(body.get("tools", []))) / 3.5
             )
-            requested = prompt_tokens + int(body.get("max_tokens") or 0)
-            if state.enforce_context and requested > state.window(model):
+            max_tokens = int(body.get("max_tokens") or 0)
+            requested = prompt_tokens + max_tokens
+            # Like vLLM, always reject a max_tokens larger than the window itself
+            # (that is how cmcoder probes the limit); anything else only when enforcing.
+            if requested > state.window(model) and (
+                state.enforce_context or max_tokens >= state.window(model)
+            ):
                 self._json(
                     400,
                     {
@@ -235,14 +242,17 @@ def make_handler(state: MockState) -> type[BaseHTTPRequestHandler]:
             if "cost" in reply:
                 self.send_header("x-litellm-response-cost", str(reply["cost"]))
             self.end_headers()
-            for c in _chunks(reply, model, state.think_tags, prompt_tokens):
-                self.wfile.write(f"data: {json.dumps(c)}\n\n".encode())
-                self.wfile.flush()
-                if reply.get("delay"):
-                    time.sleep(float(reply["delay"]))
-            self.wfile.write(b"data: [DONE]\n\n")
-            self.wfile.flush()
             self.close_connection = True
+            try:
+                for c in _chunks(reply, model, state.think_tags, prompt_tokens):
+                    self.wfile.write(f"data: {json.dumps(c)}\n\n".encode())
+                    self.wfile.flush()
+                    if reply.get("delay"):
+                        time.sleep(float(reply["delay"]))
+                self.wfile.write(b"data: [DONE]\n\n")
+                self.wfile.flush()
+            except (BrokenPipeError, ConnectionResetError):
+                pass  # the client hung up (e.g. Ctrl+C, or a context-window probe)
 
     return Handler
 

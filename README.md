@@ -123,8 +123,10 @@ Qwen3 is often served with a 32K-token window, which an agent fills quickly. cmc
 room left and pages long files. When the conversation reaches 80% of the window it **summarises the older
 part** (with `smallFastModel` if set) and keeps the recent messages; `/compact [what to keep]` does this on
 demand, and `/clear` starts fresh. Settings: `"autoCompact": true`, `"autoCompactThreshold": 0.8`. If
-summarising fails, the oldest tool outputs are dropped instead. If you can, have the gateway serve a longer
-context; `cmcoder doctor` reports the window.
+summarising fails, the oldest tool outputs are dropped instead. cmcoder finds the real window by asking the
+server once (and learns it from the server's error if a request is ever too long); `cmcoder doctor` shows the
+value and where it came from. Set `"modelProfiles": [{"match": "qwen3*", "contextWindow": 40960}]` to override
+it. If you can, have the gateway serve a longer context.
 
 **Privacy:** each turn sends your prompt, file contents the agent reads and command output to the configured model
 endpoint. LiteLLM admins may be able to see that traffic in gateway logs.

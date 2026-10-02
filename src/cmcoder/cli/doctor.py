@@ -22,9 +22,9 @@ from ..config.settings import Settings
 from ..providers.auth import ApiKeyAuth
 from ..providers.messages import Message, StreamDone, TextDelta, ToolSpec
 from ..providers.openai_compat import OpenAICompatProvider, ProviderError
-from ..providers.profiles import resolve_profile
+from ..providers.profiles import ModelProfile, resolve_profile
 from ..providers.transport import TransportOptions, build_ssl_context, proxy_bypassed
-from .factory import build_provider
+from .factory import PROBE_SOURCE, build_provider, resolve_model_profile, save_learned_window
 
 OK, WARN, FAIL, INFO = "ok", "warn", "fail", "info"
 _STYLE = {OK: ("✓", "green"), WARN: ("⚠", "yellow"), FAIL: ("✗", "red"), INFO: ("•", "cyan")}
@@ -238,11 +238,42 @@ class Doctor:
         finally:
             await provider.aclose()
 
+    async def check_context_window(
+        self, provider: OpenAICompatProvider, model: str
+    ) -> ModelProfile:
+        """Ask the server for the real window (fresh, not from the cache) and
+        report which value cmcoder will use and where it came from."""
+        tokens = await provider.probe_context_window(
+            model, resolve_profile(model, self.settings.model_profiles)
+        )
+        save_learned_window(provider.base_url, model, tokens, PROBE_SOURCE)
+        profile = await resolve_model_profile(self.settings, provider, model, probe=False)
+        heard = f"server says {tokens:,} tokens" if tokens else "server did not state its limit"
+        detail = f"{heard}; using {profile.context_window:,} from {profile.context_window_source}."
+        if tokens and profile.context_window > tokens:
+            self.report(
+                WARN,
+                f"{model}: context window set to {profile.context_window:,} tokens, "
+                f"but the server allows {tokens:,}",
+                f"{detail} Requests will fail until contextWindow in modelProfiles is lowered.",
+            )
+        elif profile.context_window <= 32_768:
+            self.report(
+                WARN,
+                f"{model}: context window is {profile.context_window:,} tokens",
+                f"{detail} Small for an agent: conversations will be summarised often. If GPU "
+                "memory allows, ask the admin to serve a longer context (e.g. vLLM "
+                "--max-model-len 65536 or more; Qwen3 supports long context via YaRN).",
+            )
+        else:
+            self.report(OK, f"{model}: context window {profile.context_window:,} tokens", detail)
+        return profile
+
     async def probe_model(
         self, provider: OpenAICompatProvider, model: str, info: dict[str, Any] | None
     ) -> None:
-        profile = resolve_profile(model, self.settings.model_profiles, info)
         self.console.print(Text(f"  probing {model} …", style="dim"))
+        profile = await self.check_context_window(provider, model)
         # 1. streaming + latency
         start = time.monotonic()
         first: float | None = None
@@ -280,14 +311,6 @@ class Doctor:
                 f"{model}: output has only a closing </think> (Qwen3 Thinking-2507 style)",
                 "Handled automatically. A reasoning parser on the backend (vLLM "
                 "--reasoning-parser qwen3) would make it cleaner.",
-            )
-        if profile.context_window <= 32_768:
-            self.report(
-                WARN,
-                f"{model}: context window is {profile.context_window} tokens",
-                "Small for an agent: older tool output will be dropped often. If GPU memory allows, "
-                "ask the admin to serve a longer context (e.g. vLLM --max-model-len 65536 or more; "
-                "Qwen3 supports long context via YaRN).",
             )
 
         # 2. thinking switch

@@ -24,8 +24,23 @@ def test_overrides_and_server_info() -> None:
         server_info={"max_input_tokens": 131072, "supports_function_calling": False},
     )
     assert p.thinking_switch == "prompt"
-    assert p.context_window == 131072  # server value wins
+    # An explicit contextWindow in settings wins, so a wrong server value can be corrected.
+    assert p.context_window == 65536
+    assert p.context_window_source == "settings (modelProfiles)"
     assert p.tool_calling == "prompted"
+    p = resolve_profile("qwen3-27b", server_info={"max_input_tokens": 131072})
+    assert (p.context_window, p.context_window_source) == (131072, "server (/model/info)")
+
+
+def test_learned_window_beats_model_info_but_not_settings() -> None:
+    learned = (40960, "server limit (probe)")
+    p = resolve_profile(
+        "qwen3-27b", server_info={"max_input_tokens": 131072}, learned_window=learned
+    )
+    assert (p.context_window, p.context_window_source) == learned
+    p = resolve_profile("qwen3-27b", overrides=[{"contextWindow": 65536}], learned_window=learned)
+    assert p.context_window == 65536
+    assert resolve_profile("qwen3-27b").context_window_source == "built-in default"
 
 
 def test_unknown_model_gets_defaults() -> None:

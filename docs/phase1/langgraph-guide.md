@@ -171,7 +171,58 @@ write a `render_interrupt(payload, height)` function that does what
 
 ## 3. Detecting the real context window
 
-*Not started.*
+*Done.* Code: `providers/openai_compat.py`, `cli/factory.py`, the
+`ContextTooLong` handler in `core/agent.py`.
+
+### The LangGraph way
+
+LangChain needs to know the window too, for `trim_messages(max_tokens=…)` and
+for your "summarise at 80%" condition. Typical options:
+
+```python
+llm = ChatOpenAI(base_url=GATEWAY, model="Qwen3.6-27B")
+
+WINDOW = 32768                                    # 1. hard-code it
+WINDOW = llm.profile.get("max_input_tokens")      # 2. LangChain 1.x model profiles
+                                                  #    (from a public model database;
+                                                  #     a private Qwen deployment isn't in it)
+used = llm.get_num_tokens_from_messages(msgs)     # counting needs a tokenizer
+```
+
+When the guess is wrong, you get an `openai.BadRequestError` from deep inside
+`llm.invoke`, and the graph run fails. Recovering is up to you, e.g. with
+`.with_retry()` or a fallback, but the limit stated in the error is not
+used.
+
+### The cmcoder way
+
+| Question | cmcoder |
+|---|---|
+| What's the window? | settings → what the server enforces (probe / error) → `/model/info` → built-in |
+| How do we find out? | a deliberate over-long request (`max_tokens=10,000,000`) that the server rejects, stating its limit |
+| What if it's wrong mid-run? | the `ContextTooLong` error carries the stated limit; the agent switches to it, saves it, compacts, retries |
+| How are tokens counted? | characters ÷ a ratio calibrated against the server's reported usage (no tokenizer download) |
+
+### Why they differ
+
+A framework sits on top of many providers and can't assume what their errors
+say. cmcoder targets OpenAI-compatible servers (vLLM behind LiteLLM), whose
+"maximum context length is N" message is reliable enough to use as a
+**source of truth**. It's tested against vLLM, LiteLLM, llama.cpp and TGI
+wordings, and through a real LiteLLM proxy.
+
+The general lesson for any agent framework: **errors carry information.**
+Classify them, extract what they tell you, and feed it back into state.
+That beats only retrying.
+
+### Exercise
+
+With `ChatOpenAI` pointed at your gateway, call
+`llm.invoke("hi", max_tokens=10_000_000)` inside `try/except
+openai.BadRequestError as e:` and print `e.message`. Write a
+`learn_window(e)` that pulls out the number with
+`cmcoder.providers.openai_compat.parse_context_window`, and use it as the
+`max_tokens` for `trim_messages` in your graph.
 
 ## 4. Steering the model away from Bash for file work
 

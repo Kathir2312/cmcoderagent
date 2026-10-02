@@ -124,6 +124,7 @@ class Agent:
         ask: AskFn | None = None,
         on_rule_saved: Callable[[str], None] | None = None,
         summarizer: Summarizer | None = None,
+        on_context_window: Callable[[str, int], None] | None = None,
         auto_compact: bool = True,
         compact_threshold: float = 0.8,
     ) -> None:
@@ -143,6 +144,8 @@ class Agent:
         self._budget: ContextBudget | None = None
         # The small/fast model for summaries; the main model is the fallback.
         self.summarizer = summarizer
+        # Called with (model, tokens) when the server states a smaller window.
+        self.on_context_window = on_context_window
         self.auto_compact = auto_compact
         self.compact_threshold = compact_threshold
 
@@ -313,6 +316,23 @@ class Agent:
                         elif isinstance(sev, StreamDone):
                             done = sev
                 except ContextTooLong as e:
+                    if e.context_window and e.context_window < self.profile.context_window:
+                        # The server told us its real limit: use it from now on.
+                        old = self.profile.context_window
+                        self.profile = self.profile.model_copy(
+                            update={
+                                "context_window": e.context_window,
+                                "context_window_source": "server limit (from its error)",
+                            }
+                        )
+                        if self.on_context_window:
+                            self.on_context_window(self.model, e.context_window)
+                        yield ev.Warning(
+                            message=f"The server says {self.model}'s context window is "
+                            f"{e.context_window:,} tokens (cmcoder assumed {old:,}); "
+                            "using that from now on."
+                        )
+                        budget = self.budget()
                     # Our estimate was too low: be more conservative, free more, retry once.
                     if not overflow_retried:
                         overflow_retried = True

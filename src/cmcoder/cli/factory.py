@@ -31,6 +31,10 @@ from ..tools.base import ToolContext, output_budget_chars
 from ..tools.registry import default_tools
 
 MODEL_INFO_TTL = 24 * 3600
+LEARNED_WINDOW_TTL = 30 * 24 * 3600
+UNKNOWN_WINDOW_TTL = 24 * 3600  # re-probe daily when the server didn't say
+PROBE_SOURCE = "server limit (probe)"
+ERROR_SOURCE = "server limit (from its error)"
 
 
 def build_auth(name: str, cfg: ProviderConfig) -> AuthProvider:
@@ -93,6 +97,42 @@ async def cached_model_info(
     return info
 
 
+def _learned_path() -> Path:
+    return config_dir() / "cache" / "context_windows.json"
+
+
+def _read_learned() -> dict[str, Any]:
+    try:
+        data = json.loads(_learned_path().read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def load_learned_window(base_url: str, model: str) -> tuple[int | None, str] | None:
+    """A context window learned from the server: (tokens, source), with
+    tokens None if a recent probe got no answer. None if nothing is cached."""
+    entry = _read_learned().get(base_url, {}).get(model)
+    if not isinstance(entry, dict):
+        return None
+    tokens = entry.get("tokens")
+    ttl = LEARNED_WINDOW_TTL if tokens else UNKNOWN_WINDOW_TTL
+    if time.time() - float(entry.get("at", 0)) > ttl:
+        return None
+    return (int(tokens) if tokens else None), str(entry.get("source", PROBE_SOURCE))
+
+
+def save_learned_window(base_url: str, model: str, tokens: int | None, source: str) -> None:
+    data = _read_learned()
+    data.setdefault(base_url, {})[model] = {"tokens": tokens, "source": source, "at": time.time()}
+    try:
+        path = _learned_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    except OSError:
+        pass
+
+
 @dataclass
 class AgentOptions:
     cwd: Path
@@ -107,10 +147,25 @@ class AgentOptions:
 
 
 async def resolve_model_profile(
-    settings: Settings, provider: OpenAICompatProvider, model: str
+    settings: Settings, provider: OpenAICompatProvider, model: str, probe: bool = True
 ) -> ModelProfile:
+    """The model's profile, with the best-known context window: settings,
+    else what the server enforces (learned from an error or a probe, cached),
+    else LiteLLM /model/info, else the built-in default.
+
+    When none of these is known, the server is probed once (cached for 30
+    days, or a day if it didn't say)."""
     info = await cached_model_info(provider)
-    return resolve_profile(model, settings.model_profiles, info.get(model))
+    mi = info.get(model)
+    entry = load_learned_window(provider.base_url, model)
+    if entry is None and probe:
+        base = resolve_profile(model, settings.model_profiles, mi)
+        if base.context_window_source == "built-in default":
+            tokens = await provider.probe_context_window(model, base)
+            save_learned_window(provider.base_url, model, tokens, PROBE_SOURCE)
+            entry = (tokens, PROBE_SOURCE)
+    learned = (entry[0], entry[1]) if entry and entry[0] else None
+    return resolve_profile(model, settings.model_profiles, mi, learned)
 
 
 async def build_agent(settings: Settings, opts: AgentOptions) -> Agent:
@@ -160,6 +215,7 @@ async def build_agent(settings: Settings, opts: AgentOptions) -> Agent:
         ask=opts.ask,
         on_rule_saved=save_rule,
         summarizer=summarizer,
+        on_context_window=lambda m, n: save_learned_window(provider.base_url, m, n, ERROR_SOURCE),
         auto_compact=settings.auto_compact,
         compact_threshold=settings.auto_compact_threshold,
     )

@@ -38,6 +38,8 @@ class ModelProfile(BaseModel):
     )
     stream_usage: bool = Field(True, alias="streamUsage")
     extra_body: dict[str, Any] = Field(default_factory=dict, alias="extraBody")
+    # Where context_window came from, shown by `cmcoder doctor` (not a setting).
+    context_window_source: str = Field("built-in default", exclude=True)
 
 
 # Built-in profiles, most specific first. Matched against the model name the
@@ -88,13 +90,20 @@ def resolve_profile(
     model: str,
     overrides: list[dict[str, Any]] | None = None,
     server_info: dict[str, Any] | None = None,
+    learned_window: tuple[int, str] | None = None,
 ) -> ModelProfile:
     """Pick the profile for `model`.
 
     Order: built-in defaults < user overrides (settings `modelProfiles`) <
-    values the server reports (e.g. LiteLLM /model/info context window).
+    values the server reports (e.g. LiteLLM /model/info).
+
+    The context window has its own order, most trusted last: built-in <
+    /model/info < learned from the server itself (`learned_window`: its
+    "maximum context length" error or a probe) < an explicit `contextWindow`
+    in settings, which is the way to correct a wrong value.
     """
     data: dict[str, Any] = {}
+    source = "built-in default"
     for p in BUILTIN_PROFILES:
         if not fnmatch.fnmatch(model.lower(), p["match"]):
             continue
@@ -102,15 +111,25 @@ def resolve_profile(
             continue
         data = {k: v for k, v in p.items() if not k.startswith("_")}
         break
+    user_window: int | None = None
     for o in overrides or []:
         if fnmatch.fnmatch(model.lower(), str(o.get("match", "*")).lower()):
             data.update(o)
+            if o.get("contextWindow"):
+                user_window = int(o["contextWindow"])
     if server_info:
         if server_info.get("max_input_tokens"):
             data["contextWindow"] = int(server_info["max_input_tokens"])
+            source = "server (/model/info)"
         if server_info.get("max_output_tokens"):
             data["maxOutput"] = int(server_info["max_output_tokens"])
         if server_info.get("supports_function_calling") is False:
             data["toolCalling"] = "prompted"
+    if learned_window:
+        data["contextWindow"], source = learned_window
+    if user_window:
+        data["contextWindow"], source = user_window, "settings (modelProfiles)"
     data.setdefault("match", model)
-    return ModelProfile.model_validate(data)
+    profile = ModelProfile.model_validate(data)
+    profile.context_window_source = source
+    return profile

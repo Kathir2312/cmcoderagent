@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import random
+import re
 import ssl
 import uuid
 from collections.abc import AsyncIterator
@@ -79,6 +80,32 @@ class ServerError(ProviderError):
 
 class ContextTooLong(ProviderError):
     kind = "context_length"
+    # The limit the server stated in its error, when it said one.
+    context_window: int | None = None
+
+
+# How servers state their limit:
+#   vLLM / OpenAI: "This model's maximum context length is 32768 tokens. ..."
+#   LiteLLM wraps those: "ContextWindowExceededError: ... maximum context length is 32768 ..."
+#   llama.cpp / others: "... exceeds the available context size (8192 tokens)"
+#   TGI: "... must have less than 4096 tokens" / max_model_len=4096
+_WINDOW_PATTERNS = [
+    re.compile(r"maximum context length is (\d+)"),
+    re.compile(r"max_model_len\W{0,4}(\d+)"),
+    re.compile(r"context (?:length|window|size) (?:is |of )?(?:only )?\(?(\d+) tokens"),
+    re.compile(r"must have less than (\d+) (?:input )?tokens"),
+]
+
+
+def parse_context_window(text: str) -> int | None:
+    """The context window a server states in an error message, if any."""
+    low = text.lower().replace(",", "")
+    for pattern in _WINDOW_PATTERNS:
+        if m := pattern.search(low):
+            n = int(m.group(1))
+            if 512 <= n <= 10_000_000:  # ignore unrelated small numbers
+                return n
+    return None
 
 
 class BadRequest(ProviderError):
@@ -125,8 +152,15 @@ def classify_http_error(
         )
     elif status == 429:
         err = RateLimited(f"Rate limited: {msg}", status=status)
-    elif "context length" in low or "maximum context" in low or "too many tokens" in low:
+    elif (
+        "context length" in low
+        or "maximum context" in low
+        or "too many tokens" in low
+        or "context size" in low
+        or "max_model_len" in low
+    ):
         err = ContextTooLong(f"Request too long for the model: {msg}", status=status)
+        err.context_window = parse_context_window(raw)
     elif status == 404:
         err = BadRequest(
             f"Not found ({status}): {msg}",
@@ -296,6 +330,40 @@ class OpenAICompatProvider:
                     out[str(name)] = dict(item.get("model_info") or {})
             return out
         return {}
+
+    # -- context window --
+
+    async def probe_context_window(
+        self, model: str, profile: ModelProfile, timeout: float = 8.0
+    ) -> int | None:
+        """Ask the server for the model's real context window.
+
+        Sends a one-word prompt with an impossibly large max_tokens. vLLM and
+        similar servers reject it before generating anything, stating their
+        limit ("maximum context length is N tokens"). A server that accepts
+        the request instead is disconnected immediately. Returns None when the
+        server doesn't say.
+        """
+        body = self.build_request(
+            model, [Message.user("hi")], [], profile, thinking=False, max_tokens=10_000_000
+        )
+        url = f"{self.base_url}/chat/completions"
+
+        async def go() -> int | None:
+            try:
+                headers = await self.auth.get_headers()
+            except AuthError:
+                return None
+            async with self.client.stream("POST", url, json=body, headers=headers) as resp:
+                if resp.status_code == 200:
+                    return None  # accepted: closing the stream stops generation
+                err = classify_http_error(resp.status_code, await resp.aread(), resp.headers)
+                return err.context_window if isinstance(err, ContextTooLong) else None
+
+        try:
+            return await asyncio.wait_for(go(), timeout)
+        except (TimeoutError, httpx.HTTPError):
+            return None
 
     # -- chat --
 

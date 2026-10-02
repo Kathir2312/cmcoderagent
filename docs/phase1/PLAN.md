@@ -79,6 +79,14 @@ command; it's now shown as one shortened line.
 
 **Done when:** tests cover the vLLM/LiteLLM error formats; `doctor` reports the source.
 
+**Status: done.** Beyond the plan:
+- a deliberate **probe** finds the window *before* anything fails. It runs
+  once per model and is cached 30 days, or 1 day if the server didn't say;
+- tested through a real LiteLLM proxy.
+
+Change from Phase 0: an explicit `contextWindow` in `modelProfiles` now beats
+`/model/info`, so a wrong gateway value can be corrected.
+
 ### 4. Steer Qwen away from Bash for file work
 
 **Why:** Qwen3.6 writes files with heredocs and reads them with `python -c`,
@@ -185,7 +193,7 @@ SSO, OpenTelemetry, Windows sandboxing (Phase 4).
 
 - [x] 1. Auto-compaction
 - [x] 2. Permission prompt never scrolls off screen (the Textual dialog follows in item 11)
-- [ ] 3. Detect the real context window
+- [x] 3. Detect the real context window
 - [ ] 4. Steer Qwen away from Bash for file work
 - [ ] 5. Managed settings
 - [ ] 6. Sessions and resume

@@ -296,8 +296,11 @@ Models behave very differently, so each one is described by a profile:
 ```
 
 - Built-in profiles for common models; user overrides in settings.
-- Where the server reports the real context window (e.g. vLLM `max_model_len`
-  in `/v1/models`, Ollama `/api/show`), that value overrides the profile.
+- Context window, most trusted last: built-in default < LiteLLM `/model/info` <
+  what the server enforces (learned from its "maximum context length is N" error, or
+  from a one-off probe with an over-large `max_tokens`; cached per gateway and model)
+  < an explicit `contextWindow` in settings. `cmcoder doctor` shows the value and its
+  source (Phase 1 item 3).
 - Unknown models get conservative defaults; `cmcoder doctor --probe` runs a short
   tool-calling test against the endpoint and suggests a profile.
 
@@ -537,7 +540,7 @@ Found while using Phase 0 on a real project; all are Phase 1 work.
    the system prompt and tool descriptions for Qwen, detect common patterns
    (`cat > f <<`, `echo … > f`, `python -c "open(…)"`) and tell the model to use the
    proper tool, and add evals that score which tools are used.
-3. **Real context window unknown.** The gateway doesn't expose `/model/info`, so cmcoder
+3. **Real context window unknown.** *Fixed in Phase 1 (item 3): probed and learned from the server.* The gateway doesn't expose `/model/info`, so cmcoder
    assumes 32K for Qwen3. Get the real value from the admin, or detect it automatically
    from the server's "maximum context length is N" error, and cache it.
 

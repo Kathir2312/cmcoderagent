@@ -43,7 +43,8 @@ def _free_port() -> int:
 
 @pytest.fixture(scope="module")
 def gateway(tmp_path_factory: pytest.TempPathFactory) -> Iterator[tuple[str, MockServer]]:
-    backend = MockServer(MockState([]))
+    # The backend allows 40960 tokens; LiteLLM's config claims 32768 (as configs drift).
+    backend = MockServer(MockState([], context_window=40960))
     backend.__enter__()
     d = tmp_path_factory.mktemp("litellm")
     cfg = d / "config.yaml"
@@ -194,3 +195,16 @@ def test_cmcoder_print_mode_through_gateway(
     assert r.returncode == 0, r.stderr
     assert r.stdout.strip() == "Created hello.py."
     assert (tmp_path / "hello.py").read_text() == "print('hi')\n"
+
+
+async def test_context_window_probe_through_gateway(gateway: tuple[str, MockServer]) -> None:
+    """LiteLLM passes the backend's "maximum context length" error through, so
+    cmcoder learns the limit the backend really enforces."""
+    from cmcoder.providers.profiles import resolve_profile
+
+    base_url, _ = gateway
+    p = provider(base_url)
+    try:
+        assert await p.probe_context_window("qwen3-27b", resolve_profile("qwen3-27b")) == 40960
+    finally:
+        await p.aclose()

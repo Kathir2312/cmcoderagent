@@ -310,8 +310,167 @@ lines, then press `v`.
 
 ## 3. Detecting the real context window
 
-*Not started.* Will cover: reading numbers out of error messages with regular
-expressions, and caching results in a JSON file.
+*Done.* Code: `providers/openai_compat.py` (`parse_context_window`,
+`probe_context_window`), `providers/profiles.py` (`resolve_profile`),
+`cli/factory.py` (`resolve_model_profile`, `load_learned_window`,
+`save_learned_window`), `core/agent.py` (the `ContextTooLong` handler),
+`cli/doctor.py` (`check_context_window`). Tests: `tests/test_context_window.py`,
+plus a test through a real LiteLLM proxy in `tests/test_litellm_integration.py`.
+
+### The problem
+
+Everything in item 1 depends on knowing the window size: "compact at 80% of
+*what*?" Your gateway doesn't expose LiteLLM's `/model/info`, so cmcoder
+guessed 32,768 tokens for Qwen3. If the real window is bigger, cmcoder
+summarises far too early and wastes the model's memory. If it's smaller,
+requests fail.
+
+### The idea
+
+The server itself knows its limit, and it says so when you exceed it. vLLM
+answers an over-long request with:
+
+```
+This model's maximum context length is 40960 tokens. However, you requested 10000010 tokens …
+```
+
+So cmcoder can ask on purpose: send the word "hi" with
+`max_tokens = 10,000,000`. The server rejects that straight away, without
+generating anything, and the error states the limit. That is the **probe**.
+It runs once per model, and the answer is saved for 30 days (for a day if the
+server didn't say, so it's retried tomorrow, not on every start).
+
+cmcoder also learns **during a session**: if a request is rejected and the
+error names a smaller limit than cmcoder assumed, it switches to that limit
+on the spot, saves it, and carries on.
+
+Where the window comes from, most trusted last:
+
+| Source | Example | Shown by `doctor` as |
+|---|---|---|
+| built-in default | 32,768 for Qwen3 | `built-in default` |
+| LiteLLM `/model/info` | the gateway's config | `server (/model/info)` |
+| what the server enforces | the probe, or an error during a session | `server limit (probe)` / `server limit (from its error)` |
+| your settings | `"modelProfiles": [{"match": "qwen3*", "contextWindow": 40960}]` | `settings (modelProfiles)` |
+
+Your explicit setting wins, so you can always correct a wrong value. If your
+setting is *larger* than what the server allows, `doctor` warns you.
+
+### The code
+
+**Reading the number** (`parse_context_window`). Different servers word it
+differently, so there is a list of **regular expressions**, patterns that
+describe text:
+
+```python
+_WINDOW_PATTERNS = [
+    re.compile(r"maximum context length is (\d+)"),   # vLLM, OpenAI, LiteLLM
+    re.compile(r"max_model_len\W{0,4}(\d+)"),           # newer vLLM
+    re.compile(r"context (?:length|window|size) (?:is |of )?(?:only )?\(?(\d+) tokens"),  # llama.cpp
+    re.compile(r"must have less than (\d+) (?:input )?tokens"),  # TGI
+]
+```
+
+- `\d+` means "one or more digits"; the parentheses `( )` **capture** them,
+  so `m.group(1)` gives the number.
+- `(?: … )` groups without capturing; `?` after it means "optional".
+- `\W{0,4}` means "up to 4 non-word characters" (like `=` or `: `).
+- Commas are removed first, so "40,960" becomes "40960".
+- Numbers below 512 are ignored, so an unrelated small number isn't
+  mistaken for a window.
+
+`classify_http_error` now stores the number on the error:
+`err.context_window = parse_context_window(raw)`.
+
+**The probe** (`probe_context_window`). It sends the request with
+`client.stream(...)` and looks at the status code:
+
+- **400**: read the error and return the number;
+- **200** (the server accepted it, so it doesn't check): leave the `with`
+  block at once, which closes the connection so the server stops generating,
+  and return `None`.
+
+It's wrapped in `asyncio.wait_for(..., timeout)`, so a slow server can't hold
+up start-up for more than 8 seconds.
+
+**The cache** (`load_learned_window` / `save_learned_window` in
+`factory.py`). This is a JSON file, `~/.cmcoder/cache/context_windows.json`,
+keyed by gateway URL and then model name:
+
+```json
+{"https://gateway/v1": {"Qwen3.6-27B": {"tokens": 40960, "source": "server limit (probe)", "at": 1790000000.0}}}
+```
+
+`at` is a Unix timestamp (`time.time()`, seconds since 1970). Comparing it
+with the current time tells whether the entry has expired.
+
+**Choosing the value** (`resolve_model_profile`). If nothing is known yet (no
+setting, no `/model/info`, no cache entry), it probes; then it calls
+`resolve_profile(..., learned_window=(tokens, source))`, which applies the
+order in the table above and records `context_window_source` on the profile.
+
+**Learning mid-session** (`Agent.run`). When the server rejects a request:
+
+```python
+if e.context_window and e.context_window < self.profile.context_window:
+    self.profile = self.profile.model_copy(update={"context_window": e.context_window, ...})
+    if self.on_context_window:
+        self.on_context_window(self.model, e.context_window)   # saves it to the cache
+    yield ev.Warning(message=f"The server says {self.model}'s context window is ...")
+```
+
+`model_copy(update=...)` is pydantic's way to get a changed copy of a model
+object. The original isn't modified, which is safer than editing it in place.
+`on_context_window` is a **callback**, a function passed in from outside. The
+agent doesn't know about cache files; `factory.py` hands it a small `lambda`
+that saves to the cache. That keeps `core/` free of file-system details.
+
+**`doctor`** (`check_context_window`) always probes fresh and reports the
+value, its source, and warnings: a window of 32K or less ("small for an
+agent"), or a setting larger than what the server allows.
+
+### New Python ideas
+
+- **Regular expressions** (`re` module): `re.compile(pattern)` once, then
+  `.search(text)` returns a match or `None`; `match.group(1)` is the first
+  captured part.
+- **`model_copy(update={...})`** (pydantic): a modified copy of an object.
+- **Callbacks / `lambda`**: `lambda m, n: save(..., m, n, ...)` is a one-line
+  unnamed function, handy for small callbacks.
+- **`asyncio.wait_for(coro, timeout)`**: gives up on an `await` after
+  `timeout` seconds, raising `TimeoutError`.
+
+### The tests
+
+`tests/test_context_window.py`:
+
+- the parser on real error texts from vLLM, LiteLLM, llama.cpp and TGI, plus
+  texts with no number or a misleading small number;
+- the probe returns the mock server's limit, and `None` (quickly) when the
+  server accepts the request;
+- your gateway's case: no `/model/info` → probe once → 40,960 used and cached
+  → the next start doesn't probe again;
+- no probe when the window is known (settings, `/model/info`, or a recent "didn't say");
+- **mid-session learning**: cmcoder assumes 32K, the server allows only 20K;
+  the first rejection teaches it the real limit, the callback saves it, and
+  the session finishes;
+- `doctor` shows the value and where it came from, and flags a setting
+  larger than the server allows.
+
+`tests/test_litellm_integration.py::test_context_window_probe_through_gateway`
+runs the probe through a real LiteLLM proxy. The backend allows 40,960 while
+LiteLLM's config claims 32,768, and the probe correctly reports 40,960.
+
+```bash
+uv run pytest tests/test_context_window.py -v
+```
+
+### Try it
+
+Run `cmcoder doctor` against your gateway and look for the
+"context window" line: it now says what the server reported. To see the
+cache, open `~/.cmcoder/cache/context_windows.json` (on Windows:
+`%USERPROFILE%\.cmcoder\cache\context_windows.json`).
 
 ## 4. Steering the model away from Bash for file work
 
