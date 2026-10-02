@@ -1,0 +1,6 @@
+{
+  "prompt": "Implement fizzbuzz(n) in fizzbuzz.py so the tests in test_fizzbuzz.py pass.",
+  "check": "\"$PYTHON\" -m unittest -q test_fizzbuzz",
+  "permission_mode": "bypassPermissions",
+  "max_turns": 20
+}

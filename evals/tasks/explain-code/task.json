@@ -1,0 +1,6 @@
+{
+  "prompt": "What does the function mystery() in algo.py compute? Answer in one sentence.",
+  "check": "grep -qi \"factorial\" \"$CMCODER_EVAL_OUTPUT\"",
+  "permission_mode": "plan",
+  "max_turns": 20
+}

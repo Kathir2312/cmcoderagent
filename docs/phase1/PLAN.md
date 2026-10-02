@@ -245,6 +245,13 @@ fallback (`--simple-ui`) until the Textual one is proven on Windows.
 refactors, Windows path cases), run against the real gateway before closing the
 phase.
 
+**Status: done; real-gateway run pending.**
+- 20 tasks, each with a mock script that solves it with real tool calls; CI
+  runs all 20 on Linux, macOS and Windows.
+- `tests/test_evals.py` checks every task is well-formed and that its check
+  fails on the untouched repo.
+- Checks are Windows-safe (`$PYTHON`, `\r` stripped).
+
 ---
 
 ## Not in Phase 1
@@ -265,5 +272,5 @@ SSO, OpenTelemetry, Windows sandboxing (Phase 4).
 - [x] 9. Small/fast model jobs
 - [x] 10. Tool-call robustness
 - [x] 11. Textual TUI (opt-in until verified on Windows)
-- [ ] 12. More evals
+- [x] 12. More evals (20 tasks)
 - [ ] Real-gateway run on Windows (`doctor`, evals) and `STATUS.md`

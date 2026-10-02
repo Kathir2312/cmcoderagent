@@ -1,0 +1,15 @@
+[
+ {
+  "tool_calls": [
+   {
+    "name": "Read",
+    "arguments": {
+     "file_path": "algo.py"
+    }
+   }
+  ]
+ },
+ {
+  "content": "It computes the factorial of n (n!), returning 1 for n <= 1."
+ }
+]

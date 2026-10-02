@@ -1,0 +1,6 @@
+{
+  "prompt": "Replace the hard-coded timeout 10 in fetch.py and upload.py with config.TIMEOUT.",
+  "check": "grep -q 'config.TIMEOUT' fetch.py && grep -q 'config.TIMEOUT' upload.py && ! grep -q 'timeout=10' fetch.py upload.py && \"$PYTHON\" -c \"import fetch, upload; assert fetch.fetch() == upload.upload() == 30\"",
+  "permission_mode": "bypassPermissions",
+  "max_turns": 20
+}

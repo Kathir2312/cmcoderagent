@@ -1,0 +1,6 @@
+{
+  "prompt": "parse_rows() in parse.py breaks on quoted fields that contain commas. Fix it so the tests pass.",
+  "check": "\"$PYTHON\" -m unittest -q test_parse",
+  "permission_mode": "bypassPermissions",
+  "max_turns": 20
+}

@@ -1,0 +1,6 @@
+{
+  "prompt": "Add unit tests for multiply() from calc.py in a new file test_calc.py, then run them.",
+  "check": "grep -q multiply test_calc.py && \"$PYTHON\" -m unittest -q test_calc 2>&1 | grep -q '^OK'",
+  "permission_mode": "bypassPermissions",
+  "max_turns": 20
+}

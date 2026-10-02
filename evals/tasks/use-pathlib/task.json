@@ -1,0 +1,6 @@
+{
+  "prompt": "data_path(name) in paths.py builds paths by gluing strings with '/'. Make it return a pathlib.Path to the file inside the data folder next to paths.py.",
+  "check": "\"$PYTHON\" -c \"import pathlib, paths; p = paths.data_path('x.csv'); assert isinstance(p, pathlib.Path), type(p); assert p.name == 'x.csv'; assert p.parent == pathlib.Path(paths.__file__).resolve().parent / 'data', p\"",
+  "permission_mode": "bypassPermissions",
+  "max_turns": 20
+}

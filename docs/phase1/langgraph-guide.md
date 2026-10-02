@@ -659,4 +659,47 @@ Compare it with cmcoder's `ask()`, which needs no resume step.
 
 ## 12. More evals
 
-*Not started.*
+*Done.* Code: `evals/tasks/` (20 tasks), `evals/run.py`, `tests/test_evals.py`.
+
+### The LangGraph way
+
+LangSmith gives you **datasets** (inputs plus reference outputs) and
+**evaluators** (functions or LLM judges scoring each run). `agentevals` adds
+**trajectory** evaluators that compare the sequence of tool calls to a
+reference:
+
+```python
+from langsmith import evaluate
+evaluate(run_agent, data="coding-tasks", evaluators=[tests_pass, used_file_tools])
+```
+
+### The cmcoder way
+
+| LangSmith | cmcoder |
+|---|---|
+| dataset example | `evals/tasks/<name>/`: a repo + `task.json` prompt |
+| evaluator | the task's `check`: a shell command that must exit 0 (tests pass, file is right, answer contains …) |
+| trajectory evaluator | `tools=[…] bash-file-work=N` per task, plus the tool-choice share |
+| experiment run | `evals/run.py` → `results.json` (pass, turns, tokens, time, tools) |
+| reference run | `mock_script.json`: a known-good trajectory, replayed in CI |
+
+### Why they differ
+
+For coding agents the best evaluator is usually **executable**: run the tests,
+run the program, parse the JSON. No LLM judge is needed, and the score is
+deterministic. LLM judges are only worth it for open-ended answers.
+
+Two practices worth copying into any eval setup:
+- **Negative controls.** Every check is run against the untouched repo and must
+  fail (`tests/test_evals.py`). An evaluator that passes on a do-nothing
+  agent is worse than none.
+- **A replayable reference trajectory.** It lets CI test the *harness*
+  (tools, permissions, checks) on every change, without a model, so a
+  falling score always means the model or the prompt, never the plumbing.
+
+### Exercise
+
+Turn three cmcoder tasks into a LangSmith dataset: the input is the prompt plus
+the repo path, and the evaluator runs the task's `check` in a copy of the repo.
+Run the [Phase 0 LangGraph sketch](../phase0/langgraph-guide.md#5-cmcoder-written-in-langgraph-sketch)
+against it and compare with `uv run python evals/run.py`.

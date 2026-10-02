@@ -447,7 +447,7 @@ The protocol is versioned and has no VS Code-specific types, so other IDEs can u
 
 Started early, because quality depends heavily on the model:
 
-- `evals/tasks/*`: small repos, each with a task prompt and a check script (tests pass, file matches, etc.).
+- `evals/tasks/*`: small repos, each with a task prompt and a check script (tests pass, file matches, etc.). Phase 1: 20 tasks; each check is verified to fail on the untouched repo (`tests/test_evals.py`); the runner also scores tool choice.
 - Categories: read-only Q&A, single-file fix, multi-file refactor, run-tests-and-fix, tool-use hygiene (no blind overwrites, respects denials).
 - Runner reports success rate, turns, tokens, tool-error rate and time, per model and profile.
 - Runs in CI on every core change against a **mock OpenAI-compatible server** that replays recorded responses (no GPU or API key needed), and fully against real remote endpoints before releases.

@@ -169,7 +169,7 @@ endpoint. LiteLLM admins may be able to see that traffic in gateway logs.
 uv sync
 uv run pytest -q                       # unit, CLI, TLS and terminal (pty, not on Windows) tests
 uv run ruff check src tests evals && uv run pyright
-uv run python evals/run.py --mock      # eval harness with scripted replies
+uv run python evals/run.py --mock      # eval harness with scripted replies (20 tasks)
 LITELLM_BIN=/path/to/litellm uv run pytest tests/test_litellm_integration.py  # through a real LiteLLM proxy
 uv run python evals/run.py             # evals against your real endpoint/model
 uv run cmcoder protocol-schema         # Agent Protocol JSON Schema (for the VS Code extension)
