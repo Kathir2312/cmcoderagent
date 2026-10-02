@@ -6,6 +6,7 @@ that works with **any OpenAI-compatible endpoint**, such as a LiteLLM gateway se
 The agent runs on your machine (it reads and edits files and runs commands there); the model always runs on a
 remote server. See [docs/DESIGN.md](docs/DESIGN.md) for the architecture and roadmap, and
 [docs/asofphase0.md](docs/asofphase0.md) for a beginner-friendly tour of the code.
+Learning LangChain/LangGraph? [docs/asofphase0-langgraph.md](docs/asofphase0-langgraph.md) maps each part of cmcoder to its LangGraph equivalent.
 
 > Status: **Phase 0** (Windows, macOS and Linux). Working agent loop, tools, permissions, LiteLLM/OpenAI-compatible provider,
 > basic interactive terminal UI, headless mode, `doctor` and `login`.
