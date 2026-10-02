@@ -1,4 +1,4 @@
-# cmcoder code walkthrough (for a day-1 Python developer)
+# cmcoder code walkthrough, as of Phase 0 (for a day-1 Python developer)
 
 This guide explains how cmcoder works, file by file, assuming you know basic
 Python (variables, functions, `if`/`for`, lists and dicts) and nothing else.
@@ -190,7 +190,7 @@ cmcoderagent/
 ├── README.md               how to install and use cmcoder
 ├── docs/
 │   ├── DESIGN.md           why things are built this way (decisions, roadmap)
-│   └── WALKTHROUGH.md      this file
+│   └── asofphase0.md       this file
 ├── src/cmcoder/            ← the application
 │   ├── __main__.py         lets you run `python -m cmcoder`
 │   ├── cli/                the commands you type: cmcoder, login, doctor…
