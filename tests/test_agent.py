@@ -335,7 +335,9 @@ async def test_max_tokens_never_exceeds_remaining_context(mock_server: Any, proj
     for body in server.requests:
         # The mock counts prompt tokens the way a server would (from the JSON
         # request); prompt + requested output must fit the window.
-        server_prompt_tokens = len(json.dumps(body["messages"]) + json.dumps(body["tools"])) / 3.5
+        server_prompt_tokens = (
+            len(json.dumps(body["messages"]) + json.dumps(body.get("tools", []))) / 3.5
+        )
         assert server_prompt_tokens + body["max_tokens"] <= 12_000
     assert min(b["max_tokens"] for b in server.requests) < 4_000  # it shrank as context filled
 

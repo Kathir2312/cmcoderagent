@@ -30,6 +30,7 @@ from ..tools.base import Tool, ToolContext, ToolResult, truncate_middle
 from .compaction import CompactionError, Summarizer, compact
 from .context import WARN_RATIO, ContextBudget
 from .permissions import Decision, PermissionPolicy, suggest_rule
+from .steer import file_work_redirect
 
 MAX_IDENTICAL_CALLS = 3
 
@@ -142,6 +143,8 @@ class Agent:
         self.messages: list[Message] = [Message.system(system_prompt)]
         self.usage = Usage()
         self._budget: ContextBudget | None = None
+        # The last Bash command redirected to a file tool; sending it again runs it.
+        self._redirected: str | None = None
         # The small/fast model for summaries; the main model is the fallback.
         self.summarizer = summarizer
         # Called with (model, tokens) when the server states a smaller window.
@@ -500,6 +503,22 @@ class Agent:
                 )
             )
             return
+
+        if tool.name == "Bash" and self.profile.steer_bash_file_work:
+            command = str(args.command)
+            hint = file_work_redirect(command)
+            if hint and command != self._redirected:
+                self._redirected = command
+                yield finish(
+                    ToolResult(
+                        f"{hint} If the shell is really needed here, say why and send the "
+                        "same command again.",
+                        is_error=True,
+                        summary="use the file tool instead",
+                    )
+                )
+                return
+            self._redirected = None
 
         check = self.policy.check(tool, args, self.ctx)
         if check.decision == Decision.DENY:

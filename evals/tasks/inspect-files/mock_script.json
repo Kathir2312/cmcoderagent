@@ -1,0 +1,6 @@
+[
+  {"tool_calls": [{"name": "Bash", "arguments": {"command": "grep -rn 'def load_orders' ."}}]},
+  {"tool_calls": [{"name": "Grep", "arguments": {"pattern": "def load_orders", "output_mode": "content"}}]},
+  {"tool_calls": [{"name": "Read", "arguments": {"file_path": "orders/store.py"}}]},
+  {"content": "orders/store.py:250"}
+]

@@ -534,7 +534,7 @@ Found while using Phase 0 on a real project; all are Phase 1 work.
    - on invalid input (e.g. `11`), re-show the options instead of a bare prompt;
    - in the Textual UI (Phase 1), render the prompt as a fixed-height dialog with a
      scrollable preview, so the options can never scroll away.
-2. **Model uses Bash for file work.** Qwen3.6 writes files with Bash heredocs and reads
+2. **Model uses Bash for file work.** *Addressed in Phase 1 (item 4): prompt rule, redirect of plain file work to the file tools, tool-choice evals; real-gateway measurement pending.* Qwen3.6 writes files with Bash heredocs and reads
    them with `python -c "open(...)"`, instead of the Write/Read/Glob tools. This bypasses
    read-before-write checks, causes permission prompts, and leads to item 1. Fix: tune
    the system prompt and tool descriptions for Qwen, detect common patterns

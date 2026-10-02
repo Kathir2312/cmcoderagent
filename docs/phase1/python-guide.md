@@ -474,8 +474,149 @@ cache, open `~/.cmcoder/cache/context_windows.json` (on Windows:
 
 ## 4. Steering the model away from Bash for file work
 
-*Not started.* Will cover: how prompts and tool descriptions shape model
-behaviour, recognising shell patterns, and writing evals that score tool choice.
+*Done.* Code: `src/cmcoder/core/steer.py` (new), the Bash check in
+`Agent._run_call` (`core/agent.py`), `core/prompt.py`, the tool descriptions
+in `tools/bash.py` and `tools/files.py`, and `evals/run.py`. Tests:
+`tests/test_steer.py`, plus two new eval tasks (`create-file`, `inspect-files`).
+
+### The problem
+
+In your trials Qwen3.6 did file work through the shell. It wrote files with
+`cat > file << 'EOF' … EOF`, read them with `cat` or `python -c "open(...)"`,
+and searched with `grep -r` and `find`. That causes three problems:
+
+1. **Every call needs your approval.** Bash commands ask; Read, Grep and Glob
+   don't.
+2. **cmcoder's safety checks are skipped.** Write and Edit refuse to change a
+   file the model hasn't read, or one that changed on disk since. A heredoc
+   bypasses all that.
+3. **The permission prompt gets flooded** with the whole file, which was the
+   item 2 bug.
+
+### The idea
+
+Three layers, from gentle to firm:
+
+1. **Tell it.** The system prompt now has an explicit rule: "Write instead of
+   `cat > file << EOF`… Bash is for running programs." The Bash tool
+   description says "Do NOT use it for file work" and lists the alternatives.
+2. **Catch it.** When a Bash call is *plainly* file work, cmcoder doesn't run
+   it and doesn't ask you. It answers the model with the exact tool call to
+   use instead, for example:
+   `Not run: to create or overwrite notes.md, use the Write tool (file_path="notes.md", content=the full text).`
+   Models are good at following a concrete correction like this.
+3. **Measure it.** The evals now count which tools the model used, and how
+   often it tried file work through Bash.
+
+"Plainly" matters: only one simple command is redirected. Pipelines
+(`cat a | grep x`), chains (`make && cat out`), scripts fed to Python
+(`python3 - << EOF`) and anything unusual run as before. If the model really
+needs the shell, it can **send the same command again** and it goes through
+the normal permission flow, so it's never stuck.
+
+| Bash command | Redirected to |
+|---|---|
+| `cat > f << EOF`, `cat << EOF > f`, `tee f << EOF`, `echo … > f` | Write |
+| `cat >> f << EOF`, `echo … >> f`, `sed -i …` | Edit |
+| `cat f`, `head -n 50 f`, `tail -n 30 f`, `sed -n '10,40p' f`, `python -c "print(open('f').read())"` | Read (with offset/limit) |
+| `grep -rn pattern dir`, `grep pattern file`, `rg pattern` | Grep |
+| `find dir -name '*.py'` | Glob |
+
+### The code
+
+`file_work_redirect(command)` returns a message, or `None` to run the
+command. It checks in this order:
+
+1. **Heredoc writes**, by looking at the first line with three regular
+   expressions, one per way of writing it. The building blocks are shared:
+
+   ```python
+   _DELIM = r"""<<-?\s*['"]?\w+['"]?"""           # << EOF, <<-'EOF', << "END"
+   _TARGET = r"""(['"]?)([^\s'"<>|;&]+)\2"""     # a file name, maybe quoted
+   ```
+
+   `\2` is a **backreference**: "the same quote character that group 2
+   matched", so `'file'` and `"file"` both work but `'file"` doesn't.
+2. **`python -c` with `open(`**: a write if it opens with `"w"`/`"a"` or calls
+   `.write(`, otherwise a read.
+3. **Anything with a pipe, `;`, `&`, a backtick or `$(`** → run it (too
+   complex to be sure).
+4. **`echo`/`printf` redirected into a file.** The `(?<![0-9&])` in that
+   pattern is a **negative lookbehind**: it skips `2> err.txt` (error output)
+   and `&> f`. Writes to `/dev/null` are allowed.
+5. **The rest is split into words** with `shlex.split` (shell-style, so
+   quotes are handled). Then `cat`, `head`, `tail`, `sed`, `grep`/`rg` and
+   `find` are checked one by one. Unusual options mean "run it": `tail -f`
+   (follow), `grep -A 3` (its value `3` would be mistaken for the pattern),
+   `find … -delete`.
+
+In `Agent._run_call`, before the permission check:
+
+```python
+if tool.name == "Bash" and self.profile.steer_bash_file_work:
+    hint = file_work_redirect(command)
+    if hint and command != self._redirected:     # same command twice: let it through
+        self._redirected = command
+        yield finish(ToolResult(hint + " If the shell is really needed …", is_error=True))
+        return
+    self._redirected = None
+```
+
+Nothing is run and no permission is asked, so this can't weaken security.
+At worst the model is told to use a tool that has *more* checks.
+
+To turn it off for a model, use `"modelProfiles": [{"match": "qwen3*", "steerBashFileWork": false}]`.
+
+### Scoring tool choice in the evals
+
+`evals/run.py` now reads cmcoder's event stream (`--output-format stream-json`)
+and counts every `tool_use` event. It flags the Bash ones that
+`file_work_redirect` would catch. Each task line shows
+`tools=[Grep:1 Read:1] bash-file-work=0`, and the summary shows the share of
+file work done with the file tools:
+
+```
+Tool choice: 16 file-tool calls, 2 attempts at file work through Bash (88% of file work done with the file tools)
+```
+
+Two new tasks focus on this: `create-file` ("create settings.ini with …") and
+`inspect-files` ("which file defines load_orders …"). Their mock scripts
+deliberately start with the bad habit (a heredoc, a `grep -rn`), so CI checks
+that the redirect happens and the model recovers. With your real model, the
+number to watch is that percentage.
+
+### New Python ideas
+
+- **Backreferences** (`\2`) and **lookbehind** (`(?<!…)`) in regular expressions.
+- **`shlex.split`**: splits a command line the way a shell does, so
+  `grep -rn 'def main' src` gives `['grep', '-rn', 'def main', 'src']`.
+- **Tuples in a list as a lookup table**: `_HEREDOC_WRITES` holds
+  `(pattern, operator group, path group)` triples, and the loop unpacks them
+  with `for pattern, op_group, path_group in _HEREDOC_WRITES:`.
+
+### The tests
+
+`tests/test_steer.py`:
+- 20 commands that must be redirected, each checked for the right tool and
+  arguments (file name, `offset`/`limit`, pattern, path);
+- 16 that must still run: pipelines, chains, `python3 - << EOF`, `tail -f`,
+  `grep -A 3`, `find -delete`, writes to `/dev/null`, `2>`;
+- your trial case end to end: the heredoc is answered *without a permission
+  prompt*, the model then uses Write, and the file is created;
+- sending the same command again goes to the normal permission flow;
+- `steerBashFileWork: false` restores the old behaviour;
+- the system prompt (both tiers) and the Bash description carry the rule.
+
+```bash
+uv run pytest tests/test_steer.py -v
+uv run python evals/run.py --mock
+```
+
+### Try it
+
+Against your gateway: `uv run python evals/run.py` and look at the "Tool
+choice" line. Then in a session, ask "create a file hello.txt containing hi"
+and watch which tool Qwen picks.
 
 ## 5. Managed settings
 

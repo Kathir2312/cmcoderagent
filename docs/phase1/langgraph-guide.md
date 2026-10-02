@@ -226,7 +226,67 @@ openai.BadRequestError as e:` and print `e.message`. Write a
 
 ## 4. Steering the model away from Bash for file work
 
-*Not started.*
+*Done.* Code: `src/cmcoder/core/steer.py`, the Bash check in
+`Agent._run_call`, `evals/run.py`.
+
+### The LangGraph way
+
+Tool choice is shaped by the **tool descriptions** (the `@tool` docstring)
+and the **system prompt**. You can force a specific tool with
+`bind_tools(tools, tool_choice="Write")`, but that's all-or-nothing. To
+correct bad calls you'd add a check in the tools node, or a node between
+`agent` and `tools`:
+
+```python
+def guard(state: MessagesState):
+    msgs = []
+    for call in state["messages"][-1].tool_calls:
+        if call["name"] == "bash" and (hint := file_work_redirect(call["args"]["command"])):
+            msgs.append(ToolMessage(hint, tool_call_id=call["id"]))     # answer, don't run
+    return {"messages": msgs}
+```
+
+You measure tool choice with LangSmith evaluators or `agentevals`
+**trajectory** scoring, which compares the sequence of tool calls to a
+reference.
+
+### The cmcoder way
+
+| Layer | cmcoder |
+|---|---|
+| Prompt | a rule in the system prompt (both tiers): "Write instead of `cat > f << EOF` … Bash is for running programs" |
+| Tool description | Bash: "Do NOT use it for file work"; Write: "never shell commands like cat > file << EOF" |
+| Guard | `file_work_redirect` in `_run_call`: a `ToolMessage`-style error with the exact replacement call |
+| Escape hatch | the same command sent again runs normally (permission flow) |
+| Measurement | `evals/run.py` counts tool calls per task and reports the share of file work done with file tools |
+
+### Why they differ
+
+The guard is the part frameworks usually leave out, and it's what makes small
+models usable.
+- **Prompts alone aren't enough.** Qwen3 was trained on a lot of shell
+  transcripts and falls back to habits.
+- **Blocking alone is frustrating.** The model retries the same thing.
+
+A **corrective tool result** that names the exact replacement call (`use the
+Write tool (file_path="notes.md", content=…)`) works with how models learn
+within a conversation. They follow concrete feedback on their last action
+better than general rules at the top of the prompt.
+
+Two design rules carry over to any agent framework:
+- **Never let a guard trap the agent.** The escape hatch (send it again) keeps
+  rare legitimate uses possible.
+- **A guard that answers instead of running can only make things safer.**
+  Nothing executes, and the suggested tool has more checks than the shell.
+
+### Exercise
+
+Add the `guard` node above to the
+[Phase 0 LangGraph sketch](../phase0/langgraph-guide.md#5-cmcoder-written-in-langgraph-sketch)
+(between `agent` and `tools`, with `tools` running only the calls the guard
+didn't answer). Ask Qwen to "create notes.md with a heading" five times with
+and without the guard, and count how often it ends up using a write tool
+instead of bash.
 
 ## 5. Managed settings
 

@@ -13,7 +13,12 @@ Each task folder holds:
   mock_script.json  scripted model replies used with --mock
 
 The check runs with bash (Git Bash on Windows) in the task's working copy and
-passes on exit code 0. CMCODER_EVAL_OUTPUT points at a file holding the agent's
+passes on exit code 0.
+
+Tool choice is scored too: each run counts the tools the model called and
+how often it tried to do file work through Bash (cat > f << EOF, cat f,
+grep -r, ...; see cmcoder/core/steer.py). The summary shows the share of
+file work done with the file tools. CMCODER_EVAL_OUTPUT points at a file holding the agent's
 final answer, and $PYTHON is the current Python interpreter (`python3` is not
 available on most Windows machines).
 """
@@ -30,6 +35,9 @@ import time
 from pathlib import Path
 
 from cmcoder.compat import SHELL_HELP, find_shell, to_shell_path
+from cmcoder.core.steer import file_work_redirect
+
+FILE_TOOLS = ("Read", "Write", "Edit", "Glob", "Grep")
 
 ROOT = Path(__file__).resolve().parent
 TASKS = ROOT / "tasks"
@@ -88,7 +96,7 @@ def run_task(
         "-p",
         spec["prompt"],
         "--output-format",
-        "json",
+        "stream-json",
         "--permission-mode",
         spec.get("permission_mode", "bypassPermissions"),
         "--max-turns",
@@ -119,13 +127,23 @@ def run_task(
     duration = time.monotonic() - started
 
     result: dict[str, object] = {}
+    tools: dict[str, int] = {}
+    bash_file_work = 0
     for line in stdout.splitlines():
         try:
             data = json.loads(line)
         except ValueError:
             continue
-        if isinstance(data, dict) and data.get("type") == "result":
+        if not isinstance(data, dict):
+            continue
+        if data.get("type") == "result":
             result = data
+        elif data.get("type") == "tool_use":
+            name = str(data.get("name"))
+            tools[name] = tools.get(name, 0) + 1
+            command = (data.get("input") or {}).get("command")
+            if name == "Bash" and isinstance(command, str) and file_work_redirect(command):
+                bash_file_work += 1
     output_file = work / ".cmcoder_eval_output.txt"
     output_file.write_text(str(result.get("result", "")), encoding="utf-8")
     (work / ".cmcoder_eval_stderr.txt").write_text(stderr, encoding="utf-8")
@@ -150,6 +168,9 @@ def run_task(
         "prompt_tokens": usage.get("prompt_tokens"),
         "completion_tokens": usage.get("completion_tokens"),
         "seconds": round(duration, 1),
+        "tools": tools,
+        "file_tool_calls": sum(tools.get(t, 0) for t in FILE_TOOLS),
+        "bash_file_work": bash_file_work,
         "check_output": (check.stdout + check.stderr)[-500:],
         "workdir": str(work),
     }
@@ -182,9 +203,11 @@ def main() -> int:
         r = run_task(task, run_dir, args, shell)
         results.append(r)
         mark = "PASS" if r["passed"] else "FAIL"
+        used = " ".join(f"{k}:{v}" for k, v in sorted(dict(r["tools"]).items()))  # type: ignore[call-overload]
         print(
             f"{mark}  {r['task']:<24} {r['agent_status']!s:<12} turns={r['turns']} "
-            f"tokens={r['prompt_tokens']}/{r['completion_tokens']} {r['seconds']}s",
+            f"tokens={r['prompt_tokens']}/{r['completion_tokens']} {r['seconds']}s "
+            f"tools=[{used}] bash-file-work={r['bash_file_work']}",
             flush=True,
         )
         if not r["passed"]:
@@ -192,7 +215,14 @@ def main() -> int:
             print(f"      workdir: {r['workdir']}")
     (run_dir / "results.json").write_text(json.dumps(results, indent=2), encoding="utf-8")
     passed = sum(1 for r in results if r["passed"])
+    file_tools = sum(int(r["file_tool_calls"]) for r in results)  # type: ignore[call-overload]
+    via_bash = sum(int(r["bash_file_work"]) for r in results)  # type: ignore[call-overload]
+    share = f"{100 * file_tools // max(1, file_tools + via_bash)}%"
     print(f"\n{passed}/{len(results)} passed · results in {run_dir / 'results.json'}")
+    print(
+        f"Tool choice: {file_tools} file-tool calls, {via_bash} attempts at file work through "
+        f"Bash ({share} of file work done with the file tools)"
+    )
     return 0 if passed == len(results) else 1
 
 

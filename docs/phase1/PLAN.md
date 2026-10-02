@@ -102,6 +102,17 @@ bypassing read-before-write checks and causing item 2 (§16.3 item 2).
 **Done when:** on the real gateway, the tool-choice evals show Read/Write/Edit
 used for file work in most runs (target agreed after the first measurement).
 
+**Status: built; waiting for the first real-gateway measurement.**
+- Prompt rule and tool descriptions are in place.
+- `core/steer.py` redirects plain file work: one simple command only, never
+  pipelines or chains; sending the same command again runs it.
+- `steerBashFileWork: false` turns it off per model.
+- The evals report the tool-choice share, with two new tasks (`create-file`,
+  `inspect-files`).
+
+Run `uv run python evals/run.py` on the gateway and agree a target from the
+"Tool choice" line.
+
 ### 5. Managed settings (enterprise policy)
 
 **Why:** the security team wants rules developers can't loosen (moved from
@@ -194,7 +205,7 @@ SSO, OpenTelemetry, Windows sandboxing (Phase 4).
 - [x] 1. Auto-compaction
 - [x] 2. Permission prompt never scrolls off screen (the Textual dialog follows in item 11)
 - [x] 3. Detect the real context window
-- [ ] 4. Steer Qwen away from Bash for file work
+- [x] 4. Steer Qwen away from Bash for file work (real-gateway measurement pending)
 - [ ] 5. Managed settings
 - [ ] 6. Sessions and resume
 - [ ] 7. Checkpoints and `/rewind`

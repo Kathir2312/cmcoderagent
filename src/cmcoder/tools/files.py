@@ -107,7 +107,8 @@ class WriteTool(Tool):
     name = "Write"
     description = (
         "Create a new file or overwrite an existing one with the given content. "
-        "An existing file must be Read first. Prefer Edit for changing existing files."
+        "An existing file must be Read first. Prefer Edit for changing existing files. "
+        "Always use this to write files, never shell commands like cat > file << EOF."
     )
     Input = WriteInput
 

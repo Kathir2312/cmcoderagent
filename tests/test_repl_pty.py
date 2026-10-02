@@ -132,8 +132,10 @@ def test_ctrl_c_interrupts_running_command(
 
 def test_long_preview_keeps_options_on_screen(mock_server: Any, project: Path) -> None:
     """User-trial bug: a 500-line heredoc pushed the options off an 80x24 screen."""
-    body = "\n".join(f"row {i}" for i in range(1, 501))
-    command = f"cat > big.txt << 'EOF'\n{body}\nEOF"
+    # A long script fed to Python (file writes like `cat > f << EOF` are now
+    # redirected to the Write tool before any prompt; see core/steer.py).
+    body = "\n".join(f"# row {i}" for i in range(1, 501))
+    command = f"python3 - << 'EOF'\n{body}\nEOF"
     server = mock_server(
         [
             {"tool_calls": [{"name": "Bash", "arguments": {"command": command}}]},

@@ -117,6 +117,14 @@ High-risk commands (`rm -rf`, `git clean`, `git reset --hard`, force push, `sudo
 approved by allow rules; `-p` runs refuse them. To block them entirely set
 `"permissions": {"highRiskCommands": "deny"}` in `~/.cmcoder/settings.json`.
 
+### File work goes through the file tools
+
+Models like Qwen sometimes write files with `cat > f << EOF` or read them with `cat`/`grep` in Bash, which needs
+your approval each time and skips cmcoder's checks. Such plain file work isn't run: the model is told which tool
+to use instead (Write, Read, Edit, Grep, Glob), with no prompt for you. Pipelines and other real shell work run as
+usual, and the model can send the same command again if it really needs the shell. Turn it off per model with
+`"modelProfiles": [{"match": "qwen3*", "steerBashFileWork": false}]`.
+
 ### Context window
 
 Qwen3 is often served with a 32K-token window, which an agent fills quickly. cmcoder sizes each request to the

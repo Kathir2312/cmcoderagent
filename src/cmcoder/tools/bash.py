@@ -28,10 +28,12 @@ class BashInput(ToolInput):
 class BashTool(Tool):
     name = "Bash"
     description = (
-        "Run a command in a persistent bash shell (the working directory and environment carry "
-        "over between calls). stdin is closed, so interactive commands fail; pass non-interactive "
-        "flags instead. Prefer Read/Edit/Glob/Grep over cat/sed/find/grep. Output is truncated "
-        "if very long."
+        "Run a program in a persistent bash shell (the working directory and environment carry "
+        "over between calls): tests, builds, linters, git, package managers. stdin is closed, so "
+        "interactive commands fail; pass non-interactive flags instead. Do NOT use it for file "
+        "work: create files with Write (not cat/echo > file), look at them with Read (not "
+        "cat/head/tail/sed -n), change them with Edit (not sed -i), search with Grep and Glob "
+        "(not grep/find). Output is truncated if very long."
     )
     Input = BashInput
 

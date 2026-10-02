@@ -37,6 +37,10 @@ class ModelProfile(BaseModel):
         "max_tokens", alias="maxTokensParam"
     )
     stream_usage: bool = Field(True, alias="streamUsage")
+    # Answer plain file work done through Bash (cat > f << EOF, cat f, grep -r,
+    # find -name, sed -i, python -c "open(...)") with "use the Write/Read/Grep/
+    # Glob/Edit tool" instead of running it (core/steer.py).
+    steer_bash_file_work: bool = Field(True, alias="steerBashFileWork")
     extra_body: dict[str, Any] = Field(default_factory=dict, alias="extraBody")
     # Where context_window came from, shown by `cmcoder doctor` (not a setting).
     context_window_source: str = Field("built-in default", exclude=True)
