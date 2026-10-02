@@ -53,6 +53,10 @@ out of view.
 **Done when:** a pseudo-terminal test with a 500-line heredoc shows the options
 on the last screen in an 80×24 terminal.
 
+**Status: done.** Also fixed a second cause found by that test: option 2
+printed the suggested rule, which for a multi-line command is the whole
+command; it's now shown as one shortened line.
+
 ### 3. Detect the real context window
 
 **Why:** the gateway doesn't expose `/model/info`, so cmcoder guesses 32K (§16.3 item 3).
@@ -170,7 +174,7 @@ SSO, OpenTelemetry, Windows sandboxing (Phase 4).
 ## Checklist
 
 - [ ] 1. Auto-compaction
-- [ ] 2. Permission prompt never scrolls off screen
+- [x] 2. Permission prompt never scrolls off screen (the Textual dialog follows in item 11)
 - [ ] 3. Detect the real context window
 - [ ] 4. Steer Qwen away from Bash for file work
 - [ ] 5. Managed settings

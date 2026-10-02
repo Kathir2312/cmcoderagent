@@ -520,7 +520,7 @@ Not validated (needs the company network): the real gateway URL and certificate,
 
 Found while using Phase 0 on a real project; all are Phase 1 work.
 
-1. **Permission prompt pushed off screen by long previews (bug).** When the model
+1. **Permission prompt pushed off screen by long previews (bug).** *Fixed in Phase 1 (item 2); the Textual dialog follows in item 11.* When the model
    writes a whole file through Bash (`cat > file << EOF … EOF`), the preview prints
    every line, the panel grows taller than the window, and the 1/2/3 options scroll
    out of view. Fix:

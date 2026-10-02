@@ -41,7 +41,56 @@ Status of each section follows [PLAN.md](PLAN.md).
 
 ## 2. Permission prompt never scrolls off screen
 
-*Not started.*
+*Done.* Code: `src/cmcoder/cli/repl.py`.
+
+### The LangGraph way
+
+LangGraph stops at `interrupt(payload)` and hands the **payload** to
+whatever is driving the graph. Showing it to a person is your job:
+
+```python
+out = graph.invoke(inputs, config)
+if "__interrupt__" in out:
+    req = out["__interrupt__"][0].value      # e.g. {"command": "...", "reason": "..."}
+    print(req["command"])                    # a 500-line command floods the screen here
+    answer = input("approve? [y/n] ")
+    out = graph.invoke(Command(resume=answer), config)
+```
+
+The framework stops at "here is the payload". How long the payload is, and
+whether the question is still on screen when the person has to answer it, is
+up to the UI.
+
+### The cmcoder way
+
+The agent side is unchanged: `Agent._run_call` still sends a
+`PermissionRequest` (cmcoder's interrupt payload) to `ask()`. Only the UI
+that renders it changed:
+
+- the preview is clipped to the terminal height (`clip_preview`), keeping the
+  first and last lines;
+- the options are printed after the preview and repeated in the input line;
+- the "always allow" rule is shown as one shortened line (`short_rule`);
+- `v` shows the full payload on request, and invalid answers re-show the options.
+
+### Why they differ
+
+This is the same lesson in both worlds: **human-in-the-loop is only as safe
+as its UI.** If a person can't see what they're approving, or can't find the
+options, they'll press `1` to make the prompt go away. A good approval
+screen:
+- keeps the start and the end of the payload visible, which is where heredoc
+  targets and closing `EOF`s are;
+- states the risk (`high-risk: …`);
+- makes the full text available on demand.
+
+### Exercise
+
+In the LangGraph sketch from the
+[Phase 0 guide](../phase0/langgraph-guide.md#5-cmcoder-written-in-langgraph-sketch),
+make the model run a 300-line heredoc and print the interrupt payload. Then
+write a `render_interrupt(payload, height)` function that does what
+`clip_preview` does, and check it with `shutil.get_terminal_size()`.
 
 ## 3. Detecting the real context window
 

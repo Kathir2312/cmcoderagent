@@ -31,6 +31,39 @@ from ..providers.messages import Usage
 from ..providers.openai_compat import OpenAICompatProvider
 from .factory import AgentOptions, build_agent, resolve_model_profile
 
+# Lines the permission prompt needs besides the preview: panel border and
+# title, reason, three options, the input line and the bottom toolbar.
+PROMPT_CHROME_LINES = 12
+MAX_PREVIEW_LINES = 30
+MAX_PREVIEW_LINE_CHARS = 400
+
+
+def clip_preview(text: str, max_lines: int) -> tuple[str, int]:
+    """Keep the first and last lines of a long preview so the permission
+    options always fit on screen. Returns (shown text, hidden line count)."""
+    lines = [
+        line if len(line) <= MAX_PREVIEW_LINE_CHARS else line[:MAX_PREVIEW_LINE_CHARS] + " …"
+        for line in text.splitlines()
+    ]
+    max_lines = max(3, max_lines)
+    if len(lines) <= max_lines:
+        return "\n".join(lines), 0
+    tail = max(1, max_lines // 3)
+    head = max_lines - tail - 1  # one line for the "… N more lines" marker
+    hidden = len(lines) - head - tail
+    shown = [*lines[:head], f"… {hidden} more lines (v to view all) …", *lines[-tail:]]
+    return "\n".join(shown), hidden
+
+
+def short_rule(rule: str, limit: int = 60) -> str:
+    """One-line form of a rule for display: a rule for a multi-line command
+    would otherwise print the whole command again."""
+    first = rule.splitlines()[0] if rule else rule
+    if first != rule or len(first) > limit:
+        return first[: limit - 3].rstrip() + " …)"
+    return rule
+
+
 HELP = """\
 [bold]Commands[/bold]
   /help              show this help
@@ -137,10 +170,12 @@ class Repl:
 
     # -- permission prompt ---------------------------------------------------
 
-    def _preview(self, req: PermissionRequest) -> Any:
+    @staticmethod
+    def _preview_source(req: PermissionRequest) -> tuple[str, str]:
+        """(text, syntax lexer) shown in the permission panel."""
         inp = req.input
         if req.tool_name == "Bash":
-            return Syntax(str(inp.get("command", "")), "bash", word_wrap=True)
+            return str(inp.get("command", "")), "bash"
         if req.tool_name == "Edit":
             diff = difflib.unified_diff(
                 str(inp.get("old_string", "")).splitlines(),
@@ -148,39 +183,57 @@ class Repl:
                 lineterm="",
                 n=2,
             )
-            return Syntax("\n".join(list(diff)[2:]) or "(no change)", "diff")
+            return "\n".join(list(diff)[2:]) or "(no change)", "diff"
         if req.tool_name == "Write":
-            content = str(inp.get("content", ""))
-            lines = content.splitlines()
-            shown = "\n".join(lines[:30]) + (
-                f"\n… ({len(lines) - 30} more lines)" if len(lines) > 30 else ""
-            )
-            return Syntax(shown, "text")
-        return Text(str(inp))
+            return str(inp.get("content", "")), "text"
+        return str(inp), "text"
 
-    async def ask(self, req: PermissionRequest) -> PermissionAnswer:
-        self._stop_status()
-        self._stop_live()
+    def _preview_lines(self) -> int:
+        """How many preview lines fit so the options stay on screen."""
+        return min(MAX_PREVIEW_LINES, self.console.size.height - PROMPT_CHROME_LINES)
+
+    def _print_options(self, req: PermissionRequest) -> None:
         c = self.console
-        c.print(
-            Panel(
-                self._preview(req), title=f"Allow {req.label}?", border_style="yellow", expand=False
-            )
-        )
         if req.reason:
             c.print(Text(f"  ({req.reason})", style="dim"))
         c.print("  [bold]1[/bold] Yes")
         if req.can_remember:
             c.print(
-                f"  [bold]2[/bold] Yes, and don't ask again for [cyan]{req.suggested_rule}[/cyan] in this project"
+                Text.assemble(
+                    ("  2", "bold"),
+                    " Yes, and don't ask again for ",
+                    (short_rule(req.suggested_rule), "cyan"),
+                    " in this project",
+                )
             )
         else:
             c.print("  [dim]2 (not offered: high-risk commands are approved one at a time)[/dim]")
         c.print("  [bold]3[/bold] No, and tell cmcoder what to do differently")
+
+    async def ask(self, req: PermissionRequest) -> PermissionAnswer:
+        self._stop_status()
+        self._stop_live()
+        c = self.console
+        source, lexer = self._preview_source(req)
+        shown, hidden = clip_preview(source, self._preview_lines())
+        c.print(
+            Panel(
+                Syntax(shown, lexer, word_wrap=True),
+                title=f"Allow {req.label}?",
+                border_style="yellow",
+                expand=False,
+            )
+        )
+        # The options always come after the preview, and the input line
+        # repeats them, so they can't scroll out of view.
+        self._print_options(req)
+        keys = "1 yes · 2 always · 3 no" if req.can_remember else "1 yes · 3 no"
+        if hidden:
+            keys += " · v view all"
         assert self.session is not None
         while True:
             try:
-                choice = (await self.session.prompt_async("  choose [1/2/3]: ")).strip().lower()
+                choice = (await self.session.prompt_async(f"  {keys}: ")).strip().lower()
             except (KeyboardInterrupt, EOFError):
                 self._arm_interrupt()
                 return PermissionAnswer(allow=False)
@@ -190,15 +243,22 @@ class Repl:
             if choice in ("2", "a", "always") and req.can_remember:
                 answer = PermissionAnswer(allow=True, remember=True)
                 break
-            if choice in ("3", "n", "no"):
-                try:
-                    feedback = await self.session.prompt_async(
-                        "  what should cmcoder do instead? (Enter to just stop): "
-                    )
-                except (KeyboardInterrupt, EOFError):
-                    feedback = ""
-                answer = PermissionAnswer(allow=False, feedback=feedback.strip() or None)
-                break
+            if choice in ("v", "view") and hidden:
+                c.print(Syntax(source, lexer, word_wrap=True, line_numbers=True))
+                self._print_options(req)
+                continue
+            if choice not in ("3", "n", "no"):
+                c.print(Text(f"  Please answer {keys}.", style="yellow"))
+                self._print_options(req)
+                continue
+            try:
+                feedback = await self.session.prompt_async(
+                    "  what should cmcoder do instead? (Enter to just stop): "
+                )
+            except (KeyboardInterrupt, EOFError):
+                feedback = ""
+            answer = PermissionAnswer(allow=False, feedback=feedback.strip() or None)
+            break
         # prompt_toolkit installs and then removes its own SIGINT handler, which
         # also drops ours; re-arm Ctrl+C for the rest of the turn.
         self._arm_interrupt()
