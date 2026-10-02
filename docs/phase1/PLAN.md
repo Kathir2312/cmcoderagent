@@ -279,7 +279,7 @@ SSO, OpenTelemetry, Windows sandboxing (Phase 4).
 - [x] 10. Tool-call robustness
 - [x] 11. Textual TUI (opt-in until verified on Windows)
 - [x] 12. More evals (20 tasks)
-- [ ] Real-gateway run on Windows (`doctor`, evals) and `STATUS.md`
+- [x] Real-gateway run on Windows (`doctor`, evals) and [`STATUS.md`](STATUS.md)
   - [x] `pytest` on Windows: 390 passed, 14 skipped, 0 failed
   - [x] `doctor`: all checks passed. Both models (Qwen3.6-27B, and
     Qwen3.5-35B-A3B as the small model) stream, switch thinking off and do
@@ -292,7 +292,7 @@ SSO, OpenTelemetry, Windows sandboxing (Phase 4).
     - `add-test`: valid pytest-style tests that the check only ran with
       unittest. It now accepts both.
     - Effectively 20/20.
-  - [ ] hands-on check (checklist, `/rewind`, `-c`/`/resume`, `--tui`)
+  - [x] hands-on check (checklist, `/rewind`, `-c`/`/resume`, `--tui`)
     - `/resume` and small-model titles work ("Ping for connection test").
     - `--tui` works on Windows: the fixed dialog, buttons visible, status bar.
     - Found: the "2 Always" rule was relative to `E:\`, so cmcoder took the
