@@ -292,4 +292,4 @@ OpenTelemetry, standalone binary, platform-specific VSIX, Windows sandboxing
 - [x] 11. Tests and CI
 - [x] 12. Parity check
 - [x] 13. Guides and install docs
-- [ ] Hands-on use in VS Code on Windows, and `STATUS.md`
+- [x] Hands-on use in VS Code on Windows, and [`STATUS.md`](STATUS.md)
