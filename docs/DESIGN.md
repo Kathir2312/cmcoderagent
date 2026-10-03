@@ -462,11 +462,11 @@ Started early, because quality depends heavily on the model:
 | **3 — Extensibility** | MCP client, hooks, custom slash commands, subagents (`Task`) with per-role models, skills | Teams can customise it without forking |
 | **4 — Hardening** | SSO auth provider (e.g. Okta/OIDC) if needed, Responses API / Anthropic adapters, OpenTelemetry, standalone binary + platform-specific VSIX, **Bash sandbox on Linux, macOS and Windows** (moved from Phase 3) | Release candidate |
 
-Per-phase plans, guides and status reports live in [docs/README.md](README.md) (`docs/phase0/`, `docs/phase1/`, …). Finished phases are frozen as git snapshots (Phase 0: commit `ba6669f`, tag `phase0`; Phase 1: tag `phase1`; Phase 2: tag `phase2`).
+Per-phase plans, guides and status reports live in [docs/README.md](README.md) (`docs/phase0/`, `docs/phase1/`, …). Finished phases are frozen as git snapshots (Phase 0: commit `ba6669f`, tag `phase0`; Phase 1: tag `phase1`; Phase 2: tag `phase2`; Phase 3: tag `phase3`).
 
 ### 16.1 Phase 0 status
 
-**Phase 0 is complete**; see [phase0/STATUS.md](phase0/STATUS.md). **Phase 1 is complete**; see [phase1/STATUS.md](phase1/STATUS.md). **Phase 2 is complete**; see [phase2/STATUS.md](phase2/STATUS.md). Phase 3 is in progress: [phase3/PLAN.md](phase3/PLAN.md).
+**Phase 0 is complete**; see [phase0/STATUS.md](phase0/STATUS.md). **Phase 1 is complete**; see [phase1/STATUS.md](phase1/STATUS.md). **Phase 2 is complete**; see [phase2/STATUS.md](phase2/STATUS.md). **Phase 3 is complete**; see [phase3/STATUS.md](phase3/STATUS.md). Phase 4 (Hardening) is next.
 
 
 Delivered:
