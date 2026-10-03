@@ -65,6 +65,7 @@ class Expansion:
 def parse_file(text: str) -> tuple[dict[str, str], str]:
     """Simple frontmatter (`key: value` lines between `---`) and the body."""
     meta: dict[str, str] = {}
+    text = text.removeprefix("\ufeff").replace("\r\n", "\n")  # Windows editors: BOM, CRLF
     if text.startswith("---"):
         end = text.find("\n---", 3)
         if end != -1:

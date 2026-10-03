@@ -94,6 +94,11 @@ def test_files_frontmatter_and_arguments() -> None:
     assert substitute("Fix the tests.", "in api/") == "Fix the tests.\n\nin api/"
     assert substitute("Use $2.", "one") == "Use ."
     assert parse_file("No frontmatter.") == ({}, "No frontmatter.")
+    # Windows PowerShell 5.1 writes a BOM; Notepad may write CRLF.
+    assert parse_file("\ufeff---\r\ndescription: d\r\n---\r\nBody\r\n") == (
+        {"description": "d"},
+        "Body",
+    )
 
 
 def test_loading_namespaces_and_precedence(project: Path) -> None:
