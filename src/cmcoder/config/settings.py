@@ -16,6 +16,7 @@ import hashlib
 import json
 import os
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Literal
 
@@ -40,6 +41,40 @@ class ProviderConfig(_Model):
     connect_timeout: float = Field(15.0, alias="connectTimeout")
     read_timeout: float = Field(300.0, alias="readTimeout")
     max_retries: int = Field(2, alias="maxRetries")
+
+
+class McpServerConfig(_Model):
+    """An MCP server, in Claude Code's `.mcp.json` format.
+
+    Local: `command` (+ `args`, `env`, `cwd`). Remote: `url` (+ `headers`),
+    `type` "http" (Streamable HTTP, the default for a URL) or "sse". Values
+    may use `${VAR}` / `${VAR:-default}` from the environment, so secrets stay
+    out of files."""
+
+    type: Literal["stdio", "http", "sse"] | None = None
+    command: str | None = None
+    args: list[str] = Field(default_factory=list)
+    env: dict[str, str] = Field(default_factory=dict)
+    cwd: str | None = None
+    url: str | None = None
+    headers: dict[str, str] = Field(default_factory=dict)
+    ca_cert_path: str | None = Field(None, alias="caCertPath")
+    # Seconds to connect and list tools, and per tool call.
+    startup_timeout: float = Field(30.0, alias="startupTimeout")
+    tool_timeout: float = Field(120.0, alias="toolTimeout")
+    disabled: bool = False
+
+    @property
+    def transport(self) -> Literal["stdio", "http", "sse"]:
+        if self.type:
+            return self.type
+        return "stdio" if self.command else "http"
+
+    def describe(self) -> str:
+        """For prompts and listings: what will run, or where it connects."""
+        if self.transport == "stdio":
+            return " ".join([self.command or "?", *self.args])
+        return f"{self.url} ({self.transport})"
 
 
 class PermissionsConfig(_Model):
@@ -77,12 +112,20 @@ class Settings(_Model):
     cleanup_period_days: int = Field(30, alias="cleanupPeriodDays", ge=1)
     # Managed settings only: use only the providers the managed file defines.
     lock_providers: bool = Field(False, alias="lockProviders")
+    # MCP servers from your user (and managed) settings.
+    mcp_servers: dict[str, McpServerConfig] = Field(default_factory=dict, alias="mcpServers")
+    # Managed settings only: server names allowed (if set) and denied.
+    allowed_mcp_servers: list[str] | None = Field(None, alias="allowedMcpServers")
+    denied_mcp_servers: list[str] = Field(default_factory=list, alias="deniedMcpServers")
     # Where each layer came from, for `cmcoder doctor`.
     sources: list[str] = Field(default_factory=list, exclude=True)
     # Project trust (see load_settings): whether this project's own settings
     # files are trusted, and what was left out of them because they aren't.
     project_trusted: bool = Field(False, exclude=True)
     ignored_project_settings: list[str] = Field(default_factory=list, exclude=True)
+    # A trusted project's MCP servers (.mcp.json, .cmcoder/settings*.json);
+    # each one still needs approval before it first starts.
+    project_mcp_servers: dict[str, McpServerConfig] = Field(default_factory=dict, exclude=True)
     # The managed settings file in force, if any.
     managed_path: str | None = Field(None, exclude=True)
 
@@ -136,7 +179,7 @@ def managed_settings_path() -> Path:
 # Keys that only count in the managed file: in any other file they would let
 # a project (or a user) speak for the organisation.
 _MANAGED_ONLY_PERMISSIONS = ("disableBypassPermissionsMode", "allowManagedPermissionRulesOnly")
-_MANAGED_ONLY_TOP = ("lockProviders",)
+_MANAGED_ONLY_TOP = ("lockProviders", "allowedMcpServers", "deniedMcpServers")
 
 
 def _strip_managed_only(layer: dict[str, Any]) -> dict[str, Any]:
@@ -340,6 +383,27 @@ def set_project_trust(root: Path, trusted: bool) -> None:
     _write_trust(projects)
 
 
+def config_fingerprint(config: BaseModel) -> str:
+    """Identifies an MCP server or hook's exact configuration: approving one
+    covers that configuration only, so a changed command asks again."""
+    data = json.dumps(config.model_dump(by_alias=True, exclude_none=True), sort_keys=True)
+    return hashlib.sha256(data.encode()).hexdigest()
+
+
+def is_approved(root: Path, key: str, fingerprint: str) -> bool:
+    """Whether the user approved this project's `key` (e.g. "mcp:github") as configured."""
+    return _as_dict(_entry(root).get("approved")).get(key) == fingerprint
+
+
+def approve(root: Path, key: str, fingerprint: str) -> None:
+    projects = _read_trust()
+    k = _trust_key(root)
+    entry = _as_dict(projects.get(k))
+    approved = {**_as_dict(entry.get("approved")), key: fingerprint}
+    projects[k] = {**entry, "approved": approved}
+    _write_trust(projects)
+
+
 def _fingerprint(path: Path) -> str | None:
     try:
         return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -361,6 +425,9 @@ def _filter_project_layer(layer: dict[str, Any], trusted: bool) -> tuple[dict[st
         return out, dropped
     if out.pop("env", None):
         dropped.append("env")
+    if servers := out.pop("mcpServers", None):
+        names = ", ".join(servers) if isinstance(servers, dict) else "?"
+        dropped.append(f"mcpServers ({names})")
     perms = out.get("permissions")
     if isinstance(perms, dict):
         perms = dict(perms)
@@ -383,6 +450,15 @@ def project_settings_preview(root: Path) -> list[str]:
             continue
         _, dropped = _filter_project_layer(_strip_managed_only(layer), trusted=False)
         out += [f"{path.name}: {d}" for d in dropped if not d.startswith(_PROJECT_NEVER)]
+    try:
+        servers = _read_json(root / ".mcp.json").get("mcpServers")
+    except SettingsError as e:
+        out.append(str(e))
+        servers = None
+    if isinstance(servers, dict) and servers:
+        out.append(
+            f".mcp.json: mcpServers ({', '.join(servers)}); each is approved before it first runs"
+        )
     return out
 
 
@@ -397,6 +473,14 @@ def load_settings(
     merged: dict[str, Any] = {}
     sources: list[str] = []
     ignored: list[str] = []
+    project_mcp: dict[str, Any] = {}
+    mcp_json = root / ".mcp.json"
+    if (servers := _read_json(mcp_json).get("mcpServers")) and isinstance(servers, dict):
+        if trusted:
+            project_mcp.update(servers)
+            sources.append(str(mcp_json))
+        else:
+            ignored.append(f".mcp.json: mcpServers ({', '.join(servers)})")
     for path, from_project in (
         (config_dir() / "settings.json", False),
         (root / ".cmcoder" / "settings.json", True),
@@ -407,6 +491,8 @@ def load_settings(
             own = path.name == "settings.local.json" and _local_is_own(root, path)
             layer, dropped = _filter_project_layer(layer, trusted or own)
             ignored += [f"{path.name}: {d}" for d in dropped]
+            if servers := layer.pop("mcpServers", None):
+                project_mcp.update(servers if isinstance(servers, dict) else {})
         if layer:
             merged = deep_merge(merged, layer)
             sources.append(str(path))
@@ -452,6 +538,12 @@ def load_settings(
     settings.sources = sources
     settings.project_trusted = trusted
     settings.ignored_project_settings = ignored
+    try:
+        settings.project_mcp_servers = {
+            name: McpServerConfig.model_validate(cfg) for name, cfg in project_mcp.items()
+        }
+    except ValueError as e:
+        raise SettingsError(f"Invalid MCP server in this project's settings: {e}") from e
     if managed:
         settings.managed_path = str(managed_file)
     return settings
@@ -497,4 +589,14 @@ def add_local_allow_rule(project_root: Path, rule: str) -> Path:
         entry = _as_dict(projects.get(key))
         projects[key] = {**entry, "local_sha256": _fingerprint(path)}
         _write_trust(projects)
+    return path
+
+
+def update_user_settings(change: Callable[[dict[str, Any]], None]) -> Path:
+    """Read ~/.cmcoder/settings.json, apply `change` to it, write it back."""
+    path = config_dir() / "settings.json"
+    data = _read_json(path)
+    change(data)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
     return path

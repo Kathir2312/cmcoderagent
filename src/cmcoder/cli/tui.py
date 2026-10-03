@@ -29,6 +29,7 @@ from .. import __version__
 from ..config.settings import Settings, ignored_settings_message
 from ..core.agent import Agent, PermissionAnswer, PermissionRequest
 from ..core.permissions import MODES, ModeNotAllowed
+from ..mcp_client import status_lines
 from ..protocol import events as ev
 from ..tools.todo import MARKS
 from .factory import AgentOptions, build_agent
@@ -41,6 +42,7 @@ HELP = """\
 /mode [mode]       show or set the permission mode
 /model             show the model
 /cost              token usage for this session
+/mcp               MCP servers: status and tools
 /todos             show the todo list
 /exit              quit
 Keys: Enter send · Ctrl+C interrupt (twice when idle: quit) · Shift+Tab cycle mode
@@ -353,6 +355,8 @@ class CmcoderApp(App[int]):
             self.write(
                 f"Model: {a.model} (context {a.profile.context_window:,} tokens, {a.profile.context_window_source})"
             )
+        elif name == "mcp":
+            self.write("\n".join(status_lines(a.mcp)))
         elif name == "cost":
             u = a.usage
             cost = f", cost {u.cost:.4f}" if u.cost is not None else ""

@@ -96,6 +96,25 @@ it), or for one run with `--trust-project`. "Always allow" answers cmcoder saves
 nobody else changes `settings.local.json`. The VS Code extension passes `--trust-project` only for workspaces VS
 Code itself trusts. `cmcoder doctor` shows the project's trust state and anything ignored.
 
+### MCP servers
+
+[MCP](https://modelcontextprotocol.io) servers give cmcoder more tools (issue trackers, databases, internal APIs):
+
+```bash
+cmcoder mcp add github --url https://mcp.example.com/github -H "Authorization: Bearer ${GITHUB_TOKEN}"
+cmcoder mcp add files -- npx -y @modelcontextprotocol/server-filesystem C:\docs
+cmcoder mcp list --check      # start them and list their tools
+```
+
+They are saved under `mcpServers` in `~/.cmcoder/settings.json`; `${VAR}` is read from the environment, so tokens
+stay out of the file. Their tools are named `mcp__<server>__<tool>` and ask before running, unless an allow rule says
+otherwise (`"mcp__github"` for all of a server's tools, `"mcp__github__create_issue"` for one). `/mcp` shows their
+status; a server's own output goes to `~/.cmcoder/logs/mcp-<name>.log`.
+
+A project can list servers in `.mcp.json` (Claude Code's format). They are used only in a trusted project, and each
+one asks once before it first starts (`cmcoder mcp approve NAME` approves it ahead of time); a changed command asks
+again. Administrators can restrict servers with `allowedMcpServers` / `deniedMcpServers` in the managed settings.
+
 ### Project memory
 
 cmcoder reads `CMCODER.md` (and `AGENTS.md`) from `~/.cmcoder/`, the project root and each folder down to the

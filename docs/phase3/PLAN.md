@@ -31,6 +31,25 @@ VS Code.
 - Project servers: trusted project + one-time approval each.
   Managed settings: `allowedMcpServers` / `deniedMcpServers`.
 
+**Status: done.** `src/cmcoder/mcp_client.py`, `cli/mcp_cmd.py`; tests in
+`tests/test_mcp.py` against a real MCP server (`tests/mcp_servers/demo_server.py`)
+over stdio and HTTP.
+- Each server runs in its own task for its whole life (the SDK's connections
+  must be opened and closed in one task); servers start at the beginning of
+  the first turn; one that fails is reported and skipped.
+- Server programs are found on PATH with `find_program` (the SDK's own lookup
+  uses `shutil.which`, which on Windows looks in the project folder first).
+- A server's stderr goes to `~/.cmcoder/logs/mcp-<name>.log`, so it never
+  mixes with the terminal or the VS Code protocol.
+- Remote servers use cmcoder's TLS setup (OS trust store, `caCertPath`) and
+  proxy settings.
+- Project servers: approval is tied to the server's exact configuration and
+  asked through the normal permission prompt (CLI, TUI, VS Code); without
+  anyone to ask (`-p`) they stay off.
+- `cmcoder doctor` has an "MCP servers" section; `cmcoder trust` lists a
+  project's servers.
+- Prompts as slash commands come with item 3.
+
 ### 2. Hooks
 
 - Shell commands on `PreToolUse`, `PostToolUse`, `UserPromptSubmit`,
@@ -96,7 +115,7 @@ binary). Output styles and the status line (later). Plugins and marketplaces.
 
 ## Checklist
 
-- [ ] 1. MCP client
+- [x] 1. MCP client
 - [ ] 2. Hooks
 - [ ] 3. Custom slash commands
 - [ ] 4. Subagents (`Task`)

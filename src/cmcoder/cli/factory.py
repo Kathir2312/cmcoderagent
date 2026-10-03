@@ -24,6 +24,7 @@ from ..core.compaction import Summarizer
 from ..core.permissions import ModeNotAllowed, PermissionPolicy
 from ..core.prompt import build_system_prompt, load_memory_files
 from ..core.sessions import SessionLog, cleanup, find_session, list_sessions, load
+from ..mcp_client import McpManager
 from ..providers.auth import ApiKeyAuth, AuthProvider, NoAuth
 from ..providers.openai_compat import OpenAICompatProvider, ProviderError
 from ..providers.profiles import ModelProfile, resolve_profile
@@ -240,6 +241,9 @@ async def build_agent(settings: Settings, opts: AgentOptions) -> Agent:
         auto_compact=settings.auto_compact,
         compact_threshold=settings.auto_compact_threshold,
         session=session,
+        mcp=McpManager(settings, root)
+        if settings.mcp_servers or settings.project_mcp_servers
+        else None,
     )
     if opts.continue_session or opts.resume:
         resume_session(agent, settings, root, opts.resume)

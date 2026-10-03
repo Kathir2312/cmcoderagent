@@ -20,7 +20,7 @@ from ..protocol.events import protocol_json_schema
 from ..providers.auth import ApiKeyAuth, delete_api_key, mask_key, store_api_key
 from ..providers.openai_compat import ProviderError
 
-SUBCOMMANDS = {"doctor", "login", "logout", "models", "protocol-schema", "trust", "version"}
+SUBCOMMANDS = {"doctor", "login", "logout", "mcp", "models", "protocol-schema", "trust", "version"}
 
 console = Console(highlight=False)
 err_console = Console(stderr=True, highlight=False)
@@ -393,6 +393,11 @@ def trust(
 @sub_app.command(help="Print the version.")
 def version() -> None:
     console.print(__version__)
+
+
+from .mcp_cmd import mcp_app  # noqa: E402
+
+sub_app.add_typer(mcp_app, name="mcp")
 
 
 def run() -> None:

@@ -29,6 +29,7 @@ from ..config.settings import Settings, config_dir, ignored_settings_message
 from ..core.agent import Agent, PermissionAnswer, PermissionRequest
 from ..core.permissions import MODES, ModeNotAllowed
 from ..core.sessions import SessionLog, age, list_sessions, load
+from ..mcp_client import status_lines
 from ..protocol import events as ev
 from ..providers.messages import Usage
 from ..providers.openai_compat import OpenAICompatProvider
@@ -92,6 +93,7 @@ HELP = """\
   /model [name]      show or switch the model (e.g. /model qwen3-27b)
   /mode [mode]       show or set the permission mode: default, acceptEdits, plan, bypassPermissions
   /cost              token usage for this session
+  /mcp               MCP servers: status and tools
   /exit              quit
 
 [bold]Keys[/bold]
@@ -375,6 +377,9 @@ class Repl:
                     except ModeNotAllowed as e:
                         c.print(Text(str(e), style="red"))
             c.print(f"Permission mode: [bold]{self.agent.policy.mode}[/bold]")
+        elif name == "mcp":
+            for line in status_lines(self.agent.mcp):
+                c.print(Text(line))
         elif name == "cost":
             u: Usage = self.agent.usage
             est = " (estimated)" if u.estimated else ""

@@ -227,6 +227,13 @@ class PermissionPolicy:
     def _rule_matches(
         self, rule: Rule, tool: Tool, target: str | Path | None, ctx: ToolContext
     ) -> bool:
+        whole_server = (
+            rule.tool.startswith("mcp__")
+            and rule.spec is None
+            and tool.name.startswith(rule.tool + "__")
+        )  # `mcp__github` covers every tool of that MCP server
+        if whole_server:
+            return True
         if rule.tool != tool.name and not (rule.tool == "Edit" and tool.name in FILE_EDIT_TOOLS):
             return False
         if rule.spec is None or rule.spec in ("", "*"):

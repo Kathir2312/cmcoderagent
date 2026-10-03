@@ -24,6 +24,7 @@ from ..config.settings import (
     ignored_settings_message,
     managed_settings_path,
 )
+from ..mcp_client import McpManager
 from ..providers.auth import ApiKeyAuth
 from ..providers.messages import Message, StreamDone, TextDelta, ToolSpec
 from ..providers.openai_compat import OpenAICompatProvider, ProviderError, no_tool_support
@@ -445,6 +446,35 @@ class Doctor:
                 "The backend may not support tool calling for this model.",
             )
 
+    async def check_mcp(self, probe: bool) -> None:
+        """MCP servers: configured, approved, and (with probes) whether they start."""
+        s = self.settings
+        if not s.mcp_servers and not s.project_mcp_servers:
+            return
+        self.section("MCP servers")
+        root = find_project_root(Path.cwd().resolve())
+        manager = McpManager(s, root)
+        if not probe:
+            for server in manager.servers:
+                self.report(INFO, f"{server.name}: {server.config.describe()}", server.origin)
+            return
+        async for warning in manager.start(None):
+            del warning  # each failed server is reported below
+        for server in manager.servers:
+            if server.status == "connected":
+                self.report(
+                    OK, f"{server.name}: {len(server.tools)} tools", server.config.describe()
+                )
+            elif server.status == "not approved":
+                self.report(
+                    WARN, f"{server.name}: not approved", f"cmcoder mcp approve {server.name}"
+                )
+            elif server.status in ("disabled", "blocked"):
+                self.report(INFO, f"{server.name}: {server.status}", server.error)
+            else:
+                self.report(FAIL, f"{server.name}: could not start", server.error)
+        await manager.close()
+
     async def run(self, model_refs: list[str], probe: bool) -> int:
         self.check_local()
         by_provider: dict[str, list[str]] = {}
@@ -460,6 +490,7 @@ class Doctor:
         for provider_name, models in by_provider.items():
             if await self.check_network(provider_name):
                 await self.check_api(provider_name, models, probe)
+        await self.check_mcp(probe)
         self.console.print()
         if self.failed:
             self.console.print(

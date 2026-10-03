@@ -15,6 +15,7 @@ from typing import Any, Protocol
 
 from pydantic import ValidationError
 
+from ..mcp_client import McpManager, McpServer
 from ..protocol import events as ev
 from ..providers.messages import (
     Message,
@@ -168,6 +169,7 @@ class Agent:
         session: SessionLog | None = None,
         auto_compact: bool = True,
         compact_threshold: float = 0.8,
+        mcp: McpManager | None = None,
     ) -> None:
         self.provider = provider
         self.model = model
@@ -195,6 +197,8 @@ class Agent:
         self._redirected: str | None = None
         # The small/fast model for summaries; the main model is the fallback.
         self.summarizer = summarizer
+        # MCP servers: started at the beginning of the first turn.
+        self.mcp = mcp
         # Called with (model, tokens) when the server states a smaller window.
         self.on_context_window = on_context_window
         self.auto_compact = auto_compact
@@ -338,7 +342,27 @@ class Agent:
         self._background.add(task)
         task.add_done_callback(self._background.discard)
 
+    async def _approve_mcp_server(self, server: McpServer) -> bool:
+        """Asks once before a project's MCP server first starts (it runs as you)."""
+        if self.ask is None:
+            return False
+        answer = await self.ask(
+            PermissionRequest(
+                call_id=f"mcp-{server.name}",
+                tool_name="McpServer",
+                label=f"Start MCP server {server.name}",
+                input={"server": server.name, "runs": server.config.describe()},
+                suggested_rule="",
+                reason="This project's settings (.mcp.json) want to start an MCP server; it "
+                "runs with your permissions. Allowing is remembered until its settings change.",
+                can_remember=False,
+            )
+        )
+        return answer.allow
+
     async def close(self) -> None:
+        if self.mcp is not None:
+            await self.mcp.close()
         if self._background:  # let a title finish briefly, then stop waiting
             _done, pending = await asyncio.wait(self._background, timeout=TITLE_WAIT_ON_CLOSE)
             for t in pending:
@@ -407,6 +431,11 @@ class Agent:
         user_message = Message.user(f"{context}\n\n{prompt}" if context else prompt)
         user_message.turn = self.turn
         self.messages.append(user_message)
+        if self.mcp is not None and not self.mcp.started:
+            async for warning in self.mcp.start(self._approve_mcp_server):
+                yield warning
+            for tool in self.mcp.tools():
+                self.tools.setdefault(tool.name, tool)
         turn_usage = Usage()
         last_text = ""
         steps = 0
