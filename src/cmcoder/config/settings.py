@@ -123,6 +123,8 @@ class Settings(_Model):
     providers: dict[str, ProviderConfig] = Field(default_factory=dict)
     model: str | None = None
     small_fast_model: str | None = Field(None, alias="smallFastModel")
+    # The model of the built-in `explore` subagent (default: smallFastModel).
+    subagent_model: str | None = Field(None, alias="subagentModel")
     model_profiles: list[dict[str, Any]] = Field(default_factory=list, alias="modelProfiles")
     permissions: PermissionsConfig = Field(
         default_factory=lambda: PermissionsConfig.model_validate({})
@@ -329,6 +331,8 @@ def env_layer(environ: dict[str, str] | None = None) -> dict[str, Any]:
         layer["model"] = env["CMCODER_MODEL"]
     if env.get("CMCODER_SMALL_FAST_MODEL"):
         layer["smallFastModel"] = env["CMCODER_SMALL_FAST_MODEL"]
+    if env.get("CMCODER_SUBAGENT_MODEL"):
+        layer["subagentModel"] = env["CMCODER_SUBAGENT_MODEL"]
     return layer
 
 

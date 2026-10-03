@@ -2,7 +2,7 @@
 // Plain DOM code: it receives protocol events from the extension and renders them.
 
 import { marked } from "marked";
-import type { AgentEvent, CommandInfo, PermissionRequest, ToolResult, ToolUse } from "../protocol";
+import type { AgentEvent, CommandInfo, PermissionDenied, PermissionRequest, ToolResult, ToolUse } from "../protocol";
 import type { FromWebview, ToWebview } from "../webviewMessages";
 
 declare function acquireVsCodeApi(): { postMessage(message: FromWebview): void };
@@ -190,7 +190,33 @@ function clip(text: string, maxLines: number): string {
 
 // --- events from cmcoder ---------------------------------------------------------
 
+// A subagent's steps, listed inside its Task call's card.
+const subagentSteps = new Map<string, HTMLElement>();
+
+function subagentStep(ev: ToolUse | ToolResult | PermissionDenied, parentId: string): void {
+  const card = toolCards.get(parentId);
+  if (ev.type === "tool_use") {
+    if (!card) return;
+    const steps = card.querySelector(".steps") ?? card.appendChild(el("div", "steps"));
+    subagentSteps.set(ev.id, steps.appendChild(el("div", "step", `● ${ev.label}`)));
+    showStatus("Subagent working…");
+    return;
+  }
+  const row = subagentSteps.get(ev.id);
+  subagentSteps.delete(ev.id);
+  if (ev.type === "permission_denied") {
+    deniedHere.delete(ev.id);
+    row?.append(el("span", "error", " — denied"));
+  } else if (ev.is_error) {
+    row?.append(el("span", "error", ` — ${ev.content.split("\n")[0].slice(0, 200)}`));
+  }
+}
+
 function onEvent(ev: AgentEvent): void {
+  if ((ev.type === "tool_use" || ev.type === "tool_result" || ev.type === "permission_denied") && ev.parent_tool_use_id) {
+    subagentStep(ev, ev.parent_tool_use_id);
+    return;
+  }
   switch (ev.type) {
     case "system_init":
       modelLabel.textContent = ev.model;

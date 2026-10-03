@@ -185,3 +185,57 @@ mkdir -p ~/.cmcoder/commands
 printf -- '---\ndescription: Explain a file\n---\nExplain $1 to a new team member.\n' > ~/.cmcoder/commands/explain.md
 cmcoder        # then type /ex and press Tab, or /explain README.md
 ```
+
+## 4. Subagents
+
+*Done.* Code: `src/cmcoder/core/subagents.py`, `Agent.spawn_subagent` and the
+`TaskTool` branch of `Agent._run_call` (`core/agent.py`). Tests:
+`tests/test_subagents.py`.
+
+### The problem
+
+"Find where the config is loaded" can take twenty Grep and Read calls. Each
+result stays in the conversation, and on a 32k-token model that's most of the
+window gone before the real work starts.
+
+### The idea
+
+Do the search in a **separate conversation** and keep only its answer. The
+`Task` tool starts a second `Agent` with a short system prompt and the task as
+its only message, runs it to the end, and returns its final text as the tool
+result. The main conversation grows by one tool call and one report.
+
+### The code
+
+- `TaskTool.run_stream` is an async generator: it yields the child's
+  `ToolUse`/`ToolResult` events (copied with `model_copy(update=...)` to add
+  `parent_tool_use_id`) while the child runs, and ends with a `TaskDone`
+  carrying the report. `_run_call` forwards those events, so the user sees
+  progress; ordinary tools still use `await tool.run(...)`.
+- `Agent.spawn_subagent` builds the child with the **same objects** for what
+  must be shared (provider, `PermissionPolicy`, `ask`, `HookRunner`,
+  `Checkpoints`) and new ones for what must not (`ToolContext`, messages).
+- The child's `is_subagent` flag skips the prompt hooks and runs
+  `SubagentStop` instead of `Stop`.
+- `select_tools` removes `Task` (no nesting) and applies the agent's `tools`.
+- The factory passes a `SubagentRuntime` with two callbacks: how to resolve a
+  model name and how to build the child's system prompt. `core/` stays free
+  of settings and CLI code.
+
+### New Python ideas
+
+- **`TYPE_CHECKING` imports**: `subagents.py` needs the `Agent` type and
+  `agent.py` needs `TaskTool`. Importing `Agent` only under
+  `if TYPE_CHECKING:` breaks the import cycle at run time.
+- **Sharing by reference**: passing the same `PermissionPolicy` object means
+  an "always allow" answered during a subagent applies to the main agent too.
+- **`try/finally` around an async iteration**: the child's shell is closed
+  and its usage counted even when the user interrupts.
+
+### Try it
+
+```bash
+cmcoder -p "Use the explore agent to find where settings files are read, then summarise" --permission-mode plan
+```
+
+Watch the `│ ●` lines: the subagent's calls, inside the Task call.

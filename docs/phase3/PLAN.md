@@ -71,7 +71,7 @@ over stdio and HTTP.
 - Notification runs in the background, so it can't delay a permission prompt.
 - Managed hooks are kept apart from yours (never merged away); project hooks
   are approved per command, like MCP servers. `cmcoder doctor` lists hooks.
-- `SubagentStop` comes with item 4.
+- `SubagentStop`: done with item 4.
 
 ### 3. Custom slash commands
 
@@ -97,8 +97,7 @@ over stdio and HTTP.
 - VS Code: `list_commands` → `command_list` in the protocol; a `user_message`
   starting with a command runs it (`/compact` too); text like `/usr/bin/x
   fails` that isn't a command is sent as an ordinary prompt.
-- `model` in the frontmatter is not used yet (it needs a per-turn model
-  switch; it comes with subagents' models in item 4).
+- `model` in the frontmatter is not used (see item 4).
 
 ### 4. Subagents (`Task` tool)
 
@@ -109,6 +108,29 @@ over stdio and HTTP.
   and `~/.cmcoder/agents/` (name, description, tools, model, prompt).
 - Same permissions as the main agent; no nested subagents; `SubagentStop`
   hook; shown as a collapsible card in every front end.
+
+**Status: done.** `src/cmcoder/core/subagents.py` (`TaskTool`, definitions,
+`SubagentRuntime`), `Agent.spawn_subagent` and the streaming branch of
+`_run_call` in `core/agent.py`; tests in `tests/test_subagents.py` and
+`vscode/test/webview.test.ts`.
+- The child agent shares the main agent's provider, permission policy (mode,
+  rules, "always allow" answers), `ask` (so prompts appear as usual),
+  hooks and checkpoints (`/rewind` undoes its edits); it has its own
+  conversation, tool context (file-read tracking, shell) and no `Task` or
+  `TodoWrite`.
+- Its tool calls are forwarded with `parent_tool_use_id` (new optional field
+  on `tool_use`, `tool_result`, `permission_denied`), like Claude Code's
+  stream-json; its text isn't streamed: the report is the Task result.
+- If the user denies one of its tool calls (without feedback), the main turn
+  stops too. Its token usage is added to the session's.
+- Models: `inherit`, `small` (smallFastModel), `subagent` (new setting
+  `subagentModel`, else smallFastModel; used by `explore`), or a model name on
+  the main or the small model's provider. A model that can't be used falls
+  back to the main model with a warning.
+- A repository's agents are used only in a trusted project; yours win on a
+  name clash; the built-in names can't be replaced.
+- The `model` of slash commands stays unused (a per-turn model switch for the
+  main agent isn't needed so far; a command can ask for a subagent instead).
 
 ### 5. Skills
 
@@ -149,7 +171,7 @@ binary). Output styles and the status line (later). Plugins and marketplaces.
 - [x] 1. MCP client
 - [x] 2. Hooks
 - [x] 3. Custom slash commands
-- [ ] 4. Subagents (`Task`)
+- [x] 4. Subagents (`Task`)
 - [ ] 5. Skills
 - [ ] 6. Front ends (VS Code, doctor, trust)
 - [ ] 7. Tests, evals and security review

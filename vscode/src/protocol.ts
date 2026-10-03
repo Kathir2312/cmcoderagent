@@ -67,6 +67,7 @@ export interface ToolUse {
   name: string;
   input: Record<string, unknown>;
   label: string;
+  parent_tool_use_id: string | null;
 }
 
 export interface ToolResult {
@@ -76,6 +77,7 @@ export interface ToolResult {
   content: string;
   is_error: boolean;
   summary: string | null;
+  parent_tool_use_id: string | null;
 }
 
 export interface PermissionDenied {
@@ -83,6 +85,7 @@ export interface PermissionDenied {
   id: string;
   name: string;
   reason: string;
+  parent_tool_use_id: string | null;
 }
 
 export interface UsageUpdate {

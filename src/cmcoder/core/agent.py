@@ -54,6 +54,7 @@ from .permissions import (
 )
 from .sessions import SessionLog
 from .steer import file_work_redirect
+from .subagents import ModelChoice, SubagentRuntime, TaskDone, TaskTool
 from .titles import make_title
 
 TITLE_WAIT_ON_CLOSE = 2.0  # seconds a pending title may still take when closing
@@ -190,6 +191,7 @@ class Agent:
         mcp: McpManager | None = None,
         hooks: HookRunner | None = None,
         commands: CommandSource | None = None,
+        subagents: SubagentRuntime | None = None,
     ) -> None:
         self.provider = provider
         self.model = model
@@ -224,6 +226,11 @@ class Agent:
         self._session_hooks_done = False
         # Custom slash commands (core/commands.py); MCP prompts are added to them.
         self.commands = commands
+        # A subagent (started by the Task tool) skips the prompt hooks and runs
+        # SubagentStop instead of Stop.
+        self.is_subagent = False
+        if subagents is not None:
+            self.tools["Task"] = TaskTool(self, subagents)
         # Called with (model, tokens) when the server states a smaller window.
         self.on_context_window = on_context_window
         self.auto_compact = auto_compact
@@ -502,6 +509,36 @@ class Agent:
 
     # ------------------------------------------------------------------
 
+    def spawn_subagent(self, choice: ModelChoice, tools: dict[str, Tool], prompt: str) -> Agent:
+        """A fresh agent for one Task: same permissions, prompts, hooks and
+        checkpoints (so /rewind undoes its edits), its own conversation."""
+        child = Agent(
+            choice.provider,
+            choice.model,
+            choice.profile,
+            list(tools.values()),
+            self.policy,
+            ToolContext(
+                cwd=self.ctx.cwd,
+                project_root=self.ctx.project_root,
+                max_output_chars=self.ctx.max_output_chars,
+            ),
+            prompt,
+            max_turns=self.max_turns,
+            ask=self.ask,
+            on_rule_saved=self.on_rule_saved,
+            summarizer=self.summarizer,
+            auto_compact=self.auto_compact,
+            compact_threshold=self.compact_threshold,
+            hooks=self.hooks,
+        )
+        child.is_subagent = True
+        child._session_hooks_done = True
+        child.session_id = self.session_id
+        child.checkpoints = self.checkpoints
+        child.turn = self.turn - 1  # its run() is this turn
+        return child
+
     async def _start_mcp(self) -> AsyncIterator[ev.Warning]:
         if self.mcp is not None and not self.mcp.started:
             async for warning in self.mcp.start(self._approve_mcp_server):
@@ -567,7 +604,7 @@ class Agent:
         self.messages.append(user_message)
         async for warning in self._start_mcp():
             yield warning
-        if self.hooks is not None:
+        if self.hooks is not None and not self.is_subagent:
             notes: list[str] = []
             if not self._session_hooks_done:
                 self._session_hooks_done = True
@@ -809,7 +846,10 @@ class Agent:
                     if not msg.content and not msg.tool_calls:
                         yield ev.Warning(message="The model returned an empty reply.")
                     if self.hooks is not None and stop_blocks < MAX_STOP_HOOK_BLOCKS:
-                        outcome = await self._hook("Stop", {"stop_hook_active": stop_blocks > 0})
+                        outcome = await self._hook(
+                            "SubagentStop" if self.is_subagent else "Stop",
+                            {"stop_hook_active": stop_blocks > 0},
+                        )
                         for w in outcome.warnings:
                             yield ev.Warning(message=w)
                         if outcome.block:
@@ -1030,8 +1070,17 @@ class Agent:
                     self.checkpoints.capture(self.turn, target)  # for /rewind
                 except OSError:
                     pass
+        stop_after = False
         try:
-            res = await tool.run(args, self.ctx)
+            if isinstance(tool, TaskTool):  # a subagent: show its tool calls as they happen
+                res = ToolResult("The subagent didn't finish.", is_error=True)
+                async for item in tool.run_stream(args, self.ctx, call.id):
+                    if isinstance(item, TaskDone):
+                        res, stop_after = item.result, item.stop_turn
+                    else:
+                        yield item
+            else:
+                res = await tool.run(args, self.ctx)
         except asyncio.CancelledError:
             raise
         except Exception as e:  # a tool bug must not kill the session
@@ -1054,6 +1103,8 @@ class Agent:
             if notes:
                 res = ToolResult(res.content + "\n\n" + "\n".join(notes), res.is_error, res.summary)
         yield finish(res)
+        if stop_after:
+            yield _StopTurn()
 
     def _repair_after_interrupt(self) -> None:
         """Keep the transcript valid: every tool call needs a result."""

@@ -74,6 +74,20 @@ def clip_preview(text: str, max_lines: int) -> tuple[str, int]:
     return "\n".join(shown), hidden
 
 
+def subagent_line(event: ev.Event) -> tuple[str, str] | None:
+    """A subagent's tool call or problem as one indented line: (text, style)."""
+    if getattr(event, "parent_tool_use_id", None) is None:
+        return None
+    if isinstance(event, ev.ToolUse):
+        return f"  │ ● {event.label}", "dim"
+    if isinstance(event, ev.ToolResult) and event.is_error:
+        first = (event.content.strip().splitlines() or [""])[0]
+        return f"  │   └ {first[:200]}", "red"
+    if isinstance(event, ev.PermissionDenied):
+        return f"  │   └ denied: {event.reason}", "yellow"
+    return "", ""
+
+
 def short_rule(rule: str, limit: int = 60) -> str:
     """One-line form of a rule for display: a rule for a multi-line command
     would otherwise print the whole command again."""
@@ -163,7 +177,12 @@ class Repl:
 
     def _render(self, event: ev.Event) -> None:
         c = self.console
-        if isinstance(event, ev.ReasoningDelta):
+        if (line := subagent_line(event)) is not None:  # a step inside a Task call
+            if line[0]:
+                self._stop_status()
+                c.print(Text(line[0], style=line[1]))
+                self._start_status("Subagent working…")
+        elif isinstance(event, ev.ReasoningDelta):
             self._start_status("Thinking…")
             if self.verbose:
                 self._stop_status()

@@ -35,7 +35,7 @@ from ..mcp_client import status_lines
 from ..protocol import events as ev
 from ..tools.todo import MARKS
 from .factory import AgentOptions, build_agent
-from .repl import Repl, output_preview, short_rule
+from .repl import Repl, output_preview, short_rule, subagent_line
 
 
 class SlashSuggester(Suggester):
@@ -268,7 +268,10 @@ class CmcoderApp(App[int]):
         self._md, self._text = None, ""
 
     async def render_event(self, event: ev.Event) -> None:
-        if isinstance(event, ev.AssistantDelta):
+        if (line := subagent_line(event)) is not None:  # a step inside a Task call
+            if line[0]:
+                self.write(line[0], "err" if line[1] == "red" else "dim")
+        elif isinstance(event, ev.AssistantDelta):
             if self._md is None:
                 self._md = Markdown()
                 log = self.query_one("#log", VerticalScroll)

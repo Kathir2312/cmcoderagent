@@ -24,8 +24,9 @@ from ..core.commands import CommandSource
 from ..core.compaction import Summarizer
 from ..core.hooks import HookRunner
 from ..core.permissions import ModeNotAllowed, PermissionPolicy
-from ..core.prompt import build_system_prompt, load_memory_files
+from ..core.prompt import build_subagent_prompt, build_system_prompt, load_memory_files
 from ..core.sessions import SessionLog, cleanup, find_session, list_sessions, load
+from ..core.subagents import ModelChoice, SubagentRuntime
 from ..mcp_client import McpManager
 from ..providers.auth import ApiKeyAuth, AuthProvider, NoAuth
 from ..providers.openai_compat import OpenAICompatProvider, ProviderError
@@ -248,6 +249,14 @@ async def build_agent(settings: Settings, opts: AgentOptions) -> Agent:
         else None,
         hooks=runner if (runner := HookRunner(settings, root)).hooks else None,
         commands=CommandSource(root, settings.project_trusted),
+        subagents=SubagentRuntime(
+            root,
+            settings.project_trusted,
+            resolve_model=lambda ref: resolve_subagent_model(settings, provider, summarizer, ref),
+            system_prompt=lambda d, m: build_subagent_prompt(
+                d.prompt, cwd, root, model=m, memory=memory
+            ),
+        ),
     )
     if opts.continue_session or opts.resume:
         resume_session(agent, settings, root, opts.resume)
@@ -275,6 +284,29 @@ def resume_session(agent: Agent, settings: Settings, root: Path, ref: str | None
         info = sessions[0]
     messages, _meta = load(info.path)
     agent.resume(messages, SessionLog(root, info.session_id))
+
+
+async def resolve_subagent_model(
+    settings: Settings,
+    main_provider: OpenAICompatProvider,
+    summarizer: Summarizer | None,
+    ref: str,
+) -> ModelChoice | None:
+    """A subagent's `model`: "small" (smallFastModel), "subagent" (subagentModel,
+    else smallFastModel), or a model name. None: use the main model."""
+    if ref == "subagent":
+        ref = settings.subagent_model or "small"
+    if ref == "small":
+        return summarizer
+    name, model = settings.resolve_model(ref)
+    if summarizer is not None and name == summarizer.provider.name:
+        provider = summarizer.provider
+    elif name == main_provider.name:
+        provider = main_provider
+    else:  # a provider nothing else uses would have to be opened and closed per task
+        raise SettingsError(f"provider {name!r} isn't the main or the small model's provider")
+    profile = await resolve_model_profile(settings, provider, model)
+    return ModelChoice(provider, model, profile)
 
 
 async def build_summarizer(

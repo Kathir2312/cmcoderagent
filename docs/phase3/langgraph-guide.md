@@ -108,3 +108,28 @@ The person at the keyboard picks a command; the program doesn't. So commands
 are files with a name, a description and completion, and the only thing they
 can change besides the prompt is the permission rules for that turn, which a
 repository gets only when the project is trusted.
+
+## 4. Subagents
+
+### The LangGraph way
+
+A **subgraph**: a compiled graph used as a node, or called from a tool
+(`deepagents`' `task` tool does exactly this). With its own state schema, the
+subgraph's messages don't flow into the parent's state; streaming with
+`subgraphs=True` shows its steps with a namespace.
+
+### The cmcoder way
+
+| LangChain / LangGraph | cmcoder |
+|---|---|
+| subgraph with its own `MessagesState` | `spawn_subagent`: a new `Agent` with its own `messages` |
+| `deepagents` `task` tool, `subagents=[...]` | `Task` tool, built-in and `.cmcoder/agents/*.md` agents |
+| `stream(..., subgraphs=True)` namespaces | `parent_tool_use_id` on the forwarded events |
+| a different `model` per subagent | `model: small` / a model name in the agent file |
+| `interrupt()` inside the subgraph | the same `ask` function: the prompt appears as usual |
+
+### Why they differ
+
+cmcoder's agents are files a team writes, not code, and a subagent must obey
+the same permission rules as the main agent, so it shares the policy object
+instead of getting its own graph configuration.

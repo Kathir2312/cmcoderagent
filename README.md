@@ -129,8 +129,8 @@ Hooks run your own commands on agent events, e.g. a linter after every edit or a
 }
 ```
 
-Events: `PreToolUse`, `PostToolUse`, `UserPromptSubmit`, `SessionStart`, `Stop`, `PreCompact`, `Notification`
-(`SubagentStop` with subagents). A hook gets the event as JSON on stdin and runs in the project folder with the
+Events: `PreToolUse`, `PostToolUse`, `UserPromptSubmit`, `SessionStart`, `Stop`, `SubagentStop`, `PreCompact`,
+`Notification`. A hook gets the event as JSON on stdin and runs in the project folder with the
 Bash tool's shell (Git Bash on Windows), with `CMCODER_PROJECT_DIR` set. **Exit 2** blocks (stderr tells the model
 why: the tool doesn't run, the prompt isn't sent, or the model keeps working after `Stop`); other non-zero exits
 are warnings. JSON on stdout can decide too: `{"hookSpecificOutput": {"permissionDecision": "allow"|"ask"|"deny"}}`
@@ -159,6 +159,29 @@ them only in a trusted project, and never with managed-only rules). A command on
 runs anything by itself. MCP servers' prompts are commands too: `/mcp__<server>__<prompt> args`. Commands are
 listed in `/help` and completed as you type in the terminal, the TUI and the VS Code panel (`/compact` works
 there too).
+
+### Subagents
+
+The model can hand a self-contained job to a **subagent** with the `Task` tool: a fresh conversation with its own
+tools (and possibly a smaller model) that returns one report, so searches and side quests don't fill the main
+conversation. Built in: `general-purpose` (every tool, the main model) and `explore` (read-only Read/Glob/Grep, on
+`subagentModel`, else `smallFastModel`, else the main model). Your own go in `~/.cmcoder/agents/*.md`, and a
+trusted project's in `.cmcoder/agents/*.md` (same format as Claude Code):
+
+```markdown
+---
+name: reviewer
+description: Reviews a change for bugs. Use after editing code.
+tools: Read, Grep, Glob, Bash
+model: small
+---
+You are a careful reviewer. Report problems with file:line references.
+```
+
+`tools` limits the tools (default: all; `mcp__server` means all of a server's tools); `model` is `inherit`
+(default), `small` or a model name. A subagent asks permission like the main agent (same rules and mode), runs
+`PreToolUse`/`PostToolUse` hooks and `SubagentStop` when it finishes, can't start subagents itself, and its file
+changes can be undone with `/rewind`. Its steps are shown inside the Task call in every front end.
 
 ### Project memory
 

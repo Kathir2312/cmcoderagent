@@ -133,6 +133,11 @@ def build_system_prompt(
         )
     if append:
         parts.append(append)
+    parts.append(_environment(cwd, project_root, model))
+    return "\n\n".join(parts)
+
+
+def _environment(cwd: Path, project_root: Path, model: str | None) -> str:
     env = [
         f"Working directory: {cwd}",
         f"Project root: {project_root}",
@@ -148,5 +153,22 @@ def build_system_prompt(
             "Shell: the Bash tool runs Git Bash. Use bash syntax and forward slashes "
             "(C:/Users/... or /c/Users/...). Use `python` rather than `python3`."
         )
-    parts.append("# Environment\n" + "\n".join(env))
+    return "# Environment\n" + "\n".join(env)
+
+
+def build_subagent_prompt(
+    agent_prompt: str,
+    cwd: Path,
+    project_root: Path,
+    *,
+    model: str | None = None,
+    memory: list[MemoryFile] | None = None,
+) -> str:
+    """A subagent's system prompt: its own instructions, the project's memory
+    files and the environment (not the main agent's long prompt)."""
+    parts = [agent_prompt.strip()]
+    if memory:
+        mem = "\n\n".join(f"## From {m.path}\n{m.content}" for m in memory)
+        parts.append(f"# Project instructions\n{mem}")
+    parts.append(_environment(cwd, project_root, model))
     return "\n\n".join(parts)

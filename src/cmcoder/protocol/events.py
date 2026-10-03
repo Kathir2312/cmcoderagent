@@ -54,6 +54,8 @@ class ToolUse(_Event):
     name: str
     input: dict[str, Any]
     label: str
+    # Set on a subagent's events: the id of the Task call that started it.
+    parent_tool_use_id: str | None = None
 
 
 class ToolResult(_Event):
@@ -63,6 +65,8 @@ class ToolResult(_Event):
     content: str
     is_error: bool = False
     summary: str | None = None
+    # Set on a subagent's events: the id of the Task call that started it.
+    parent_tool_use_id: str | None = None
 
 
 class PermissionDenied(_Event):
@@ -70,6 +74,8 @@ class PermissionDenied(_Event):
     id: str
     name: str
     reason: str
+    # Set on a subagent's events: the id of the Task call that started it.
+    parent_tool_use_id: str | None = None
 
 
 class UsageUpdate(_Event):
