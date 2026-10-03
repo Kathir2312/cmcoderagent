@@ -183,6 +183,25 @@ You are a careful reviewer. Report problems with file:line references.
 `PreToolUse`/`PostToolUse` hooks and `SubagentStop` when it finishes, can't start subagents itself, and its file
 changes can be undone with `/rewind`. Its steps are shown inside the Task call in every front end.
 
+### Skills
+
+A skill is a folder with a `SKILL.md`: instructions for one kind of task, plus any templates, references or
+scripts it needs. Yours go in `~/.cmcoder/skills/<name>/`, a project's in `.cmcoder/skills/<name>/` (yours win on a
+name clash). Same format as Claude Code:
+
+```markdown
+---
+name: release-notes
+description: Writes release notes in our format. Use when asked for release notes or a changelog.
+---
+1. List the merged changes with `git log --oneline <last tag>..HEAD`.
+2. Fill in template.md, grouping changes by area.
+```
+
+Only the names and descriptions are in the system prompt; when a task matches, the model loads the instructions
+with the `Skill` tool, and the skill's other files with `Skill(skill, file)`. A skill is only text: it runs
+nothing by itself and grants no permissions (scripts it mentions go through the Bash tool's permission checks).
+
 ### Project memory
 
 cmcoder reads `CMCODER.md` (and `AGENTS.md`) from `~/.cmcoder/`, the project root and each folder down to the

@@ -133,3 +133,26 @@ subgraph's messages don't flow into the parent's state; streaming with
 cmcoder's agents are files a team writes, not code, and a subagent must obey
 the same permission rules as the main agent, so it shares the policy object
 instead of getting its own graph configuration.
+
+## 5. Skills
+
+### The LangGraph way
+
+There's no built-in "skill"; the usual patterns are a retrieval tool over a
+document store (RAG), or dynamic prompts (middleware that adds instructions
+when a condition holds). `deepagents` reads skills from a filesystem backend
+in the same SKILL.md format.
+
+### The cmcoder way
+
+| LangChain / LangGraph | cmcoder |
+|---|---|
+| a retriever tool over how-to documents | the `Skill` tool, by name instead of by similarity search |
+| dynamic system prompt middleware | the "# Skills" list: names and descriptions only |
+| documents in a vector store | folders in the repository or `~/.cmcoder/skills` |
+
+### Why they differ
+
+A team's how-tos are few and named, so the model can pick by description
+without embeddings, and the files live next to the code where they're
+reviewed like code.

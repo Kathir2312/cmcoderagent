@@ -26,6 +26,7 @@ from ..core.hooks import HookRunner
 from ..core.permissions import ModeNotAllowed, PermissionPolicy
 from ..core.prompt import build_subagent_prompt, build_system_prompt, load_memory_files
 from ..core.sessions import SessionLog, cleanup, find_session, list_sessions, load
+from ..core.skills import SkillTool, load_skills, skills_prompt
 from ..core.subagents import ModelChoice, SubagentRuntime
 from ..mcp_client import McpManager
 from ..providers.auth import ApiKeyAuth, AuthProvider, NoAuth
@@ -203,6 +204,8 @@ async def build_agent(settings: Settings, opts: AgentOptions) -> Agent:
     provider = build_provider(settings, provider_name)
     profile = await resolve_model_profile(settings, provider, model)
     memory = load_memory_files(cwd, root)
+    skills = load_skills(root)
+    skills_section = skills_prompt(skills)
     system_prompt = build_system_prompt(
         cwd,
         root,
@@ -210,6 +213,7 @@ async def build_agent(settings: Settings, opts: AgentOptions) -> Agent:
         model=model,
         memory=memory,
         append=opts.append_system_prompt,
+        skills=skills_section,
     )
 
     def save_rule(rule: str) -> None:
@@ -228,7 +232,7 @@ async def build_agent(settings: Settings, opts: AgentOptions) -> Agent:
         provider,
         model,
         profile,
-        default_tools(),
+        [*default_tools(), *([SkillTool(skills)] if skills else [])],
         policy,
         ToolContext(
             cwd=cwd,
@@ -254,7 +258,7 @@ async def build_agent(settings: Settings, opts: AgentOptions) -> Agent:
             settings.project_trusted,
             resolve_model=lambda ref: resolve_subagent_model(settings, provider, summarizer, ref),
             system_prompt=lambda d, m: build_subagent_prompt(
-                d.prompt, cwd, root, model=m, memory=memory
+                d.prompt, cwd, root, model=m, memory=memory, skills=skills_section
             ),
         ),
     )

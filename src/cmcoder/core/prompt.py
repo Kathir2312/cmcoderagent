@@ -122,6 +122,7 @@ def build_system_prompt(
     model: str | None = None,
     memory: list[MemoryFile] | None = None,
     append: str | None = None,
+    skills: str | None = None,
 ) -> str:
     """Stable content first (so server-side prefix caches are reused), dynamic last."""
     parts = [COMPACT_PROMPT if tier == "compact" else BASE_PROMPT]
@@ -131,6 +132,8 @@ def build_system_prompt(
             "# Project instructions\nFollow these instructions from the user's memory files. "
             f"They override the defaults above.\n\n{mem}"
         )
+    if skills:
+        parts.append(skills)
     if append:
         parts.append(append)
     parts.append(_environment(cwd, project_root, model))
@@ -163,6 +166,7 @@ def build_subagent_prompt(
     *,
     model: str | None = None,
     memory: list[MemoryFile] | None = None,
+    skills: str | None = None,
 ) -> str:
     """A subagent's system prompt: its own instructions, the project's memory
     files and the environment (not the main agent's long prompt)."""
@@ -170,5 +174,7 @@ def build_subagent_prompt(
     if memory:
         mem = "\n\n".join(f"## From {m.path}\n{m.content}" for m in memory)
         parts.append(f"# Project instructions\n{mem}")
+    if skills:
+        parts.append(skills)
     parts.append(_environment(cwd, project_root, model))
     return "\n\n".join(parts)

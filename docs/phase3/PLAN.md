@@ -139,6 +139,22 @@ over stdio and HTTP.
   the prompt; a `Skill` tool loads the rest when the model decides it's
   relevant, and the skill's other files can be read as usual.
 
+**Status: done.** `src/cmcoder/core/skills.py` (`load_skills`,
+`skills_prompt`, `SkillTool`), wired in `cli/factory.py`; tests in
+`tests/test_skills.py`.
+- A skill needs a description (that's how the model finds it); at most 50
+  are listed, descriptions up to 300 characters.
+- The skill's other files are read with `Skill(skill, file)` rather than
+  `Read`, so a skill in `~/.cmcoder/skills` works without a permission prompt
+  for a folder outside the project. Paths can't leave the skill's folder
+  (symlinks included), and secret files (`.env`, keys) are refused like `Read`
+  refuses them.
+- A project's skills are used without trust: like `CMCODER.md`, they're text
+  the model reads and they grant nothing (the trust decision covers what can
+  run or change permissions: MCP servers, hooks, agents, allow rules).
+- Subagents see the same skills list and can use the tool, unless their
+  `tools` leave it out.
+
 ### 6. Front ends
 
 - VS Code: slash-command completion, subagent cards, MCP and hook approval
@@ -172,7 +188,7 @@ binary). Output styles and the status line (later). Plugins and marketplaces.
 - [x] 2. Hooks
 - [x] 3. Custom slash commands
 - [x] 4. Subagents (`Task`)
-- [ ] 5. Skills
+- [x] 5. Skills
 - [ ] 6. Front ends (VS Code, doctor, trust)
 - [ ] 7. Tests, evals and security review
 - [ ] 8. Guides and docs

@@ -239,3 +239,48 @@ cmcoder -p "Use the explore agent to find where settings files are read, then su
 ```
 
 Watch the `│ ●` lines: the subagent's calls, inside the Task call.
+
+## 5. Skills
+
+*Done.* Code: `src/cmcoder/core/skills.py`, wired in `cli/factory.py`.
+Tests: `tests/test_skills.py`.
+
+### The problem
+
+A team has long how-tos: the release checklist, the migration procedure, the
+house style for API docs. Putting all of them in `CMCODER.md` would fill the
+context window on every request, even when nobody is releasing anything.
+
+### The idea
+
+**Progressive disclosure**: the system prompt only lists each skill's name and
+one-line description. When a task matches, the model calls the `Skill` tool to
+load the full instructions, and reads the skill's other files only if they're
+needed.
+
+### The code
+
+- `load_skills` finds `*/SKILL.md` with `Path.glob` and reuses the commands'
+  `parse_file` for the frontmatter; a skill without a description is skipped.
+- `skills_prompt` builds the "# Skills" section; the factory passes it to
+  `build_system_prompt` and to every subagent's prompt.
+- `SkillTool.run` resolves the requested file and checks
+  `path.is_relative_to(folder)` **after** `resolve()`, so neither `../` nor a
+  symlink can leave the folder; then the same `is_secret` check as `Read`.
+
+### New Python ideas
+
+- **`Path.resolve()` + `is_relative_to()`**: the standard way to keep a
+  user-supplied path inside a directory.
+- **`rglob("*")`** lists a folder tree; `relative_to(...).as_posix()` gives the
+  same `a/b.md` names on Windows and Linux.
+
+### Try it
+
+```bash
+mkdir -p ~/.cmcoder/skills/haiku
+printf -- '---\nname: haiku\ndescription: Use when asked for a poem about code.\n---\nWrite a haiku (5-7-5) about the code in question.\n' > ~/.cmcoder/skills/haiku/SKILL.md
+cmcoder -p "write a poem about src/cmcoder/core/skills.py"
+```
+
+The output shows `Skill(haiku)` before the poem.
