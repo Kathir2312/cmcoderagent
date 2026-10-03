@@ -219,6 +219,28 @@ result, status, turns and tool calls. Mock run: **40/40 passed, parity
 the main README's "VS Code extension" section, and sections 1–12 in
 [python-guide.md](python-guide.md) and [langgraph-guide.md](langgraph-guide.md).
 
+## Hands-on check (Windows, real gateway)
+
+The last step before `STATUS.md`. In a real project, with the `.vsix`
+installed:
+
+1. Open the chat (Ctrl+Alt+K): the banner shows your model; no error.
+2. A multi-step task ("create mathops.py with add and divide, write pytest
+   tests, run them"): streaming reply, todo list, tool cards with output.
+3. A Write/Edit opens the **diff editor**; **Accept** in its title bar
+   applies it, **Reject** with a message makes cmcoder try something else.
+4. **Always allow** on an edit, then a second edit of the same file: no
+   prompt.
+5. Select lines, **Ctrl+Alt+L**, ask "what does this do?": the answer is
+   about the selection (📎 shows it was attached).
+6. A file with a problem in the Problems panel: "fix the problems in this
+   file" (cmcoder may call `getDiagnostics`).
+7. **Stop** / Esc during a long command.
+8. **History** → pick an older conversation: it is shown and continues.
+9. **cmcoder: Open in Terminal**: the CLI starts in the project folder.
+10. `uv run python evals/run.py --via both` against the gateway: same
+    results through `-p` and the extension's protocol.
+
 ## Not in Phase 2
 
 MCP, hooks, custom slash commands, subagents, Bash sandbox (Phase 3); SSO,
