@@ -229,6 +229,8 @@ class Agent:
         # A subagent (started by the Task tool) skips the prompt hooks and runs
         # SubagentStop instead of Stop.
         self.is_subagent = False
+        # Shown with the first turn (e.g. a sandbox that was asked for but can't run).
+        self.startup_warnings: list[str] = []
         if subagents is not None:
             self.tools["Task"] = TaskTool(self, subagents)
         # Called with (model, tokens) when the server states a smaller window.
@@ -450,8 +452,9 @@ class Agent:
             _done, pending = await asyncio.wait(self._background, timeout=TITLE_WAIT_ON_CLOSE)
             for t in pending:
                 t.cancel()
-        if self.ctx.shell:
-            await self.ctx.shell.close()
+        await self.ctx.close_shells()
+        if self.ctx.sandbox is not None and not self.is_subagent:
+            await self.ctx.sandbox.close()
         providers = [self.provider]
         if self.summarizer is not None and self.summarizer.provider is not self.provider:
             providers.append(self.summarizer.provider)
@@ -523,6 +526,7 @@ class Agent:
                 cwd=self.ctx.cwd,
                 project_root=self.ctx.project_root,
                 max_output_chars=self.ctx.max_output_chars,
+                sandbox=self.ctx.sandbox,
             ),
             prompt,
             max_turns=self.max_turns,
@@ -603,6 +607,9 @@ class Agent:
         user_message = Message.user(f"{context}\n\n{prompt}" if context else prompt)
         user_message.turn = self.turn
         self.messages.append(user_message)
+        for message in self.startup_warnings:
+            yield ev.Warning(message=message)
+        self.startup_warnings = []
         async for warning in self._start_mcp():
             yield warning
         if self.hooks is not None and not self.is_subagent:

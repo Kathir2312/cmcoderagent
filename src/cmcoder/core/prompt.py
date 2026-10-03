@@ -135,6 +135,7 @@ def build_system_prompt(
     memory: list[MemoryFile] | None = None,
     append: str | None = None,
     skills: str | None = None,
+    sandbox: str | None = None,
 ) -> str:
     """Stable content first (so server-side prefix caches are reused), dynamic last."""
     parts = [COMPACT_PROMPT if tier == "compact" else BASE_PROMPT]
@@ -148,7 +149,8 @@ def build_system_prompt(
         parts.append(skills)
     if append:
         parts.append(append)
-    parts.append(_environment(cwd, project_root, model))
+    env = _environment(cwd, project_root, model)
+    parts.append(f"{env}\n{sandbox}" if sandbox else env)
     return "\n\n".join(parts)
 
 

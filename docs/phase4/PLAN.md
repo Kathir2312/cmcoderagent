@@ -15,6 +15,9 @@ usage if it wants to.
 | Gateways | LiteLLM (as before) **plus Open WebUI**. What runs behind Open WebUI is unknown, so both Ollama and OpenAI-compatible backends are handled; `cmcoder doctor` tells which. |
 | Bash sandbox | **Linux, macOS, and Windows through WSL2.** Native Windows keeps permission prompts as the protection (as Claude Code does). |
 | OpenTelemetry | **Yes, off by default.** Counts and timings only, never prompts, code, paths or commands. |
+| TUI default (3 Oct, item 2) | **Classic stays the default**; the full-screen UI remains opt-in (`--tui`). |
+| Sandbox: prompts (3 Oct, item 3) | **Auto-allow**: a command that runs in the sandbox doesn't ask (deny rules and high-risk commands unchanged). |
+| Sandbox: network (3 Oct, item 3) | **Blocked except an allowlist** of hosts in settings. |
 
 ## Items, in order
 
@@ -85,6 +88,32 @@ point; it is now restored as it was. Tests: `tests/test_panel_commands.py`,
 - Decided when the item starts: may sandboxed commands skip the permission
   prompt (Claude Code's auto-allow)?
 
+**Status: done.** `src/cmcoder/sandbox/` (`Sandbox`, `detect`,
+`seatbelt_profile`; `proxy.py` the filtering proxy; `bridge.py` inside the
+Linux sandbox), the sandboxed `PersistentShell`, Bash's
+`dangerously_disable_sandbox`, the policy rules, `doctor` section, a note in
+the system prompt. Tests: `tests/test_sandbox.py` (real bubblewrap in CI on
+Linux, `sandbox-exec` on macOS; the evals run sandboxed there too).
+- The persistent shell runs inside the sandbox, so `cd` and variables still
+  carry over. bubblewrap: read-only `/`, private `/tmp`, the project and a temp
+  folder writable, own PID and network namespaces (`--die-with-parent`,
+  `--new-session`); a timeout kills everything inside.
+- Read-only inside the project: `.git/hooks`, `.git/config` (hooks and
+  `core.fsmonitor` would run outside the sandbox later), `.cmcoder` (cmcoder's
+  permissions), `.vscode`, `.mcp.json`. Hidden: `~/.ssh`, `~/.aws`, `~/.azure`,
+  gcloud, `~/.kube`, Docker's config, `~/.netrc`, git credentials, `~/.gnupg`,
+  `~/.pypirc`, cmcoder's credentials file, plus `sandbox.denyReadPaths`.
+- Package caches (pip, npm, yarn, Go, XDG) go to the sandbox's temp folder, so
+  a sandboxed command can't poison caches used unsandboxed later.
+- Network: Linux has none except a bridge to the proxy's Unix socket; macOS
+  only localhost (the proxy, and local dev servers). The proxy allows
+  `sandbox.network.allowedHosts` (`*.example.com` for subdomains), chains to
+  the user's own HTTPS_PROXY, and answers others with a 403 naming the setting.
+- Leaving the sandbox (`dangerously_disable_sandbox`) asks every time, even
+  over an allow rule ("always allow" isn't offered); `allowUnsandboxedCommands:
+  false` (e.g. managed) forbids it; plan mode denies it.
+- `CMCODER_SANDBOX=off|on|auto`. A repository's `sandbox` settings need trust.
+
 ### 4. OpenTelemetry (off by default)
 
 - OTLP export configured in settings or managed settings (standard `OTEL_*`
@@ -116,8 +145,8 @@ client certificates: later, if needed.
 ## Checklist
 
 - [x] 1. Open WebUI gateway
-- [ ] 2. Carry-overs (VS Code commands, TUI default, Node 22)
-- [ ] 3. Bash sandbox
+- [x] 2. Carry-overs (VS Code commands, TUI default, Node 22)
+- [x] 3. Bash sandbox
 - [ ] 4. OpenTelemetry
 - [ ] 5. Standalone binary and per-platform VSIX
 - [ ] 6. Tests, evals and security review

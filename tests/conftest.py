@@ -26,6 +26,9 @@ def _isolate_config(
         if var.startswith(("CMCODER_", "OPENAI_")) and var != "CMCODER_CONFIG_DIR":
             monkeypatch.delenv(var)
     monkeypatch.setenv("PYTHON_KEYRING_BACKEND", "keyring.backends.fail.Keyring")
+    # Most tests are about permission prompts; tests/test_sandbox.py and the
+    # evals use the Bash sandbox.
+    monkeypatch.setenv("CMCODER_SANDBOX", "off")
     # Never pick up real managed settings from the machine running the tests.
     missing = tmp_path_factory.mktemp("no-managed") / "managed-settings.json"
     monkeypatch.setattr("cmcoder.config.settings.managed_settings_path", lambda: missing)

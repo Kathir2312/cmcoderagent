@@ -34,6 +34,7 @@ from ..providers.openai_compat import OpenAICompatProvider, ProviderError
 from ..providers.openwebui import OpenWebUIProvider
 from ..providers.profiles import ModelProfile, resolve_profile
 from ..providers.transport import TransportOptions, build_client
+from ..sandbox import make_sandbox
 from ..tools.base import ToolContext, output_budget_chars
 from ..tools.registry import default_tools
 
@@ -224,6 +225,7 @@ async def build_agent(settings: Settings, opts: AgentOptions) -> Agent:
     provider = build_provider(settings, provider_name)
     profile = await resolve_model_profile(settings, provider, model)
     memory = load_memory_files(cwd, root)
+    sandbox, sandbox_warning = make_sandbox(settings.sandbox, root)
     skills = load_skills(root)
     skills_section = skills_prompt(skills)
     system_prompt = build_system_prompt(
@@ -234,6 +236,7 @@ async def build_agent(settings: Settings, opts: AgentOptions) -> Agent:
         memory=memory,
         append=opts.append_system_prompt,
         skills=skills_section,
+        sandbox=sandbox.prompt_note() if sandbox else None,
     )
 
     def save_rule(rule: str) -> None:
@@ -258,6 +261,7 @@ async def build_agent(settings: Settings, opts: AgentOptions) -> Agent:
             cwd=cwd,
             project_root=root,
             max_output_chars=output_budget_chars(profile.context_window),
+            sandbox=sandbox,
         ),
         system_prompt,
         max_turns=opts.max_turns or settings.max_turns,
@@ -282,6 +286,8 @@ async def build_agent(settings: Settings, opts: AgentOptions) -> Agent:
             ),
         ),
     )
+    if sandbox_warning:
+        agent.startup_warnings.append(sandbox_warning)
     if opts.continue_session or opts.resume:
         resume_session(agent, settings, root, opts.resume)
     return agent

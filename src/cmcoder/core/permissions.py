@@ -271,6 +271,24 @@ class PermissionPolicy:
                 )
             return PermissionCheck(Decision.ASK, f"high-risk: {risk}", high_risk=True)
         if (
+            tool.name == "Bash"
+            and ctx.sandbox is not None
+            and getattr(args, "dangerously_disable_sandbox", False)
+        ):
+            # Before allow rules: leaving the sandbox is the user's call each time.
+            if not ctx.sandbox.allow_unsandboxed:
+                return PermissionCheck(
+                    Decision.DENY,
+                    "running commands outside the sandbox is turned off by settings; "
+                    "tell the user what the sandbox blocks",
+                )
+            if self.mode == "plan":
+                return PermissionCheck(
+                    Decision.DENY, "plan mode is read-only; propose a plan instead"
+                )
+            if self.mode != "bypassPermissions":
+                return PermissionCheck(Decision.ASK, "runs outside the sandbox", high_risk=True)
+        if (
             tool.name in FILE_EDIT_TOOLS
             and isinstance(target, Path)
             and self.mode != "bypassPermissions"
@@ -314,6 +332,8 @@ class PermissionPolicy:
                 return PermissionCheck(
                     Decision.DENY, "plan mode is read-only; propose a plan instead"
                 )
+            if ctx.sandbox is not None and ctx.sandbox.auto_allow:
+                return PermissionCheck(Decision.ALLOW, "runs in the sandbox")
             return PermissionCheck(Decision.ASK)
 
         if tool.name in FILE_EDIT_TOOLS:

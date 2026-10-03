@@ -9,8 +9,12 @@ import uuid
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from ..compat import kill_process_tree, new_process_group_kwargs
+
+if TYPE_CHECKING:
+    from ..sandbox import Sandbox
 
 MAX_CAPTURE_BYTES = 5_000_000
 # Max length of a single output line the reader accepts (default asyncio limit is 64 KiB).
@@ -61,9 +65,10 @@ def child_env(cwd: Path) -> dict[str, str]:
 
 
 class PersistentShell:
-    def __init__(self, cwd: Path, shell: str) -> None:
+    def __init__(self, cwd: Path, shell: str, sandbox: Sandbox | None = None) -> None:
         self.initial_cwd = cwd
         self.shell = shell
+        self.sandbox = sandbox  # run the shell inside it
         self._proc: asyncio.subprocess.Process | None = None
         # Killed shells still to be reaped, so their pipes are closed cleanly
         # (Windows warns about unclosed transports otherwise).
@@ -81,10 +86,12 @@ class PersistentShell:
                 "TERM": "dumb",
             }
         )
+        argv = [self.shell, "--noprofile", "--norc"]
+        if self.sandbox is not None:
+            argv, sandbox_env = await self.sandbox.shell_command(self.shell, self.initial_cwd)
+            env.update(sandbox_env)
         self._proc = await asyncio.create_subprocess_exec(
-            self.shell,
-            "--noprofile",
-            "--norc",
+            *argv,
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,

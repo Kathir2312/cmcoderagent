@@ -99,6 +99,31 @@ class McpServerConfig(_Model):
         return out
 
 
+class SandboxNetwork(_Model):
+    # Hosts sandboxed commands may reach (through cmcoder's proxy): exact names,
+    # or "*.example.com" for its subdomains. Everything else is blocked.
+    allowed_hosts: list[str] = Field(default_factory=list, alias="allowedHosts")
+
+
+class SandboxConfig(_Model):
+    """The Bash sandbox (Linux/WSL2: bubblewrap; macOS: sandbox-exec)."""
+
+    # "auto": on where available. A repository's settings can't change any of
+    # this unless the project is trusted; managed settings win over yours.
+    enabled: bool | Literal["auto"] = "auto"
+    # Sandboxed commands run without a permission prompt (deny rules and
+    # high-risk commands still apply).
+    auto_allow: bool = Field(True, alias="autoAllow")
+    network: SandboxNetwork = Field(default_factory=lambda: SandboxNetwork.model_validate({}))
+    # More folders sandboxed commands may write to (besides the project and a
+    # temp folder), and more to hide from them (besides ~/.ssh, ~/.aws, ...).
+    writable_paths: list[str] = Field(default_factory=list, alias="writablePaths")
+    deny_read_paths: list[str] = Field(default_factory=list, alias="denyReadPaths")
+    # Whether the model may ask to run a command outside the sandbox (it always
+    # asks the user). Managed settings can set false.
+    allow_unsandboxed_commands: bool = Field(True, alias="allowUnsandboxedCommands")
+
+
 class HookCommand(_Model):
     type: Literal["command"] = "command"
     command: str
@@ -165,6 +190,7 @@ class Settings(_Model):
     lock_providers: bool = Field(False, alias="lockProviders")
     # MCP servers from your user (and managed) settings.
     mcp_servers: dict[str, McpServerConfig] = Field(default_factory=dict, alias="mcpServers")
+    sandbox: SandboxConfig = Field(default_factory=lambda: SandboxConfig.model_validate({}))
     # Managed settings only: server names allowed (if set) and denied.
     allowed_mcp_servers: list[str] | None = Field(None, alias="allowedMcpServers")
     denied_mcp_servers: list[str] = Field(default_factory=list, alias="deniedMcpServers")
@@ -371,6 +397,13 @@ def env_layer(environ: dict[str, str] | None = None) -> dict[str, Any]:
         layer["model"] = env["CMCODER_MODEL"]
     if env.get("CMCODER_SMALL_FAST_MODEL"):
         layer["smallFastModel"] = env["CMCODER_SMALL_FAST_MODEL"]
+    sandbox = env.get("CMCODER_SANDBOX", "").strip().lower()
+    if sandbox in ("0", "false", "off", "no"):
+        layer["sandbox"] = {"enabled": False}
+    elif sandbox in ("1", "true", "on", "yes"):
+        layer["sandbox"] = {"enabled": True}
+    elif sandbox == "auto":
+        layer["sandbox"] = {"enabled": "auto"}
     if env.get("CMCODER_SUBAGENT_MODEL"):
         layer["subagentModel"] = env["CMCODER_SUBAGENT_MODEL"]
     return layer
@@ -511,6 +544,8 @@ def _filter_project_layer(layer: dict[str, Any], trusted: bool) -> tuple[dict[st
     if hooks := out.pop("hooks", None):
         events = ", ".join(hooks) if isinstance(hooks, dict) else "?"
         dropped.append(f"hooks ({events})")
+    if out.pop("sandbox", None) is not None:
+        dropped.append("sandbox settings")
     if servers := out.pop("mcpServers", None):
         names = ", ".join(servers) if isinstance(servers, dict) else "?"
         dropped.append(f"mcpServers ({names})")

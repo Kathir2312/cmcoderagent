@@ -273,8 +273,7 @@ class TaskTool(Tool):
                     yield ev.Warning(message=f"[{definition.name}] {event.message}")
         finally:
             parent.usage.add(child.usage)
-            if child.ctx.shell is not None:
-                await child.ctx.shell.close()
+            await child.ctx.close_shells()
         summary = f"{tool_uses} tool use{'s' if tool_uses != 1 else ''} · {choice.model}"
         if final is None:
             yield TaskDone(

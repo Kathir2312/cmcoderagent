@@ -23,6 +23,12 @@ class BashInput(ToolInput):
     description: str | None = Field(
         None, description="Short description of what the command does (5-10 words)."
     )
+    dangerously_disable_sandbox: bool = Field(
+        False,
+        description="Run outside the sandbox. Only after a command failed because of the "
+        "sandbox (read-only file system, blocked network) and it is really needed; the user "
+        "is always asked.",
+    )
 
 
 class BashTool(Tool):
@@ -42,16 +48,34 @@ class BashTool(Tool):
 
     def describe(self, args: BashInput, ctx: ToolContext) -> str:
         cmd = args.command.strip().replace("\n", " ")
-        return f"Bash({cmd if len(cmd) <= 80 else cmd[:77] + '...'})"
+        label = f"Bash({cmd if len(cmd) <= 80 else cmd[:77] + '...'})"
+        return f"{label} [outside the sandbox]" if outside_sandbox(args, ctx) else label
 
     async def run(self, args: BashInput, ctx: ToolContext) -> ToolResult:
-        if ctx.shell is None:
-            shell = find_shell()
-            if shell is None:
-                return ToolResult(f"No shell available. {SHELL_HELP}", is_error=True)
-            ctx.shell = PersistentShell(ctx.cwd, shell)
-        res = await ctx.shell.run(args.command, float(args.timeout_seconds or DEFAULT_TIMEOUT))
+        shell = find_shell()
+        if shell is None and (ctx.shell is None or ctx.unsandboxed_shell is None):
+            return ToolResult(f"No shell available. {SHELL_HELP}", is_error=True)
+        if outside_sandbox(args, ctx):
+            if ctx.unsandboxed_shell is None:
+                assert shell is not None
+                ctx.unsandboxed_shell = PersistentShell(ctx.cwd, shell)
+            runner = ctx.unsandboxed_shell
+        else:
+            if ctx.shell is None:
+                assert shell is not None
+                ctx.shell = PersistentShell(ctx.cwd, shell, sandbox=ctx.sandbox)
+            runner = ctx.shell
+        res = await runner.run(args.command, float(args.timeout_seconds or DEFAULT_TIMEOUT))
         out = truncate_middle(res.output.rstrip("\n"), ctx.max_output_chars)
+        if ctx.sandbox is not None and runner is ctx.shell and _sandbox_blocked(res.output):
+            out += "\n\n" + (
+                "(This ran in the sandbox: it can write only inside the project and reach only "
+                "allowed hosts. If the command really needs more, run it again with "
+                "dangerously_disable_sandbox; the user will be asked.)"
+                if ctx.sandbox.allow_unsandboxed
+                else "(This ran in the sandbox, which can't be turned off here: tell the user "
+                "what is blocked.)"
+            )
         if res.exit_code not in (0, None):
             out = f"{out}\n\nExit code {res.exit_code}" if out else f"Exit code {res.exit_code}"
         hidden = hidden_pipe_failure(res.pipe_status) if res.exit_code == 0 else None
@@ -71,6 +95,18 @@ class BashTool(Tool):
         else:
             summary = f"exit {res.exit_code}" + (f" · pipe {hidden}" if hidden else "")
         return ToolResult(out, is_error=failed, summary=summary)
+
+
+def outside_sandbox(args: BashInput, ctx: ToolContext) -> bool:
+    """True when this call runs unsandboxed although a sandbox is active."""
+    return ctx.sandbox is not None and args.dangerously_disable_sandbox
+
+
+def _sandbox_blocked(output: str) -> bool:
+    return any(
+        s in output
+        for s in ("Read-only file system", "cmcoder sandbox:", "Operation not permitted")
+    )
 
 
 SIGPIPE_EXIT = 141  # `yes | head -1`: the writer is stopped when the reader quits; not a failure

@@ -7,6 +7,7 @@ import os
 import platform
 import socket
 import ssl
+import sys
 import tempfile
 import time
 from dataclasses import dataclass
@@ -494,6 +495,30 @@ class Doctor:
         if find_shell() is None:
             self.report(FAIL, "Hooks need bash to run", SHELL_HELP)
 
+    def check_sandbox(self) -> None:
+        from ..sandbox import detect
+
+        cfg = self.settings.sandbox
+        self.section("Bash sandbox")
+        if cfg.enabled is False:
+            self.report(INFO, "Off in settings (sandbox.enabled: false)")
+            return
+        avail = detect()
+        if not avail.ok:
+            status = INFO if sys.platform == "win32" else WARN
+            self.report(status, "Not available: Bash commands run unsandboxed", avail.reason)
+            return
+        how = "bubblewrap" if avail.kind == "bwrap" else "macOS sandbox-exec"
+        hosts = ", ".join(cfg.network.allowed_hosts) or "none (add sandbox.network.allowedHosts)"
+        self.report(
+            OK,
+            f"Bash commands run in a sandbox ({how})",
+            f"writes: the project and a temp folder{' + ' + ', '.join(cfg.writable_paths) if cfg.writable_paths else ''}\n"
+            f"network: {hosts}\n"
+            f"prompts: {'none for sandboxed commands' if cfg.auto_allow else 'as usual'}; "
+            f"leaving the sandbox: {'asks each time' if cfg.allow_unsandboxed_commands else 'not allowed'}",
+        )
+
     def check_extensions(self) -> None:
         """Custom commands, subagents and skills: what's found, and from where."""
         from ..core.commands import load_commands
@@ -578,6 +603,7 @@ class Doctor:
                 await self.check_api(provider_name, models, probe)
         await self.check_mcp(probe)
         self.check_hooks()
+        self.check_sandbox()
         self.check_extensions()
         self.console.print()
         if self.failed:
