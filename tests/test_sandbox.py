@@ -108,7 +108,10 @@ async def test_files(project: Path, home: Path) -> None:
     assert r[0].output.strip() == "ok" and (project / "made.txt").read_text() == "ok\n"
     assert not outside.exists()  # outside the project: never reaches the disk
     for i in (2, 3, 4):
-        assert r[i].exit_code != 0 and "Read-only file system" in r[i].output
+        # Linux: "Read-only file system"; macOS: "Operation not permitted".
+        assert r[i].exit_code != 0 and (
+            "Read-only file system" in r[i].output or "Operation not permitted" in r[i].output
+        )
     assert not (project / ".git" / "hooks" / "pre-commit").exists()
     assert (project / ".git" / "config").read_text() == "[core]\n"
     assert not (project / ".cmcoder" / "settings.json").exists()

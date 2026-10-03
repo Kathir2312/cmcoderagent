@@ -28,6 +28,8 @@ def _pipe(src: socket.socket, dst: socket.socket) -> None:
 
 
 def _serve(client: socket.socket, path: str) -> None:
+    if sys.platform == "win32":
+        raise SystemExit("the sandbox bridge runs on Linux only")
     upstream = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     try:
         upstream.connect(path)

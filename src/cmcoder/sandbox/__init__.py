@@ -233,7 +233,9 @@ class Sandbox:
         assert self.tmp is not None
         bwrap = find_program("bwrap") or "bwrap"
         argv = [bwrap, "--die-with-parent", "--new-session", "--unshare-pid", "--unshare-net"]
-        argv += ["--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp"]
+        # A new, private, empty /tmp inside the sandbox (not a temp file of ours).
+        private_tmp = ["--tmpfs", "/tmp"]  # nosec B108
+        argv += ["--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", *private_tmp]
         for p in writable:
             argv += ["--bind", str(p), str(p)]
         for p in protected:
@@ -282,7 +284,11 @@ def seatbelt_profile(writable: list[Path], protected: list[Path], hidden: list[P
         lines += ["(deny file-read* file-write*", *[f"  (subpath {_sb(p)})" for p in hidden], ")"]
     lines += [
         "(deny network*)",
-        '(allow network* (local ip "localhost:*") (remote ip "localhost:*"))',
+        # Local servers (the proxy, a test server): bind and accept on localhost,
+        # connect only to localhost. Nothing else leaves the machine.
+        '(allow network-bind (local ip "localhost:*"))',
+        '(allow network-inbound (local ip "localhost:*"))',
+        '(allow network-outbound (remote ip "localhost:*"))',
     ]
     return "\n".join(lines) + "\n"
 

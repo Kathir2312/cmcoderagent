@@ -14,6 +14,7 @@ import asyncio
 import fnmatch
 import ipaddress
 import os
+import sys
 import urllib.parse
 import urllib.request
 from contextlib import suppress
@@ -70,6 +71,8 @@ class FilteringProxy:
         self._tasks: set[asyncio.Task[None]] = set()
 
     async def start_unix(self, path: str) -> None:
+        if sys.platform == "win32":
+            raise RuntimeError("Unix sockets: Linux and macOS only")
         self._server = await asyncio.start_unix_server(self._handle, path=path)
         with suppress(OSError):
             os.chmod(path, 0o600)
