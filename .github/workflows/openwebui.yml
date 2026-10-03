@@ -1,0 +1,37 @@
+name: Open WebUI
+
+# cmcoder through a real Open WebUI (tests/test_openwebui_real.py), in front of
+# the mock model server and a stand-in Ollama. Open WebUI is a ~7 GB install, so
+# this runs on its own: by hand, weekly (new Open WebUI releases), and when the
+# provider code changes.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 4 * * 1"
+  push:
+    paths:
+      - "src/cmcoder/providers/**"
+      - "tests/test_openwebui*.py"
+      - "tests/fake_ollama.py"
+      - ".github/workflows/openwebui.yml"
+
+jobs:
+  openwebui:
+    name: real Open WebUI (latest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: uv sync
+      - name: Install Open WebUI (separate venv)
+        run: |
+          uv venv /tmp/owui --python 3.12
+          uv pip install --python /tmp/owui/bin/python open-webui
+          /tmp/owui/bin/python -c "import importlib.metadata as m; print('open-webui', m.version('open-webui'))"
+      - name: Tests through Open WebUI
+        env:
+          CMCODER_TEST_OPENWEBUI: /tmp/owui/bin/open-webui
+        run: uv run pytest -q tests/test_openwebui_real.py tests/test_openwebui.py

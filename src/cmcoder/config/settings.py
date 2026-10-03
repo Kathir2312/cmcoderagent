@@ -35,6 +35,9 @@ class AuthConfig(_Model):
 
 
 class ProviderConfig(_Model):
+    # "openai": any OpenAI-compatible server (LiteLLM, vLLM, ...), baseUrl ending
+    # in /v1. "openwebui": an Open WebUI server, baseUrl its address.
+    type: Literal["openai", "openwebui"] = "openai"
     base_url: str = Field(alias="baseUrl")
     auth: AuthConfig = Field(default_factory=lambda: AuthConfig())
     ca_cert_path: str | None = Field(None, alias="caCertPath")
@@ -360,6 +363,8 @@ def env_layer(environ: dict[str, str] | None = None) -> dict[str, Any]:
     provider: dict[str, Any] = {}
     if base_url:
         provider["baseUrl"] = base_url
+    if env.get("CMCODER_PROVIDER_TYPE"):
+        provider["type"] = env["CMCODER_PROVIDER_TYPE"]
     if provider:
         layer["providers"] = {"default": provider}
     if env.get("CMCODER_MODEL"):

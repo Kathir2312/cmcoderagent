@@ -44,6 +44,8 @@ class MockState:
         summary: str = "Summary (mock): the user asked for work on the project; files were read.",
         model_info: bool = True,
         title: str = "Fix the login bug",
+        openwebui: dict[str, str] | None = None,
+        ollama_context: dict[str, int] | None = None,
     ) -> None:
         self.script = list(script)
         self.models = models or ["qwen3-27b", "qwen3-7b"]
@@ -54,6 +56,12 @@ class MockState:
         self.summary = summary
         self.model_info = model_info  # False: no /model/info, like many gateways
         self.title = title
+        # Open WebUI mode: model -> owned_by ("ollama" or "openai"); see _openwebui.
+        self.openwebui = openwebui
+        self.ollama_context = ollama_context or {}
+        # Ollama models: requests whose prompt didn't fit num_ctx (Ollama drops
+        # the start silently; the default num_ctx is small).
+        self.truncated: list[str] = []
         self.title_requests: list[dict[str, Any]] = []
         self.think_tags = think_tags
         self.requests: list[dict[str, Any]] = []
@@ -138,6 +146,65 @@ def _chunks(
     return out
 
 
+OLLAMA_DEFAULT_NUM_CTX = 2048
+
+
+def _ollama_chunks(reply: dict[str, Any], model: str, prompt_tokens: int) -> list[dict[str, Any]]:
+    """An Ollama reply as Open WebUI converts it (utils/response.py): tool calls
+    whole and all numbered 0, each with its own id; an empty chunk mid-stream
+    saying finish_reason "stop"; usage with the last chunk."""
+    cid = f"chatcmpl-{uuid.uuid4()}"
+
+    def chunk(delta: dict[str, Any], finish: str | None = None) -> dict[str, Any]:
+        return {
+            "id": cid,
+            "object": "chat.completion.chunk",
+            "model": model,
+            "choices": [{"index": 0, "delta": delta, "finish_reason": finish}],
+        }
+
+    out = []
+    if reply.get("reasoning"):
+        out.append(chunk({"role": "assistant", "reasoning_content": reply["reasoning"]}))
+    content = reply.get("content") or ""
+    for i in range(0, len(content), 12):
+        out.append(chunk({"content": content[i : i + 12]}))
+    out.append(chunk({}, "stop"))  # Ollama's empty mid-stream chunk
+    calls = reply.get("tool_calls") or []
+    if calls:
+        out.append(
+            chunk(
+                {
+                    "tool_calls": [
+                        {
+                            "index": 0,
+                            "id": f"call_{uuid.uuid4()}",
+                            "type": "function",
+                            "function": {
+                                "name": c["name"],
+                                "arguments": json.dumps(c.get("arguments", {})),
+                            },
+                        }
+                        for c in calls
+                    ]
+                }
+            )
+        )
+    completion = max(1, len(content) // 4)
+    last = chunk({}, "tool_calls" if calls else "stop")
+    last["usage"] = {
+        "input_tokens": prompt_tokens,
+        "output_tokens": completion,
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion,
+        "total_tokens": prompt_tokens + completion,
+    }
+    out.append(last)
+    if out[0]["choices"][0]["delta"] is not None:
+        out[0]["choices"][0]["delta"]["role"] = "assistant"
+    return out
+
+
 def make_handler(state: MockState) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
@@ -165,6 +232,17 @@ def make_handler(state: MockState) -> type[BaseHTTPRequestHandler]:
             if not self._authorized():
                 return
             path = self.path.rstrip("/")
+            if state.openwebui is not None:
+                if path in ("/api/models", "/api/v1/models"):
+                    data = [
+                        {"id": m, "name": m, "object": "model", "owned_by": owner}
+                        for m, owner in state.openwebui.items()
+                    ]
+                    data.append({"id": "arena-model", "name": "Arena", "owned_by": "arena"})
+                    self._json(200, {"data": data})
+                else:
+                    self._json(404, {"detail": "Not Found"})
+                return
             if path.endswith("/models"):
                 self._json(
                     200,
@@ -198,7 +276,29 @@ def make_handler(state: MockState) -> type[BaseHTTPRequestHandler]:
             raw = self.rfile.read(length)
             if not self._authorized():
                 return
-            if not self.path.rstrip("/").endswith("/chat/completions"):
+            ollama = False
+            if state.openwebui is not None:
+                path = self.path.rstrip("/")
+                if path == "/ollama/api/show":
+                    model = json.loads(raw or b"{}").get("model", "")
+                    if state.openwebui.get(model) != "ollama":
+                        self._json(400, {"detail": f"Model '{model}' was not found"})
+                    else:
+                        ctx = state.ollama_context.get(model, 40960)
+                        self._json(
+                            200,
+                            {"model_info": {"general.architecture": "x", "x.context_length": ctx}},
+                        )
+                    return
+                if path not in ("/api/chat/completions", "/api/v1/chat/completions"):
+                    self._json(404, {"detail": "Not Found"})
+                    return
+                body = json.loads(raw or b"{}")
+                if body.get("model") not in state.openwebui:
+                    self._json(400, {"detail": "Model not found"})
+                    return
+                ollama = state.openwebui[body["model"]] == "ollama"
+            elif not self.path.rstrip("/").endswith("/chat/completions"):
                 self._json(404, {"error": {"message": f"not found: {self.path}"}})
                 return
             body = json.loads(raw or b"{}")
@@ -210,20 +310,28 @@ def make_handler(state: MockState) -> type[BaseHTTPRequestHandler]:
             )
             max_tokens = int(body.get("max_tokens") or 0)
             requested = prompt_tokens + max_tokens
+            if ollama:
+                # Ollama never refuses: it drops what doesn't fit num_ctx.
+                num_ctx = int((body.get("options") or {}).get("num_ctx") or OLLAMA_DEFAULT_NUM_CTX)
+                if prompt_tokens > num_ctx:
+                    state.truncated.append(str(model))
+                max_tokens = 0
+                requested = 0
             # Like vLLM, always reject a max_tokens larger than the window itself
             # (that is how cmcoder probes the limit); anything else only when enforcing.
             if requested > state.window(model) and (
                 state.enforce_context or max_tokens >= state.window(model)
             ):
+                message = (
+                    f"This model's maximum context length is {state.window(model)} tokens. "
+                    f"However, you requested {requested} tokens. Please reduce the length of "
+                    "the messages."
+                )
                 self._json(
                     400,
-                    {
-                        "error": {
-                            "message": f"This model's maximum context length is "
-                            f"{state.window(model)} tokens. However, you requested "
-                            f"{requested} tokens. Please reduce the length of the messages."
-                        }
-                    },
+                    {"detail": message}
+                    if state.openwebui is not None
+                    else {"error": {"message": message}},
                 )
                 return
             messages = body.get("messages") or [{}]
@@ -242,8 +350,12 @@ def make_handler(state: MockState) -> type[BaseHTTPRequestHandler]:
                     reply = {"content": f"(mock expectation failed: {expected!r} not sent)"}
             if "error" in reply:
                 err = reply["error"]
+                message = err.get("message", "error")
                 self._json(
-                    int(err.get("status", 500)), {"error": {"message": err.get("message", "error")}}
+                    int(err.get("status", 500)),
+                    {"detail": message}
+                    if state.openwebui is not None
+                    else {"error": {"message": message}},
                 )
                 return
             self.send_response(200)
@@ -255,7 +367,12 @@ def make_handler(state: MockState) -> type[BaseHTTPRequestHandler]:
             self.end_headers()
             self.close_connection = True
             try:
-                for c in _chunks(reply, model, state.think_tags, prompt_tokens):
+                chunks = (
+                    _ollama_chunks(reply, model, prompt_tokens)
+                    if ollama
+                    else _chunks(reply, model, state.think_tags, prompt_tokens)
+                )
+                for c in chunks:
                     self.wfile.write(f"data: {json.dumps(c)}\n\n".encode())
                     self.wfile.flush()
                     if reply.get("delay"):
@@ -288,6 +405,11 @@ class MockServer:
     @property
     def base_url(self) -> str:
         return f"{self.scheme}://{self.host}:{self.httpd.server_address[1]}/v1"
+
+    @property
+    def root_url(self) -> str:
+        """The server's address without /v1 (e.g. for Open WebUI mode)."""
+        return f"{self.scheme}://{self.host}:{self.httpd.server_address[1]}"
 
     @property
     def requests(self) -> list[dict[str, Any]]:

@@ -272,10 +272,21 @@ class Doctor:
                     self.report(
                         FAIL,
                         f"Model '{m}' is not in the server's model list",
-                        "Use one of the names above (LiteLLM aliases).",
+                        "Use one of the names above (LiteLLM aliases or Open WebUI model ids).",
                     )
             info = await provider.model_info()
-            if info:
+            if provider.kind == "openwebui":
+                for m in models:
+                    backend = info.get(m, {}).get("backend", "?")
+                    where = (
+                        "Ollama"
+                        if backend == "ollama"
+                        else "an OpenAI-compatible server"
+                        if backend == "openai"
+                        else f"a '{backend}' connection"
+                    )
+                    self.report(INFO, f"{m}: served by {where} through Open WebUI")
+            elif info:
                 for m in models:
                     mi = info.get(m, {})
                     if mi:
@@ -301,6 +312,17 @@ class Doctor:
     ) -> ModelProfile:
         """Ask the server for the real window (fresh, not from the cache) and
         report which value cmcoder will use and where it came from."""
+        profile = await resolve_model_profile(self.settings, provider, model, probe=False)
+        if profile.backend == "ollama":
+            self.report(
+                OK,
+                f"{model}: context window {profile.context_window:,} tokens, sent to Ollama "
+                "as num_ctx with every request",
+                f"from {profile.context_window_source}. Ollama drops the start of longer "
+                "prompts silently, so cmcoder sets it itself. A larger value needs more GPU "
+                'memory on the server: set "contextWindow" in modelProfiles to change it.',
+            )
+            return profile
         tokens = await provider.probe_context_window(
             model, resolve_profile(model, self.settings.model_profiles)
         )
@@ -372,6 +394,7 @@ class Doctor:
             )
 
         # 2. thinking switch
+        switch = "Ollama's think option" if profile.backend == "ollama" else profile.thinking_switch
         if profile.thinking_switch != "none":
             try:
                 quick: StreamDone | None = None
@@ -383,13 +406,11 @@ class Doctor:
                 if quick and quick.message.reasoning.strip():
                     self.report(
                         WARN,
-                        f"{model}: thinking could not be switched off via {profile.thinking_switch}",
+                        f"{model}: thinking could not be switched off via {switch}",
                         'The gateway may drop extra params. Set modelProfiles thinkingSwitch to "prompt".',
                     )
                 else:
-                    self.report(
-                        OK, f"{model}: thinking can be switched off ({profile.thinking_switch})"
-                    )
+                    self.report(OK, f"{model}: thinking can be switched off ({switch})")
             except ProviderError as e:
                 self.report(
                     WARN,
@@ -443,11 +464,14 @@ class Doctor:
                 "backend (vLLM --enable-auto-tool-choice --tool-call-parser hermes).",
             )
         else:
-            self.report(
-                FAIL,
-                f"{model}: no tool call returned",
-                "The backend may not support tool calling for this model.",
-            )
+            hint = "The backend may not support tool calling for this model."
+            if provider.kind == "openwebui":
+                hint += (
+                    " In Open WebUI, set the model's Function Calling to Native (Admin Panel → "
+                    "Settings → Models → the model → Advanced Params); with an Ollama backend "
+                    "the model itself must support tools."
+                )
+            self.report(FAIL, f"{model}: no tool call returned", hint)
 
     def check_hooks(self) -> None:
         runner = HookRunner(self.settings, find_project_root(Path.cwd().resolve()))

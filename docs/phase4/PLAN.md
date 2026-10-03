@@ -38,6 +38,26 @@ usage if it wants to.
   WebUI in front of the mock model if it fits CI (else a manual run). A setup
   guide.
 
+**Status: done.** `src/cmcoder/providers/openwebui.py` (`OpenWebUIProvider`),
+Ollama options in `openai_compat.build_request` (profile `backend: "ollama"`),
+`factory._ollama_window`, doctor lines; guide [openwebui.md](openwebui.md).
+- Read from Open WebUI's source (0.11.4) and then checked against a real Open
+  WebUI with both backends: `/api/models` hides a model's settings, so its
+  `num_ctx` can't be read; a request's `options` win over them, so cmcoder
+  sends `num_ctx` itself (capped at the trained length from `/ollama/api/show`)
+  and doesn't run the context probe (Ollama never refuses a long prompt).
+- Found and fixed: Ollama's tool calls come through Open WebUI all numbered 0
+  (each with its own id), which merged two calls into one; a new id now starts
+  a new call.
+- `think: false` is sent only for models known to think (Ollama rejects it
+  for others); `num_ctx` only for Ollama models (Open WebUI would pass it on to
+  other backends as an unknown field).
+- Tests: `tests/test_openwebui.py` (mock server's Open WebUI mode, 9 tests);
+  `tests/test_openwebui_real.py` with a real Open WebUI in front of the mock
+  model and a stand-in Ollama (`tests/fake_ollama.py`), in its own CI workflow
+  (`.github/workflows/openwebui.yml`: by hand, weekly, and when the provider
+  code changes), because Open WebUI is a ~7 GB install.
+
 ### 2. Carry-overs
 
 - VS Code panel: `/rewind`, `/cost`, `/model`, `/todos`.
@@ -84,7 +104,7 @@ client certificates: later, if needed.
 
 ## Checklist
 
-- [ ] 1. Open WebUI gateway
+- [x] 1. Open WebUI gateway
 - [ ] 2. Carry-overs (VS Code commands, TUI default, Node 22)
 - [ ] 3. Bash sandbox
 - [ ] 4. OpenTelemetry

@@ -31,6 +31,7 @@ from ..core.subagents import ModelChoice, SubagentRuntime
 from ..mcp_client import McpManager
 from ..providers.auth import ApiKeyAuth, AuthProvider, NoAuth
 from ..providers.openai_compat import OpenAICompatProvider, ProviderError
+from ..providers.openwebui import OpenWebUIProvider
 from ..providers.profiles import ModelProfile, resolve_profile
 from ..providers.transport import TransportOptions, build_client
 from ..tools.base import ToolContext, output_budget_chars
@@ -61,7 +62,8 @@ def build_provider(settings: Settings, name: str) -> OpenAICompatProvider:
         connect_timeout=cfg.connect_timeout,
         read_timeout=cfg.read_timeout,
     )
-    return OpenAICompatProvider(
+    cls = OpenWebUIProvider if cfg.type == "openwebui" else OpenAICompatProvider
+    return cls(
         name,
         cfg.base_url,
         build_auth(name, cfg),
@@ -101,6 +103,22 @@ async def cached_model_info(
     except OSError:
         pass
     return info
+
+
+async def _ollama_window(
+    settings: Settings, provider: OpenWebUIProvider, model: str, mi: dict[str, Any]
+) -> dict[str, Any]:
+    """An Ollama model behind Open WebUI: cmcoder's usual window, but never
+    more than the model was trained for (cmcoder sends it as num_ctx)."""
+    trained = await provider.ollama_context_length(str(mi.get("base_model") or model))
+    base = resolve_profile(model, settings.model_profiles, None)
+    if trained and trained < base.context_window:
+        return {
+            **mi,
+            "max_input_tokens": trained,
+            "window_source": "Ollama model (trained length, via Open WebUI)",
+        }
+    return mi
 
 
 def _learned_path() -> Path:
@@ -165,6 +183,8 @@ async def resolve_model_profile(
     days, or a day if it didn't say)."""
     info = await cached_model_info(provider)
     mi = info.get(model)
+    if mi and mi.get("backend") == "ollama" and isinstance(provider, OpenWebUIProvider):
+        mi = await _ollama_window(settings, provider, model, mi)
     entry = load_learned_window(provider.base_url, model)
     if entry is None and probe:
         base = resolve_profile(model, settings.model_profiles, mi)

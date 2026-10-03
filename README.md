@@ -57,6 +57,15 @@ cmcoder doctor
 `doctor` checks DNS (VPN), proxy settings, the TLS certificate chain, the API key, the model list, streaming,
 the Qwen3 thinking switch and tool calling, and tells you what to fix.
 
+**Open WebUI instead of (or as well as) LiteLLM.** Give the provider `"type": "openwebui"` and the Open WebUI
+address; the key is an Open WebUI API key (Settings → Account → API keys). Models served by Ollama behind Open WebUI
+get their context window set by cmcoder on every request. Details: [docs/phase4/openwebui.md](docs/phase4/openwebui.md).
+
+```json
+{ "providers": { "webui": { "type": "openwebui", "baseUrl": "https://chat.example.com" } },
+  "model": "webui:qwen3:32b" }
+```
+
 **Internal certificates.** cmcoder trusts the OS certificate store (the Windows certificate store, macOS Keychain,
 or the Linux CA bundle), so if IT has installed the company root CA you need nothing else. Otherwise set `"caCertPath": "/path/to/company-root-ca.pem"` on the provider (or
 `CMCODER_CA_CERT`). Certificate verification is never switched off.

@@ -270,6 +270,8 @@ def estimate_tokens(text: str) -> int:
 
 
 class OpenAICompatProvider:
+    kind = "openai"  # see providers/openwebui.py for "openwebui"
+
     def __init__(
         self,
         name: str,
@@ -406,7 +408,13 @@ class OpenAICompatProvider:
         if profile.top_p is not None:
             body["top_p"] = profile.top_p
         body[profile.max_tokens_param] = max_tokens or profile.max_output
-        if thinking is False:
+        if profile.backend == "ollama":
+            # Open WebUI passes `options` to Ollama (and moves `think` to the top).
+            options: dict[str, Any] = {"num_ctx": profile.context_window}
+            if thinking is False and profile.thinking_switch != "none":
+                options["think"] = False  # only for models that think (Ollama rejects it otherwise)
+            body["options"] = options
+        elif thinking is False:
             if profile.thinking_switch == "chat_template_kwargs":
                 body["chat_template_kwargs"] = {"enable_thinking": False}
             elif profile.thinking_switch == "prompt":
@@ -608,6 +616,11 @@ class OpenAICompatProvider:
 def _call_index(tc: dict[str, Any], calls: dict[int, dict[str, str]]) -> int:
     idx = tc.get("index")
     if isinstance(idx, int):
+        entry = calls.get(idx)
+        if entry is not None and tc.get("id") and entry["id"] and entry["id"] != tc["id"]:
+            # Same index, another id: a new call (Ollama through Open WebUI
+            # numbers every call 0 and gives each its own id).
+            return max(calls) + 1
         return idx
     # Some servers omit `index`; match by id, else treat as a new call.
     if tc.get("id"):

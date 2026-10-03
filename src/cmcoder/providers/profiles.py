@@ -42,6 +42,10 @@ class ModelProfile(BaseModel):
     # Glob/Edit tool" instead of running it (core/steer.py).
     steer_bash_file_work: bool = Field(True, alias="steerBashFileWork")
     extra_body: dict[str, Any] = Field(default_factory=dict, alias="extraBody")
+    # "ollama": an Ollama model behind Open WebUI. Requests then carry Ollama
+    # options: num_ctx (Ollama silently drops what doesn't fit its window, so it
+    # must match cmcoder's) and think (the thinking switch).
+    backend: Literal["default", "ollama"] = "default"
     # Where context_window came from, shown by `cmcoder doctor` (not a setting).
     context_window_source: str = Field("built-in default", exclude=True)
 
@@ -124,7 +128,9 @@ def resolve_profile(
     if server_info:
         if server_info.get("max_input_tokens"):
             data["contextWindow"] = int(server_info["max_input_tokens"])
-            source = "server (/model/info)"
+            source = str(server_info.get("window_source") or "server (/model/info)")
+        if server_info.get("backend") == "ollama":
+            data["backend"] = "ollama"
         if server_info.get("max_output_tokens"):
             data["maxOutput"] = int(server_info["max_output_tokens"])
         if server_info.get("supports_function_calling") is False:
