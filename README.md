@@ -190,6 +190,7 @@ uv run python evals/run.py             # evals against your real endpoint/model
 uv run cmcoder protocol-schema         # Agent Protocol JSON Schema (for the VS Code extension)
 uv run cmcoder protocol-schema --typescript > vscode/src/protocol.ts   # after changing the protocol
 cd vscode && npm ci && npm run typecheck && uv run --project .. npm test   # the extension's tests
+#   (on Windows: uv run --project .. npm.cmd test, or set CMCODER_TEST_PYTHON to cmcoder's python.exe)
 ```
 
 `python -m cmcoder.testing.mock_server --script replies.json` runs a scripted OpenAI-compatible server for

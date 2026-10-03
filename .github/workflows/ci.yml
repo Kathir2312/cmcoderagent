@@ -89,11 +89,16 @@ jobs:
         run: npm run build
       - name: Browser for the chat panel tests
         run: npx playwright install ${{ runner.os == 'Linux' && '--with-deps' || '' }} chromium
+      # The tests start cmcoder with this Python. (`uv run npm ...` can't start
+      # npm on Windows, where it is npm.cmd.)
+      - name: cmcoder's Python for the tests
+        shell: bash
+        run: echo "CMCODER_TEST_PYTHON=$(uv run --project .. python -c 'import sys; print(sys.executable)')" >> "$GITHUB_ENV"
       - name: Tests (against the real cmcoder and the mock model server)
-        run: uv run --project .. npm test
+        run: npm test
       - name: Integration tests in a real VS Code
         if: runner.os == 'Linux'
-        run: xvfb-run -a uv run --project .. npm run test:integration
+        run: xvfb-run -a npm run test:integration
       - name: Package
         if: runner.os == 'Linux'
         run: npm run package

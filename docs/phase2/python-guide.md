@@ -221,6 +221,8 @@ descriptor (no buffer, no lock) and splits lines itself.
 cd vscode
 npm ci
 uv run --project .. npm test     # `uv run` puts cmcoder's Python on PATH
+# Windows: `uv run --project .. npm.cmd test`, or set CMCODER_TEST_PYTHON
+# to the full path of the Python that has cmcoder installed.
 ```
 
 They start the mock model server and the real `cmcoder` and check a

@@ -1,6 +1,6 @@
 // Runs the integration suite in a real VS Code (downloaded by @vscode/test-electron),
 // with the real cmcoder and the mock model server. On Linux, run under xvfb-run.
-//   uv run --project .. npm run test:integration
+//   uv run --project .. npm run test:integration   (or set CMCODER_TEST_PYTHON)
 
 import { spawn, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
