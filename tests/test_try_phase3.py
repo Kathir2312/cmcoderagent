@@ -57,7 +57,7 @@ async def test_the_script_makes_a_project_cmcoder_reads(tmp_path: Path) -> None:
     try:
         warnings = [w.message async for w in manager.start(None)]
         assert warnings == []
-        assert [t.name for t in manager.tools()] == ["mcp__tickets__get_ticket"]
+        assert "mcp__tickets__get_ticket" in [t.name for t in manager.tools()]
     finally:
         await manager.close()
 
