@@ -155,3 +155,27 @@ def test_find_program_on_windows_rules(
     assert (
         compat.system_program("taskkill.exe").lower().endswith("system32" + os.sep + "taskkill.exe")
     )
+
+
+def test_every_subprocess_sets_stdin() -> None:
+    """Under --protocol stdio a thread reads stdin; on Windows a child process
+    that inherits that pipe can hang when it starts (seen: a subagent's prompt
+    running git mid-turn). So every subprocess cmcoder starts names its stdin."""
+    import ast
+
+    calls = {
+        "subprocess": {"run", "Popen", "call", "check_call", "check_output"},
+        "asyncio": {"create_subprocess_exec", "create_subprocess_shell"},
+    }
+    missing = []
+    for path in (Path(__file__).parent.parent / "src" / "cmcoder").rglob("*.py"):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Name)
+                and node.func.attr in calls.get(node.func.value.id, set())
+                and not any(k.arg == "stdin" for k in node.keywords)
+            ):
+                missing.append(f"{path.name}:{node.lineno}")
+    assert missing == []

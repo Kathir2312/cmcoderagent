@@ -59,7 +59,13 @@ def ripgrep() -> str | None:
 
 async def _run(argv: list[str], cwd: Path, timeout: float = SEARCH_TIMEOUT) -> tuple[int, str, str]:
     proc = await asyncio.create_subprocess_exec(
-        *argv, cwd=cwd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        *argv,
+        cwd=cwd,
+        # Never inherit stdin: under --protocol stdio a thread is reading it, and on
+        # Windows starting a process that inherits that pipe can hang.
+        stdin=asyncio.subprocess.DEVNULL,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
     )
     try:
         out, err = await asyncio.wait_for(proc.communicate(), timeout)

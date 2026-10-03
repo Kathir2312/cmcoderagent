@@ -62,6 +62,10 @@ def _git_info(cwd: Path) -> str | None:
         branch = subprocess.run(
             [git, "rev-parse", "--abbrev-ref", "HEAD"],
             cwd=cwd,
+            # Never inherit stdin: under --protocol stdio a thread is reading it, and on
+            # Windows starting a process that inherits that pipe can hang (subagents
+            # build their prompt in the middle of a turn).
+            stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
             timeout=5,
@@ -69,7 +73,12 @@ def _git_info(cwd: Path) -> str | None:
         if branch.returncode != 0:
             return None
         status = subprocess.run(
-            [git, "status", "--short"], cwd=cwd, capture_output=True, text=True, timeout=5
+            [git, "status", "--short"],
+            cwd=cwd,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         changed = status.stdout.strip().splitlines()
         summary = f"{len(changed)} changed files" if changed else "clean"

@@ -193,6 +193,7 @@ def kill_process_tree(pid: int) -> None:
         with suppress(OSError, subprocess.SubprocessError):
             subprocess.run(
                 [system_program("taskkill.exe"), "/F", "/T", "/PID", str(pid)],
+                stdin=subprocess.DEVNULL,  # see tools/search.py: stdin may be in use
                 capture_output=True,
                 timeout=15,
             )
