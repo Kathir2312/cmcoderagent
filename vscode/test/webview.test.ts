@@ -30,7 +30,25 @@ async function panel(): Promise<{ page: Page; send: (m: ToWebview) => Promise<vo
     <script>window.sent=[];function acquireVsCodeApi(){return{postMessage:(m)=>window.sent.push(m)}}</script>
     </head><body><div id="app"></div></body></html>`);
   await page.addScriptTag({ content: readFileSync(join(root, "dist", "webview.js"), "utf8") });
-  const send = (m: ToWebview) => page.evaluate((m) => window.postMessage(m, "*"), m);
+  // postMessage is delivered later: resolve only once the page has handled it
+  // (a marker posted right after it arrives after it), so assertions never
+  // race the rendering.
+  const send = (m: ToWebview) =>
+    page.evaluate(
+      (m) =>
+        new Promise<void>((resolve) => {
+          const done = (e: MessageEvent) => {
+            if ((e.data as { testFlush?: boolean })?.testFlush) {
+              window.removeEventListener("message", done);
+              resolve();
+            }
+          };
+          window.addEventListener("message", done);
+          window.postMessage(m, "*");
+          window.postMessage({ testFlush: true }, "*");
+        }),
+      m,
+    );
   const ev = (event: AgentEvent) => send({ kind: "event", event });
   const sent = () => page.evaluate(() => (window as unknown as { sent: FromWebview[] }).sent);
   page.on("close", () => assert.deepEqual(errors, []));
