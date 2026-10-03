@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from ..config.settings import config_dir
+from ..sensitive import safe_project_file
 
 # Commands the front ends handle themselves; a file can't replace them.
 BUILT_IN = {
@@ -90,11 +91,16 @@ def split_tools(value: str) -> list[str]:
     return [t for t in out if t]
 
 
-def _load_dir(folder: Path, origin: Literal["user", "project"]) -> dict[str, SlashCommand]:
+def _load_dir(
+    folder: Path, origin: Literal["user", "project"], root: Path | None = None
+) -> dict[str, SlashCommand]:
+    """`root`: for a project's files, which must really be inside it."""
     found: dict[str, SlashCommand] = {}
     if not folder.is_dir():
         return found
     for path in sorted(folder.rglob("*.md")):
+        if root is not None and not safe_project_file(path, root):
+            continue
         rel = path.relative_to(folder).with_suffix("")
         name = ":".join(rel.parts)
         if not NAME_RE.match(name) or name in BUILT_IN:
@@ -118,7 +124,7 @@ def _load_dir(folder: Path, origin: Literal["user", "project"]) -> dict[str, Sla
 
 def load_commands(project_root: Path) -> dict[str, SlashCommand]:
     """This project's commands, then yours on top (yours win on a name clash)."""
-    commands = _load_dir(project_root / ".cmcoder" / "commands", "project")
+    commands = _load_dir(project_root / ".cmcoder" / "commands", "project", project_root)
     commands.update(_load_dir(config_dir() / "commands", "user"))
     return commands
 

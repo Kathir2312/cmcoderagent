@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -75,6 +76,24 @@ class McpServerConfig(_Model):
         if self.transport == "stdio":
             return " ".join([self.command or "?", *self.args])
         return f"{self.url} ({self.transport})"
+
+    def approval_details(self) -> dict[str, str]:
+        """Everything a person approving a project's server should see: what
+        runs, with which environment and headers (as written, `${VAR}` not
+        expanded), and which of their environment variables it reads."""
+        out = {"runs": self.describe()}
+        if self.cwd:
+            out["cwd"] = self.cwd
+        if self.env:
+            out["env"] = ", ".join(f"{k}={v}" for k, v in self.env.items())
+        if self.headers:
+            out["headers"] = ", ".join(f"{k}: {v}" for k, v in self.headers.items())
+        texts = [self.command or "", *self.args, self.url or "", self.cwd or ""]
+        texts += [*self.env.values(), *self.headers.values()]
+        used = sorted({m for t in texts for m in re.findall(r"\$\{([A-Za-z_][A-Za-z0-9_]*)", t)})
+        if used:
+            out["reads your environment variables"] = ", ".join(used)
+        return out
 
 
 class HookCommand(_Model):

@@ -36,6 +36,7 @@ from pydantic import Field
 
 from ..config.settings import config_dir
 from ..protocol import events as ev
+from ..sensitive import safe_project_file
 from ..tools.base import Tool, ToolContext, ToolInput, ToolResult
 from .commands import MAX_FILE_CHARS, parse_file, split_tools
 from .compaction import Summarizer
@@ -100,11 +101,15 @@ BUILT_IN_AGENTS = {
 }
 
 
-def _load_dir(folder: Path, origin: Literal["user", "project"]) -> dict[str, AgentDefinition]:
+def _load_dir(
+    folder: Path, origin: Literal["user", "project"], root: Path | None = None
+) -> dict[str, AgentDefinition]:
     found: dict[str, AgentDefinition] = {}
     if not folder.is_dir():
         return found
     for path in sorted(folder.glob("*.md")):
+        if root is not None and not safe_project_file(path, root):
+            continue  # a project's file must really be inside it
         try:
             meta, body = parse_file(path.read_text(encoding="utf-8")[:MAX_FILE_CHARS])
         except (OSError, UnicodeDecodeError):
@@ -128,14 +133,14 @@ def load_agents(project_root: Path, project_trusted: bool) -> dict[str, AgentDef
     """Built-in agents, a trusted project's, then yours (yours win on a name clash)."""
     agents = dict(BUILT_IN_AGENTS)
     if project_trusted:
-        agents.update(_load_dir(project_root / ".cmcoder" / "agents", "project"))
+        agents.update(_load_dir(project_root / ".cmcoder" / "agents", "project", project_root))
     agents.update(_load_dir(config_dir() / "agents", "user"))
     return agents
 
 
 def untrusted_project_agents(project_root: Path) -> list[str]:
     """A project's agents that aren't used because the project isn't trusted."""
-    return sorted(_load_dir(project_root / ".cmcoder" / "agents", "project"))
+    return sorted(_load_dir(project_root / ".cmcoder" / "agents", "project", project_root))
 
 
 @dataclass

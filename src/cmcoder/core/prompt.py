@@ -10,6 +10,7 @@ from pathlib import Path
 
 from ..compat import find_program
 from ..config.settings import config_dir
+from ..sensitive import safe_project_file
 
 MEMORY_FILENAMES = ("CMCODER.md", "AGENTS.md")
 LOCAL_MEMORY_FILENAME = "CMCODER.local.md"
@@ -95,6 +96,8 @@ def load_memory_files(cwd: Path, project_root: Path) -> list[MemoryFile]:
     seen: set[Path] = set()
     total = 0
     for path in candidates:
+        if path != candidates[0] and not safe_project_file(path, project_root):
+            continue  # the user memory (first) is yours; the others are the repository's
         try:
             resolved = path.resolve()
             if resolved in seen or not path.is_file():

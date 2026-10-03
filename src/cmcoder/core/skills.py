@@ -28,7 +28,7 @@ from typing import ClassVar, Literal
 from pydantic import Field
 
 from ..config.settings import config_dir
-from ..sensitive import is_secret
+from ..sensitive import is_secret, safe_project_file
 from ..tools.base import Tool, ToolContext, ToolInput, ToolResult
 from .commands import parse_file
 
@@ -47,11 +47,17 @@ class Skill:
     origin: Literal["user", "project"]
 
 
-def _load_dir(folder: Path, origin: Literal["user", "project"]) -> dict[str, Skill]:
+def _load_dir(
+    folder: Path, origin: Literal["user", "project"], root: Path | None = None
+) -> dict[str, Skill]:
     found: dict[str, Skill] = {}
     if not folder.is_dir():
         return found
     for skill_md in sorted(folder.glob("*/SKILL.md")):
+        if root is not None and not (
+            safe_project_file(skill_md, root) and safe_project_file(skill_md.parent, root)
+        ):
+            continue  # a project's skill (folder and file) must really be inside it
         try:
             meta, _ = parse_file(skill_md.read_text(encoding="utf-8")[:MAX_FILE_CHARS])
         except (OSError, UnicodeDecodeError):
@@ -66,7 +72,7 @@ def _load_dir(folder: Path, origin: Literal["user", "project"]) -> dict[str, Ski
 
 def load_skills(project_root: Path) -> dict[str, Skill]:
     """This project's skills, then yours on top (yours win on a name clash)."""
-    skills = _load_dir(project_root / ".cmcoder" / "skills", "project")
+    skills = _load_dir(project_root / ".cmcoder" / "skills", "project", project_root)
     skills.update(_load_dir(config_dir() / "skills", "user"))
     return skills
 

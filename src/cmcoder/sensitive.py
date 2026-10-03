@@ -58,3 +58,14 @@ def ripgrep_exclude_globs(search_root: Path, project_root: Path) -> list[str]:
             continue
         globs += ["--glob", "!" + p.lstrip("/")]
     return globs
+
+
+def safe_project_file(path: Path, root: Path) -> bool:
+    """A repository file cmcoder reads by itself (memory, commands, agents, skills):
+    it must really be inside the project, and not a secrets file. A symlink to
+    `~/.ssh/id_rsa` or to `.env` would otherwise be sent to the model."""
+    try:
+        resolved, base = path.resolve(), root.resolve()
+    except OSError:
+        return False
+    return resolved.is_relative_to(base) and not is_secret(resolved, base)

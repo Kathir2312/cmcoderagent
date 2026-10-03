@@ -184,6 +184,18 @@ this item added the rest, with tests in `tests/test_front_ends.py` and
   run through both `-p` and the VS Code protocol.
 - A SAST/SCA review of the new code and packages, as in Phase 2.
 
+**Status: done.**
+- Evals: `custom-command` (a project slash command, with a mock check that
+  the command was really expanded), `subagent-search` (the explore subagent)
+  and `mcp-ticket` (a small MCP server in the task's repository, given with
+  the new `--mcp-config` flag); all 23 tasks pass through `-p` and the VS Code
+  protocol with the same results and tool calls. `-p "/command args"` now
+  expands commands too.
+- Security review: [SECURITY-REVIEW.md](SECURITY-REVIEW.md). Two fixes:
+  repository files that are symlinks to files outside the project (memory,
+  commands, agents, skills) are no longer read; the MCP server approval shows
+  its env, headers and the environment variables it reads.
+
 ### 8. Guides and docs
 
 - `python-guide.md` and `langgraph-guide.md` sections per item (LangChain's
@@ -203,6 +215,6 @@ binary). Output styles and the status line (later). Plugins and marketplaces.
 - [x] 4. Subagents (`Task`)
 - [x] 5. Skills
 - [x] 6. Front ends (VS Code, doctor, trust)
-- [ ] 7. Tests, evals and security review
+- [x] 7. Tests, evals and security review
 - [ ] 8. Guides and docs
 - [ ] Hands-on use on Windows (CLI and VS Code), and `STATUS.md`

@@ -210,6 +210,7 @@ async def test_project_servers_need_trust_and_approval(mock_server: Any, project
     agent = agent_with(server, project, s, ask=deny)
     await run(agent, "hi")
     assert asked[0].tool_name == "McpServer" and "demo_server.py" in asked[0].input["runs"]
+    assert "reads your environment variables" not in asked[0].input
     assert agent.mcp.servers[0].status == "not approved"  # type: ignore[union-attr]
 
     asked.clear()
@@ -293,3 +294,23 @@ def test_mcp_config_file(tmp_path: Path) -> None:
     path.write_text(json.dumps({"mcpServers": {"bad": {"startupTimeout": "soon"}}}))
     with pytest.raises(SettingsError, match="extra.json"):
         add_mcp_config(s, path)
+
+
+def test_approval_shows_env_headers_and_variables() -> None:
+    s = Settings.model_validate(
+        {
+            "mcpServers": {
+                "web": {
+                    "url": "https://mcp.example.com/${REGION:-eu}",
+                    "headers": {"Authorization": "Bearer ${GITHUB_TOKEN}"},
+                },
+                "local": {**stdio(), "env": {"KEY": "${AWS_SECRET_ACCESS_KEY}"}, "cwd": "tools"},
+            }
+        }
+    )
+    web = s.mcp_servers["web"].approval_details()
+    assert web["headers"] == "Authorization: Bearer ${GITHUB_TOKEN}"  # as written, not expanded
+    assert web["reads your environment variables"] == "GITHUB_TOKEN, REGION"
+    local = s.mcp_servers["local"].approval_details()
+    assert local["env"] == "KEY=${AWS_SECRET_ACCESS_KEY}" and local["cwd"] == "tools"
+    assert local["reads your environment variables"] == "AWS_SECRET_ACCESS_KEY"

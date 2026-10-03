@@ -433,7 +433,7 @@ class Agent:
                 call_id=f"mcp-{server.name}",
                 tool_name="McpServer",
                 label=f"Start MCP server {server.name}",
-                input={"server": server.name, "runs": server.config.describe()},
+                input={"server": server.name, **server.config.approval_details()},
                 suggested_rule="",
                 reason="This project's settings (.mcp.json) want to start an MCP server; it "
                 "runs with your permissions. Allowing is remembered until its settings change.",

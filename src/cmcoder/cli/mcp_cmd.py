@@ -158,7 +158,8 @@ def approve_server(name: str) -> None:
         )
         err.print(f"[red]error:[/red] this project has no MCP server {name!r}{hint}")
         raise typer.Exit(1)
-    console.print(f"{name} runs: {cfg.describe()}")
+    for key, value in cfg.approval_details().items():
+        console.print(f"{name} {key}: {value}", markup=False, highlight=False)
     root = find_project_root(Path.cwd().resolve())
     approve(root, f"mcp:{name}", config_fingerprint(cfg))
     console.print(f"Approved {name} for this project (until its settings change).")
