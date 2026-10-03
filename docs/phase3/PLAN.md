@@ -202,6 +202,11 @@ this item added the rest, with tests in `tests/test_front_ends.py` and
   MCP adapters, LangGraph subgraphs, middleware/hooks); a "customising
   cmcoder" page with examples; `STATUS.md` at the end.
 
+**Status: done** (except `STATUS.md`, after the hands-on run).
+[customising.md](customising.md) has an example of each extension and the
+trust table; `python-guide.md` and `langgraph-guide.md` have a section per
+item; the README links them.
+
 ## Not in Phase 3
 
 Bash and Windows sandboxing (Phase 4, with SSO, OpenTelemetry, a standalone
@@ -216,5 +221,5 @@ binary). Output styles and the status line (later). Plugins and marketplaces.
 - [x] 5. Skills
 - [x] 6. Front ends (VS Code, doctor, trust)
 - [x] 7. Tests, evals and security review
-- [ ] 8. Guides and docs
+- [x] 8. Guides and docs
 - [ ] Hands-on use on Windows (CLI and VS Code), and `STATUS.md`

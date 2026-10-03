@@ -156,3 +156,12 @@ in the same SKILL.md format.
 A team's how-tos are few and named, so the model can pick by description
 without embeddings, and the files live next to the code where they're
 reviewed like code.
+
+## 6–7. Front ends, evals and security
+
+| LangChain / LangGraph | cmcoder |
+|---|---|
+| LangGraph Platform API + your UI | the Agent Protocol (`--protocol stdio`) + the VS Code panel |
+| `stream_mode=["updates", "messages"]` | protocol events (`tool_use`, `assistant_delta`, `command_list`, ...) |
+| LangSmith datasets and evaluators | `evals/tasks/*` and `evals/run.py`, with a `-p` vs VS Code parity check |
+| (your deployment's job) | trust + approval for anything a repository can run, reviewed in SECURITY-REVIEW.md |

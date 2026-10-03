@@ -96,6 +96,9 @@ it), or for one run with `--trust-project`. "Always allow" answers cmcoder saves
 nobody else changes `settings.local.json`. The VS Code extension passes `--trust-project` only for workspaces VS
 Code itself trusts. `cmcoder doctor` shows the project's trust state and anything ignored.
 
+Examples of everything below, and what a repository needs your trust for:
+[docs/phase3/customising.md](docs/phase3/customising.md).
+
 ### MCP servers
 
 [MCP](https://modelcontextprotocol.io) servers give cmcoder more tools (issue trackers, databases, internal APIs):

@@ -284,3 +284,35 @@ cmcoder -p "write a poem about src/cmcoder/core/skills.py"
 ```
 
 The output shows `Skill(haiku)` before the poem.
+
+## 6. Front ends
+
+*Done.* Code: `cli/stdio.py` (`/mcp`, `command_list`), `vscode/src/webview/main.ts`
+(completion popup, subagent steps), `cli/doctor.py` (`check_extensions`),
+`cli/main.py` (`trust`). Tests: `tests/test_front_ends.py`,
+`vscode/test/webview.test.ts`.
+
+- **One engine, thin front ends**: every feature lives in `core/`; the REPL,
+  the TUI and VS Code only ask the agent (`command_list()`,
+  `expand_command()`) and draw what comes back. That's why `-p`, the terminal
+  and VS Code behave the same, and why the evals can check parity.
+- **Python idea: lazy imports inside functions** (`from ..core.skills import
+  load_skills` inside `check_extensions`): the module is imported only when
+  `doctor` runs, which keeps `cmcoder --version` fast and avoids import
+  cycles.
+
+## 7. Evals and the security review
+
+*Done.* Evals: `evals/tasks/{custom-command,subagent-search,mcp-ticket}`.
+Review: [SECURITY-REVIEW.md](SECURITY-REVIEW.md).
+
+- An eval is a tiny repository, a prompt and a shell check. With `--mock` the
+  model's replies are scripted, so CI tests the plumbing (and that `-p` and the
+  VS Code protocol agree); with a real model it measures the model.
+- A mock step can `"expect"` text in the last message: the command eval fails
+  if `/changelog` isn't expanded, even though the script would otherwise edit
+  the file anyway.
+- **Python idea: `Path.resolve()` follows symlinks.** The review's main fix
+  (`sensitive.safe_project_file`) is three lines: resolve both paths, then
+  `is_relative_to`. Comparing paths *before* resolving them is the classic
+  mistake it fixes.
