@@ -30,7 +30,10 @@ def test_layers_merge(project: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: 
     )
     write(project / ".cmcoder/settings.local.json", {"smallFastModel": "corp:qwen3-7b"})
     (project / "sub").mkdir()
-    s = load_settings(project / "sub", environ={})
+    untrusted = load_settings(project / "sub", environ={})
+    assert untrusted.permissions.allow == ["Bash(npm test:*)"]  # see test_project_trust.py
+    assert untrusted.permissions.default_mode == "default"
+    s = load_settings(project / "sub", environ={}, trust_project=True)
     assert s.providers["corp"].ca_cert_path == "/ca.pem"
     assert s.permissions.allow == ["Bash(npm test:*)", "Bash(make:*)"]
     assert s.permissions.default_mode == "acceptEdits"
@@ -100,8 +103,10 @@ def test_openai_api_key_is_not_sent_to_other_gateways() -> None:
 
 
 def test_model_inside_providers_gets_a_hint(project: Path) -> None:
+    from cmcoder.config.settings import config_dir
+
     write(
-        project / ".cmcoder/settings.json",
+        config_dir() / "settings.json",  # providers are only read from user settings
         {
             "providers": {
                 "corp": {"baseUrl": "https://gw/v1"},

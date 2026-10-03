@@ -139,7 +139,8 @@ def test_managed_only_keys_are_ignored_elsewhere(
     s = load_settings(project, environ={})
     assert s.lock_providers is False
     assert s.permissions.allow_managed_permission_rules_only is False
-    assert set(s.providers) == {"corp", "evil"}  # merged as usual, nothing locked
+    # Security review: a project never adds or redirects gateways (see test_project_trust.py).
+    assert set(s.providers) == {"corp"}
     assert "Bash(npm test:*)" in s.permissions.allow
 
 
@@ -223,7 +224,9 @@ async def test_bypass_mode_can_be_disabled(
     user_settings(user)
     if where == "project settings":
         project_settings(project, {"permissions": {"defaultMode": "bypassPermissions"}})
-    s = load_settings(project, environ={})
+    # A trusted project, so its bypass mode is used and then refused (an untrusted
+    # project's bypass mode is ignored before it gets here).
+    s = load_settings(project, environ={}, trust_project=True)
     opts = AgentOptions(
         cwd=project, permission_mode="bypassPermissions" if where == "flag" else None
     )

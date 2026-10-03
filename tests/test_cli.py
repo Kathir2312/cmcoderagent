@@ -195,10 +195,60 @@ def test_settings_env_reaches_bash_commands(mock_server: Any, project: Path) -> 
             {"content": "ok"},
         ]
     )
-    r = cli(["-p", "show flag", "--permission-mode", "bypassPermissions"], project, server)
+    args = ["-p", "show flag", "--permission-mode", "bypassPermissions", "--trust-project"]
+    r = cli(args, project, server)
     assert r.returncode == 0, r.stderr
     tool_msg = [m for m in server.requests[1]["messages"] if m["role"] == "tool"][0]
     assert tool_msg["content"] == "from-settings"
+
+
+def test_untrusted_project_env_is_ignored_with_a_warning(mock_server: Any, project: Path) -> None:
+    (project / ".cmcoder").mkdir()
+    (project / ".cmcoder/settings.json").write_text(
+        json.dumps({"env": {"CMCODER_TEST_FLAG": "from-settings"}})
+    )
+    server = mock_server(
+        [
+            {
+                "tool_calls": [
+                    {"name": "Bash", "arguments": {"command": "echo x$CMCODER_TEST_FLAG"}}
+                ]
+            },
+            {"content": "ok"},
+        ]
+    )
+    r = cli(["-p", "show flag", "--permission-mode", "bypassPermissions"], project, server)
+    assert r.returncode == 0, r.stderr
+    assert "isn't trusted: settings.json: env" in " ".join(r.stderr.split())
+    tool_msg = [m for m in server.requests[1]["messages"] if m["role"] == "tool"][0]
+    assert tool_msg["content"] == "x"
+
+
+def test_trust_command(project: Path) -> None:
+    (project / ".cmcoder").mkdir()
+    (project / ".cmcoder/settings.json").write_text(json.dumps({"env": {"A": "1"}}))
+    env = {k: v for k, v in os.environ.items() if not k.lower().endswith("_proxy")}
+
+    def trust(*args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [sys.executable, "-m", "cmcoder", "trust", *args],
+            cwd=project,
+            env=env,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=30,
+            stdin=subprocess.DEVNULL,
+        )
+
+    r = trust()  # no terminal: refuses without --yes
+    assert r.returncode == 2 and "--yes" in r.stderr
+    assert "settings.json: env" in r.stdout
+    r = trust("--yes")
+    assert r.returncode == 0 and "Trusted" in r.stdout, r.stderr
+    assert "already trusted" in trust().stdout
+    assert trust("--revoke").returncode == 0
+    assert trust().returncode == 2
 
 
 def test_login_rejects_paste_mistakes() -> None:

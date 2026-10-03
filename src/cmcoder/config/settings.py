@@ -12,6 +12,7 @@ and on top of all of them, applied last and impossible to override:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import sys
@@ -78,6 +79,10 @@ class Settings(_Model):
     lock_providers: bool = Field(False, alias="lockProviders")
     # Where each layer came from, for `cmcoder doctor`.
     sources: list[str] = Field(default_factory=list, exclude=True)
+    # Project trust (see load_settings): whether this project's own settings
+    # files are trusted, and what was left out of them because they aren't.
+    project_trusted: bool = Field(False, exclude=True)
+    ignored_project_settings: list[str] = Field(default_factory=list, exclude=True)
     # The managed settings file in force, if any.
     managed_path: str | None = Field(None, exclude=True)
 
@@ -264,17 +269,144 @@ def env_api_key(environ: dict[str, str] | None = None) -> str | None:
     return env_api_key_source(environ)[0]
 
 
-def load_settings(cwd: Path | None = None, environ: dict[str, str] | None = None) -> Settings:
+# --- Project trust ---------------------------------------------------------
+#
+# A project's .cmcoder/settings.json (and settings.local.json, which a
+# repository can commit too) is written by whoever made the repository. Some
+# settings would let a cloned repository take over: `env` (e.g. BASH_ENV runs
+# a script before every shell command, even an auto-approved `ls`), allow
+# rules and permissive modes (commands run without asking), and `providers`
+# (a gateway URL of the repository's choosing receives your API key).
+#
+# - `providers` is never read from a project: gateways belong in your user
+#   settings (or the managed settings).
+# - `env`, allow rules and the acceptEdits/bypassPermissions modes are used
+#   only when the project is trusted: `cmcoder trust`, `--trust-project`
+#   (the VS Code extension passes it for workspaces VS Code trusts), or
+#   rules cmcoder wrote itself ("Always" answers) in settings.local.json.
+
+_PROJECT_NEVER = ("providers",)
+_PERMISSIVE_MODES = ("acceptEdits", "bypassPermissions")
+
+
+def trust_file() -> Path:
+    return config_dir() / "trusted-projects.json"
+
+
+def _trust_key(root: Path) -> str:
+    return os.path.normcase(str(root.resolve()))
+
+
+def _read_trust() -> dict[str, Any]:
+    try:
+        data = json.loads(trust_file().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    projects = data.get("projects") if isinstance(data, dict) else None
+    return projects if isinstance(projects, dict) else {}
+
+
+def _write_trust(projects: dict[str, Any]) -> None:
+    path = trust_file()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"projects": projects}, indent=2) + "\n", encoding="utf-8")
+    try:
+        path.chmod(0o600)
+    except OSError:
+        pass
+
+
+def _as_dict(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _entry(root: Path) -> dict[str, Any]:
+    return _as_dict(_read_trust().get(_trust_key(root)))
+
+
+def is_project_trusted(root: Path) -> bool:
+    return _entry(root).get("trusted") is True
+
+
+def set_project_trust(root: Path, trusted: bool) -> None:
+    """`cmcoder trust` (or `--revoke`)."""
+    projects = _read_trust()
+    key = _trust_key(root)
+    entry = _as_dict(projects.get(key))
+    if trusted:
+        projects[key] = {**entry, "trusted": True}
+    else:
+        projects.pop(key, None)
+    _write_trust(projects)
+
+
+def _fingerprint(path: Path) -> str | None:
+    try:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError:
+        return None
+
+
+def _local_is_own(root: Path, path: Path) -> bool:
+    """settings.local.json exactly as cmcoder last wrote it ("Always" answers)."""
+    recorded = _entry(root).get("local_sha256")
+    return recorded is not None and recorded == _fingerprint(path)
+
+
+def _filter_project_layer(layer: dict[str, Any], trusted: bool) -> tuple[dict[str, Any], list[str]]:
+    """A project settings layer without what it may not set: (layer, left out)."""
+    out = dict(layer)
+    dropped = [k for k in _PROJECT_NEVER if out.pop(k, None) is not None]
+    if trusted:
+        return out, dropped
+    if out.pop("env", None):
+        dropped.append("env")
+    perms = out.get("permissions")
+    if isinstance(perms, dict):
+        perms = dict(perms)
+        if perms.get("allow"):
+            dropped.append("permissions.allow (" + ", ".join(map(str, perms.pop("allow"))) + ")")
+        if perms.get("defaultMode") in _PERMISSIVE_MODES:
+            dropped.append(f"permissions.defaultMode ({perms.pop('defaultMode')})")
+        out["permissions"] = perms
+    return out, dropped
+
+
+def project_settings_preview(root: Path) -> list[str]:
+    """What trusting this project would enable (for `cmcoder trust`)."""
+    out: list[str] = []
+    for path in (root / ".cmcoder" / "settings.json", root / ".cmcoder" / "settings.local.json"):
+        try:
+            layer = _read_json(path)
+        except SettingsError as e:
+            out.append(str(e))
+            continue
+        _, dropped = _filter_project_layer(_strip_managed_only(layer), trusted=False)
+        out += [f"{path.name}: {d}" for d in dropped if not d.startswith(_PROJECT_NEVER)]
+    return out
+
+
+def load_settings(
+    cwd: Path | None = None,
+    environ: dict[str, str] | None = None,
+    trust_project: bool = False,
+) -> Settings:
     cwd = (cwd or Path.cwd()).resolve()
     root = find_project_root(cwd)
+    trusted = trust_project or is_project_trusted(root)
     merged: dict[str, Any] = {}
     sources: list[str] = []
-    for path in (
-        config_dir() / "settings.json",
-        root / ".cmcoder" / "settings.json",
-        root / ".cmcoder" / "settings.local.json",
+    ignored: list[str] = []
+    for path, from_project in (
+        (config_dir() / "settings.json", False),
+        (root / ".cmcoder" / "settings.json", True),
+        (root / ".cmcoder" / "settings.local.json", True),
     ):
         layer = _strip_managed_only(_read_json(path))
+        if layer and from_project:
+            own = path.name == "settings.local.json" and _local_is_own(root, path)
+            layer, dropped = _filter_project_layer(layer, trusted or own)
+            ignored += [f"{path.name}: {d}" for d in dropped]
         if layer:
             merged = deep_merge(merged, layer)
             sources.append(str(path))
@@ -318,14 +450,40 @@ def load_settings(cwd: Path | None = None, environ: dict[str, str] | None = None
             )
         raise SettingsError(f"Invalid settings: {e}{hint}") from e
     settings.sources = sources
+    settings.project_trusted = trusted
+    settings.ignored_project_settings = ignored
     if managed:
         settings.managed_path = str(managed_file)
     return settings
 
 
+def ignored_settings_message(settings: Settings) -> str | None:
+    """A warning when project settings were left out, or None."""
+    if not settings.ignored_project_settings:
+        return None
+    items = "; ".join(settings.ignored_project_settings)
+    never = all(
+        x.split(": ", 1)[-1].startswith(_PROJECT_NEVER) for x in settings.ignored_project_settings
+    )
+    if never:
+        return (
+            f"Ignored in this project's .cmcoder settings: {items}. "
+            "Gateways are only read from your user settings (~/.cmcoder/settings.json)."
+        )
+    return (
+        f"Ignored in this project's .cmcoder settings because the folder isn't trusted: {items}. "
+        "If you trust this repository, run `cmcoder trust` here."
+    )
+
+
 def add_local_allow_rule(project_root: Path, rule: str) -> Path:
-    """Persist an "allow always" answer to .cmcoder/settings.local.json."""
+    """Persist an "allow always" answer to .cmcoder/settings.local.json.
+
+    The file's fingerprint is recorded so cmcoder trusts its own rules next
+    time, but only if the file was cmcoder's own (or new) before: rules a
+    repository committed there must not become trusted by this."""
     path = project_root / ".cmcoder" / "settings.local.json"
+    own_before = not path.exists() or _local_is_own(project_root, path)
     data = _read_json(path)
     perms = data.setdefault("permissions", {})
     allow = perms.setdefault("allow", [])
@@ -333,4 +491,10 @@ def add_local_allow_rule(project_root: Path, rule: str) -> Path:
         allow.append(rule)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    if own_before or is_project_trusted(project_root):
+        projects = _read_trust()
+        key = _trust_key(project_root)
+        entry = _as_dict(projects.get(key))
+        projects[key] = {**entry, "local_sha256": _fingerprint(path)}
+        _write_trust(projects)
     return path

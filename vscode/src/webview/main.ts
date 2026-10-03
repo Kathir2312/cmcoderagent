@@ -21,6 +21,54 @@ marked.use({
   },
 });
 
+// Defence in depth on top of the escaping above and the page's CSP: rendered
+// Markdown is parsed into an inert document (no scripts run, nothing loads),
+// and only these elements and attributes are kept.
+const ALLOWED_TAGS = new Set([
+  "P", "BR", "HR", "H1", "H2", "H3", "H4", "H5", "H6", "STRONG", "EM", "DEL", "S",
+  "CODE", "PRE", "BLOCKQUOTE", "UL", "OL", "LI", "A", "TABLE", "THEAD", "TBODY",
+  "TR", "TH", "TD", "INPUT", "SPAN",
+]);
+const ALLOWED_ATTRS: Record<string, string[]> = {
+  A: ["href", "title"],
+  OL: ["start"],
+  TH: ["align"],
+  TD: ["align"],
+  INPUT: ["type", "checked", "disabled"],
+  CODE: ["class"],
+};
+
+function sanitize(parent: Node): void {
+  for (const node of Array.from(parent.childNodes)) {
+    if (node.nodeType === Node.TEXT_NODE) continue;
+    if (!(node instanceof Element) || !ALLOWED_TAGS.has(node.tagName)) {
+      // Unknown elements become their text; comments and the rest go.
+      const text = node instanceof Element ? node.getAttribute("alt") ?? node.textContent ?? "" : "";
+      node.replaceWith(document.createTextNode(text));
+      continue;
+    }
+    const keep = ALLOWED_ATTRS[node.tagName] ?? [];
+    for (const attr of Array.from(node.attributes)) {
+      if (!keep.includes(attr.name)) node.removeAttribute(attr.name);
+    }
+    if (node.tagName === "A" && !/^(https?:|mailto:|#)/i.test(node.getAttribute("href") ?? "")) {
+      node.removeAttribute("href");
+    }
+    if (node.tagName === "INPUT" && node.getAttribute("type") !== "checkbox") {
+      node.replaceWith(document.createTextNode(""));
+      continue;
+    }
+    sanitize(node);
+  }
+}
+
+function setMarkdown(target: HTMLElement, markdown: string): void {
+  const html = marked.parse(markdown, { async: false }) as string;
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  sanitize(doc.body);
+  target.replaceChildren(...Array.from(doc.body.childNodes));
+}
+
 // --- layout ------------------------------------------------------------------
 
 const app = document.getElementById("app")!;
@@ -119,7 +167,7 @@ function note(text: string, cls: string): void {
 function renderReply(): void {
   renderQueued = false;
   if (reply) {
-    reply.el.innerHTML = marked.parse(reply.text, { async: false }) as string;
+    setMarkdown(reply.el, reply.text);
     log.scrollTop = log.scrollHeight;
   }
 }
@@ -207,7 +255,7 @@ function onEvent(ev: AgentEvent): void {
       for (const item of ev.messages) {
         if (item.role === "user") append(el("div", "msg user", item.text));
         else if (item.role === "tool") append(el("div", "tool")).append(el("div", "label", `● ${item.text}`));
-        else append(el("div", "msg assistant")).innerHTML = marked.parse(item.text, { async: false }) as string;
+        else setMarkdown(append(el("div", "msg assistant")), item.text);
       }
       if (ev.messages.length) note("Resumed this conversation.", "info");
       break;

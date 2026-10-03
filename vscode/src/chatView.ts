@@ -109,7 +109,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     const command = config.get<string>("executable") || "cmcoder";
     const args = config.get<string[]>("executableArgs") ?? [];
     const mode = config.get<string>("permissionMode");
-    const allArgs = [...(mode ? ["--permission-mode", mode] : []), ...extraArgs];
+    const allArgs = [
+      ...(mode ? ["--permission-mode", mode] : []),
+      // The project's own .cmcoder settings (env, allow rules) only for a
+      // workspace VS Code trusts; cmcoder never reads gateways from a project.
+      ...(vscode.workspace.isTrusted ? ["--trust-project"] : []),
+      ...extraArgs,
+    ];
     this.log.appendLine(`Starting ${[command, ...args, "--protocol", "stdio", ...allArgs].join(" ")} in ${folder.uri.fsPath}`);
     this.setState("starting");
     const agent: AgentProcess = new AgentProcess({
@@ -214,7 +220,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         this.agent?.send({ type: "list_sessions" });
         break;
       case "resume":
-        void this.newConversation(["--resume", m.id]);
+        // Only a session id (from session_list) can become an argument.
+        if (/^[A-Za-z0-9][A-Za-z0-9-]{0,63}$/.test(m.id)) void this.newConversation([`--resume=${m.id}`]);
         break;
       case "attachFile":
         void this.attachFile();

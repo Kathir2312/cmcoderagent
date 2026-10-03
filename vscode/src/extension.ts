@@ -3,6 +3,7 @@
 import * as os from "node:os";
 import * as path from "node:path";
 import * as vscode from "vscode";
+import { resolveExecutable } from "./agentProcess";
 import { ChatViewProvider } from "./chatView";
 import { DiffReview, SCHEME } from "./diffReview";
 
@@ -77,12 +78,19 @@ function openTerminal(): void {
   const config = vscode.workspace.getConfiguration("cmcoder");
   const command = config.get<string>("executable") || "cmcoder";
   const args = config.get<string[]>("executableArgs") ?? [];
+  const folder = vscode.workspace.workspaceFolders?.[0]?.uri;
+  // A full path: never a cmcoder.exe planted in the workspace (Windows).
+  const program = resolveExecutable(command, folder?.fsPath ?? process.cwd());
+  if (!program) {
+    void vscode.window.showErrorMessage(`cmcoder: "${command}" was not found on PATH. Set cmcoder.executable to its full path.`);
+    return;
+  }
   const terminal = vscode.window.createTerminal({
     name: "cmcoder",
-    cwd: vscode.workspace.workspaceFolders?.[0]?.uri,
+    cwd: folder,
     // The program itself, not a shell command line: no quoting problems.
-    shellPath: command,
-    shellArgs: args,
+    shellPath: program,
+    shellArgs: vscode.workspace.isTrusted ? [...args, "--trust-project"] : args,
     iconPath: new vscode.ThemeIcon("code"),
   });
   terminal.show();

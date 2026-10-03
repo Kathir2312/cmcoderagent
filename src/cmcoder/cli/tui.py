@@ -26,7 +26,7 @@ from textual.widgets import Button, Input, Label, Markdown, Static
 from textual.worker import Worker
 
 from .. import __version__
-from ..config.settings import Settings
+from ..config.settings import Settings, ignored_settings_message
 from ..core.agent import Agent, PermissionAnswer, PermissionRequest
 from ..core.permissions import MODES, ModeNotAllowed
 from ..protocol import events as ev
@@ -172,6 +172,8 @@ class CmcoderApp(App[int]):
                 ),
             )
         )
+        if warning := ignored_settings_message(self.settings):
+            self.write(f"⚠ {warning}", "warn")
         if len(a.messages) > 1:
             self.write(
                 f"Resumed conversation {a.session_id[:8]} ({len(a.messages) - 1} messages).", "tool"

@@ -148,3 +148,23 @@ test("history, past conversations and resume", async () => {
   assert.deepEqual((await sent()).at(-1), { kind: "resume", id: "abc" });
   await page.close();
 });
+
+test("model output can't inject markup: allowlist after escaping", async () => {
+  const { page, ev } = await panel();
+  const evil = [
+    "[click](javascript:alert(1)) [ok](https://example.com)",
+    "<script>window.pwned=1</script><iframe src=x></iframe>",
+    "![img](https://tracker.example/p.png)",
+    "- [x] done",
+    "| a | b |\n|:-|-:|\n| 1 | 2 |",
+  ].join("\n\n");
+  await ev({ type: "assistant_message", text: evil, reasoning: "", tool_calls: [], model: null });
+  const html = await page.innerHTML(".msg.assistant");
+  assert.doesNotMatch(html, /<(script|iframe|img)\b/i);
+  assert.doesNotMatch(html, /javascript:/i);
+  assert.match(html, /<a href="https:\/\/example\.com">ok<\/a>/);
+  assert.match(html, /<input[^>]*type="checkbox"/);
+  assert.match(html, /<td[^>]*align="right"[^>]*>2<\/td>/);
+  assert.equal(await page.evaluate(() => (window as unknown as { pwned?: number }).pwned), undefined);
+  await page.close();
+});

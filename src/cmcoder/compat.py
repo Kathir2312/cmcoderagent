@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import asyncio
 import os
-import shutil
 import signal
 import stat
 import subprocess
@@ -29,6 +28,50 @@ SHELL_HELP = (
 )
 
 
+def find_program(name: str) -> str | None:
+    """Full path of a program on PATH, like `shutil.which`, but never from the
+    current folder.
+
+    On Windows, `shutil.which` and starting a program by bare name both look in
+    the current folder first. cmcoder runs inside the user's project, so a
+    cloned repository could ship its own `git.exe` or `rg.exe` and have it run.
+    Only absolute PATH entries other than the current folder are searched.
+    """
+    try:
+        here = Path.cwd().resolve()
+    except OSError:
+        here = None
+    dirs: list[str] = []
+    for entry in os.environ.get("PATH", "").split(os.pathsep):
+        if not entry or not os.path.isabs(entry):
+            continue  # "" and "." mean the current folder
+        try:
+            if here is not None and Path(entry).resolve() == here:
+                continue
+        except OSError:
+            continue
+        dirs.append(entry)
+    if IS_WINDOWS:
+        pathext = os.environ.get("PATHEXT", ".COM;.EXE;.BAT;.CMD").lower().split(";")
+        exts = [e for e in pathext if e]
+        if Path(name).suffix.lower() in exts:
+            exts = [""]
+    else:
+        exts = [""]
+    for d in dirs:
+        for ext in exts:
+            candidate = os.path.join(d, name + ext)
+            if os.path.isfile(candidate) and (IS_WINDOWS or os.access(candidate, os.X_OK)):
+                return candidate
+    return None
+
+
+def system_program(name: str) -> str:
+    """A Windows system program (e.g. taskkill) by its full System32 path."""
+    root = os.environ.get("SYSTEMROOT") or os.environ.get("WINDIR") or r"C:\Windows"
+    return os.path.join(root, "System32", name)
+
+
 def _usable_windows_bash(path: str | Path) -> bool:
     low = str(path).lower()
     # System32\bash.exe and the WindowsApps alias start WSL, which sees a
@@ -42,13 +85,13 @@ def find_shell() -> str | None:
     if override:
         return override if Path(override).is_file() else None
     if not IS_WINDOWS:
-        return shutil.which("bash")
+        return find_program("bash")
 
     candidates: list[Path] = []
-    on_path = shutil.which("bash")
+    on_path = find_program("bash")
     if on_path and _usable_windows_bash(on_path):
         candidates.append(Path(on_path))
-    git = shutil.which("git")
+    git = find_program("git")
     if git:
         # ...\Git\cmd\git.exe or ...\Git\bin\git.exe -> ...\Git\bin\bash.exe
         for parent in list(Path(git).resolve().parents)[:3]:
@@ -149,7 +192,7 @@ def kill_process_tree(pid: int) -> None:
     if sys.platform == "win32":
         with suppress(OSError, subprocess.SubprocessError):
             subprocess.run(
-                ["taskkill", "/F", "/T", "/PID", str(pid)],
+                [system_program("taskkill.exe"), "/F", "/T", "/PID", str(pid)],
                 capture_output=True,
                 timeout=15,
             )

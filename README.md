@@ -80,6 +80,22 @@ Environment variables: `CMCODER_BASE_URL`, `CMCODER_API_KEY`, `CMCODER_MODEL`, `
 `OPENAI_BASE_URL` is used if `CMCODER_BASE_URL` isn't set; `OPENAI_API_KEY` is used only together with `OPENAI_BASE_URL`, so an
 unrelated OpenAI key is never sent to your gateway. `CMCODER_API_KEY` overrides the key stored by `cmcoder login`.
 
+### Project settings and trust
+
+A project's `.cmcoder/settings.json` (and `settings.local.json`, which a repository can commit too) comes from
+whoever wrote the repository, so some of it is only used once you trust the project:
+
+| In a project's settings | Untrusted project | Trusted project |
+|---|---|---|
+| `providers` (gateway URL, CA, headers) | ignored | **ignored**: gateways only come from your user or managed settings, so a repository can never receive your API key |
+| `env`, `permissions.allow`, `defaultMode` `acceptEdits` / `bypassPermissions` | ignored, with a warning | used |
+| everything else (deny rules, model, `maxTurns`, ...) | used | used |
+
+Trust a project with `cmcoder trust` in its folder (it lists what it would enable; `cmcoder trust --revoke` undoes
+it), or for one run with `--trust-project`. "Always allow" answers cmcoder saves itself stay trusted as long as
+nobody else changes `settings.local.json`. The VS Code extension passes `--trust-project` only for workspaces VS
+Code itself trusts. `cmcoder doctor` shows the project's trust state and anything ignored.
+
 ### Project memory
 
 cmcoder reads `CMCODER.md` (and `AGENTS.md`) from `~/.cmcoder/`, the project root and each folder down to the
@@ -163,7 +179,7 @@ it. If you can, have the gateway serve a longer context.
 **Privacy:** each turn sends your prompt, file contents the agent reads and command output to the configured model
 endpoint. LiteLLM admins may be able to see that traffic in gateway logs.
 
-## VS Code extension (Phase 2, in progress)
+## VS Code extension (Phase 2)
 
 The extension in [`vscode/`](vscode/) runs the same `cmcoder` (`cmcoder --protocol stdio`) behind a chat panel in
 the side bar. Build and install it (needs Node.js 22+ to build; using it needs only VS Code and `cmcoder`):

@@ -20,18 +20,20 @@ from typing import Any, BinaryIO
 
 from pydantic import ValidationError
 
-from ..config.settings import Settings, SettingsError
+from ..config.settings import Settings, SettingsError, ignored_settings_message
 from ..core.agent import Agent, PermissionAnswer, PermissionRequest, parse_tool_arguments
 from ..core.ide import IDE_TOOLS, format_ide_context
-from ..core.permissions import MODES, ModeNotAllowed
+from ..core.permissions import MODES, Decision, ModeNotAllowed
 from ..core.sessions import list_sessions
 from ..protocol import events as ev
 from ..protocol import messages as msg
 from ..providers.openai_compat import OpenAICompatProvider, ProviderError
 from ..tools.base import ToolResult
+from ..tools.files import ReadInput, ReadTool
 from .factory import AgentOptions, build_agent, resolve_model_profile
 
 IDE_TOOL_TIMEOUT = 30.0  # seconds
+_READ = ReadTool()
 
 
 class StdioServer:
@@ -98,6 +100,8 @@ class StdioServer:
             return 2
         self._start_reader(stdin_fd)
         self.emit(self.agent.init_event())
+        if warning := ignored_settings_message(self.settings):
+            self.emit(ev.Warning(message=warning))
         if len(self.agent.messages) > 1:  # a resumed conversation
             self.emit(ev.History(messages=history(self.agent)))
         if self.agent.ctx.todos:
@@ -130,7 +134,7 @@ class StdioServer:
                 self.error("busy", "A turn is already running; interrupt it first.")
                 return
             note = (
-                format_ide_context(message.context, agent.ctx.project_root)
+                format_ide_context(message.context, agent.ctx.project_root, self._withheld)
                 if message.context
                 else None
             )
@@ -181,6 +185,16 @@ class StdioServer:
                 if s.session_id != agent.session_id
             ]
             self.emit(ev.SessionList(sessions=sessions))
+
+    def _withheld(self, path: str) -> bool:
+        """Files whose contents Read would refuse (secrets, deny rules)."""
+        agent = self.agent
+        assert agent is not None
+        try:
+            args = ReadInput.model_validate({"file_path": path})
+            return agent.policy.check(_READ, args, agent.ctx).decision == Decision.DENY
+        except (ValueError, OSError):
+            return True
 
     @property
     def busy(self) -> bool:

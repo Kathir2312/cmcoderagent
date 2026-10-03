@@ -107,3 +107,28 @@ jobs:
         with:
           name: cmcoder-vsix
           path: vscode/cmcoder.vsix
+
+  security:
+    name: security (SAST + dependency audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: vscode/package-lock.json
+      - name: Bandit (Python SAST; fails on medium or high severity)
+        run: uvx bandit -r src evals/run.py --severity-level medium
+      - name: pip-audit (known vulnerabilities in the locked Python packages)
+        run: |
+          uv export --format requirements-txt --no-hashes --no-emit-project > /tmp/requirements.txt
+          uvx pip-audit -r /tmp/requirements.txt --no-deps --disable-pip --strict
+      - name: npm audit (extension dependencies; fails on high or critical)
+        working-directory: vscode
+        run: |
+          npm ci
+          npm audit --audit-level=high

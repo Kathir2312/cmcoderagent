@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -39,7 +40,7 @@ def test_find_git_bash_next_to_git(
     wsl.parent.mkdir(parents=True)
     wsl.write_text("")
     which = {"bash": str(wsl), "git": str(git_root / "cmd" / "git.exe")}
-    monkeypatch.setattr(compat.shutil, "which", lambda name: which.get(name))
+    monkeypatch.setattr(compat, "find_program", lambda name: which.get(name))
     for var in (
         "CMCODER_GIT_BASH_PATH",
         "CMCODER_SHELL",
@@ -63,7 +64,7 @@ def test_find_shell_override_and_missing(
     monkeypatch.setenv("CMCODER_GIT_BASH_PATH", str(tmp_path / "nope.exe"))
     assert compat.find_shell() is None
     monkeypatch.delenv("CMCODER_GIT_BASH_PATH")
-    monkeypatch.setattr(compat.shutil, "which", lambda name: None)
+    monkeypatch.setattr(compat, "find_program", lambda name: None)
     for var in ("PROGRAMFILES", "PROGRAMW6432", "PROGRAMFILES(X86)", "LOCALAPPDATA"):
         monkeypatch.setenv(var, str(tmp_path / "empty"))
     assert compat.find_shell() is None
@@ -111,3 +112,46 @@ async def test_interrupt_handler_signal_fallback(monkeypatch: pytest.MonkeyPatch
         handler.disarm()
     assert fired.is_set()
     assert signal.getsignal(signal.SIGINT) == before
+
+
+def _program(folder: Path, name: str) -> Path:
+    folder.mkdir(parents=True, exist_ok=True)
+    p = folder / name
+    p.write_text("#!/bin/sh\n")
+    p.chmod(0o755)
+    return p
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX names; Windows rules are tested below")
+def test_find_program_never_uses_the_current_folder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """SAST finding (Bandit B607, verified by hand): a program started by bare
+    name, or found with shutil.which, comes from the current folder first on
+    Windows. cmcoder runs in the user's project, so a cloned repository could
+    plant git.exe or rg.exe. find_program searches absolute PATH entries only."""
+    project, tools = tmp_path / "project", tmp_path / "tools"
+    _program(project, "git")  # planted
+    real = _program(tools, "git")
+    monkeypatch.chdir(project)
+    for path in (f".{os.pathsep}{tools}", f"{os.pathsep}{tools}", f"{project}{os.pathsep}{tools}"):
+        monkeypatch.setenv("PATH", path)
+        assert compat.find_program("git") == str(real), path
+    monkeypatch.setenv("PATH", f".{os.pathsep}{project}")
+    assert compat.find_program("git") is None
+
+
+def test_find_program_on_windows_rules(
+    windows: None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project, tools = tmp_path / "project", tmp_path / "tools"
+    _program(project, "git.exe")  # planted
+    real = _program(tools, "git.exe")
+    monkeypatch.chdir(project)
+    monkeypatch.setenv("PATH", str(tools))
+    monkeypatch.setenv("PATHEXT", ".COM;.EXE;.BAT;.CMD")
+    assert compat.find_program("git") == str(real)
+    assert compat.find_program("git.exe") == str(real)
+    assert (
+        compat.system_program("taskkill.exe").lower().endswith("system32" + os.sep + "taskkill.exe")
+    )

@@ -19,7 +19,8 @@
       "description": "In untrusted workspaces, the cmcoder command can't be changed by the workspace's settings.",
       "restrictedConfigurations": [
         "cmcoder.executable",
-        "cmcoder.executableArgs"
+        "cmcoder.executableArgs",
+        "cmcoder.permissionMode"
       ]
     }
   },
@@ -207,7 +208,8 @@
             "bypassPermissions"
           ],
           "default": "",
-          "description": "Permission mode for new conversations (empty: your cmcoder settings decide)."
+          "description": "Permission mode for new conversations (empty: your cmcoder settings decide). User settings only: a workspace can't change it.",
+          "scope": "machine"
         },
         "cmcoder.diffReview": {
           "type": "boolean",
@@ -236,7 +238,7 @@
     "@types/node": "^20.11.0",
     "@types/vscode": "~1.90.0",
     "@vscode/test-electron": "^2.5.2",
-    "@vscode/vsce": "^3.2.0",
+    "@vscode/vsce": "^4.0.0",
     "esbuild": "^0.25.0",
     "marked": "^15.0.0",
     "playwright": "1.56.1",

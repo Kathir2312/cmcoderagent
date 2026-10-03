@@ -20,7 +20,7 @@ from ..protocol.events import protocol_json_schema
 from ..providers.auth import ApiKeyAuth, delete_api_key, mask_key, store_api_key
 from ..providers.openai_compat import ProviderError
 
-SUBCOMMANDS = {"doctor", "login", "logout", "models", "protocol-schema", "version"}
+SUBCOMMANDS = {"doctor", "login", "logout", "models", "protocol-schema", "trust", "version"}
 
 console = Console(highlight=False)
 err_console = Console(stderr=True, highlight=False)
@@ -33,9 +33,9 @@ sub_app = typer.Typer(
 )
 
 
-def _load(cwd: Path | None = None) -> Settings:
+def _load(cwd: Path | None = None, trust_project: bool = False) -> Settings:
     try:
-        return load_settings(cwd)
+        return load_settings(cwd, trust_project=trust_project)
     except SettingsError as e:
         err_console.print(f"[red]error:[/red] {e}")
         raise typer.Exit(2) from e
@@ -128,6 +128,14 @@ def main(
     tui: Annotated[
         bool, typer.Option("--tui", help="Use the full-screen terminal UI (Textual).")
     ] = False,
+    trust_project: Annotated[
+        bool,
+        typer.Option(
+            "--trust-project",
+            help="Use this project's .cmcoder settings (env, allow rules, permissive modes) "
+            "for this run, as if you had run `cmcoder trust`.",
+        ),
+    ] = False,
     protocol: Annotated[
         str | None,
         typer.Option(
@@ -157,7 +165,7 @@ def main(
         err_console.print("[red]error:[/red] --output-format must be text, json or stream-json")
         raise typer.Exit(2)
 
-    settings = _load()
+    settings = _load(trust_project=trust_project)
     opts = AgentOptions(
         cwd=Path.cwd(),
         model=model,
@@ -338,6 +346,47 @@ def protocol_schema(
 
     schema = {"events": protocol_json_schema(), "messages": messages_json_schema()}
     print(json.dumps(schema, indent=2))
+
+
+@sub_app.command(
+    help="Trust this project's .cmcoder settings (env, allow rules, permissive modes)."
+)
+def trust(
+    revoke: Annotated[bool, typer.Option("--revoke", help="Stop trusting this project.")] = False,
+    yes: Annotated[bool, typer.Option("--yes", "-y", help="Don't ask for confirmation.")] = False,
+) -> None:
+    from ..config.settings import (
+        find_project_root,
+        is_project_trusted,
+        project_settings_preview,
+        set_project_trust,
+    )
+
+    root = find_project_root(Path.cwd().resolve())
+    if revoke:
+        set_project_trust(root, False)
+        console.print(f"No longer trusting {root}.")
+        return
+    preview = project_settings_preview(root)
+    if is_project_trusted(root):
+        console.print(f"{root} is already trusted.")
+        return
+    console.print(f"Project: [bold]{root}[/bold]")
+    if preview:
+        console.print("Trusting it lets its .cmcoder settings do the following:")
+        for item in preview:
+            console.print(f"  • {item}")
+    else:
+        console.print("Its .cmcoder settings currently set nothing that needs trust.")
+    console.print("[dim]Gateways (providers) are never read from a project, trusted or not.[/dim]")
+    if not yes:
+        if not sys.stdin.isatty():
+            err_console.print("[red]error:[/red] not a terminal; use --yes to confirm.")
+            raise typer.Exit(2)
+        if not typer.confirm("Trust this project?", default=False):
+            raise typer.Exit(1)
+    set_project_trust(root, True)
+    console.print(f"Trusted {root}. `cmcoder trust --revoke` undoes it.")
 
 
 @sub_app.command(help="Print the version.")

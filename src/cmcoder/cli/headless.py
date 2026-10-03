@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 from typing import Literal
 
-from ..config.settings import Settings
+from ..config.settings import Settings, ignored_settings_message
 from ..protocol import events as ev
 from .factory import AgentOptions, build_agent
 
@@ -23,6 +23,8 @@ async def run_headless(
     opts.ask = None  # nobody to ask: ASK decisions become denials with a hint
     opts.persist_rules = False
     agent = await build_agent(settings, opts)
+    if warning := ignored_settings_message(settings):
+        print(f"warning: {warning}", file=sys.stderr)
     final: ev.Result | None = None
     try:
         if output_format == "stream-json":

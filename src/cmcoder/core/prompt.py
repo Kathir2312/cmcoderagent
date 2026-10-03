@@ -8,6 +8,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from ..compat import find_program
 from ..config.settings import config_dir
 
 MEMORY_FILENAMES = ("CMCODER.md", "AGENTS.md")
@@ -53,9 +54,12 @@ class MemoryFile:
 
 
 def _git_info(cwd: Path) -> str | None:
+    git = find_program("git")  # never a git.exe planted in the project (Windows)
+    if git is None:
+        return None
     try:
         branch = subprocess.run(
-            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            [git, "rev-parse", "--abbrev-ref", "HEAD"],
             cwd=cwd,
             capture_output=True,
             text=True,
@@ -64,7 +68,7 @@ def _git_info(cwd: Path) -> str | None:
         if branch.returncode != 0:
             return None
         status = subprocess.run(
-            ["git", "status", "--short"], cwd=cwd, capture_output=True, text=True, timeout=5
+            [git, "status", "--short"], cwd=cwd, capture_output=True, text=True, timeout=5
         )
         changed = status.stdout.strip().splitlines()
         summary = f"{len(changed)} changed files" if changed else "clean"

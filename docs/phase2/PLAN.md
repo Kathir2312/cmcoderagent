@@ -221,6 +221,30 @@ result, status, turns and tool calls. Mock run: **40/40 passed, parity
 the main README's "VS Code extension" section, and sections 1–12 in
 [python-guide.md](python-guide.md) and [langgraph-guide.md](langgraph-guide.md).
 
+## Validation: plan against code
+
+Each item was checked against the code and its tests (3 October 2026):
+
+| Item | Code | Tests |
+|---|---|---|
+| 1. `--protocol stdio` | `cli/stdio.py`, `protocol/messages.py` | `tests/test_stdio.py` (9) |
+| 2. TS types | `protocol/typescript.py` → `vscode/src/protocol.ts` | `tests/test_protocol_ts.py` (stale file fails CI) |
+| 3. Extension | `vscode/src/extension.ts`, `agentProcess.ts` | `vscode/test/agentProcess.test.ts` |
+| 4–5. Chat panel, permissions | `chatView.ts`, `webview/main.ts` | `vscode/test/webview.test.ts` (Chromium) |
+| 6. Diff review | `Tool.proposed_change`, `diffReview.ts` | `tests/test_tools.py`, real-VS Code test |
+| 7. Editor context | `core/ide.py`, `editorContext.ts` | `tests/test_ide.py`, `tests/test_stdio.py` |
+| 8. IDE tools | `core/ide.py`, `runIdeTool` | `tests/test_stdio.py`, real-VS Code test |
+| 9. Sessions | `history()`, `list_sessions`, History panel | `tests/test_stdio.py`, `webview.test.ts` |
+| 10. Open in terminal | `openTerminal` in `extension.ts` | real-VS Code test (command registered) |
+| 11. Tests and CI | 3 layers, 10 CI jobs | all green on `29cef63` |
+| 12. Parity | `evals/run.py --via both` | 20/20 identical, in CI |
+| 13. Docs | guides, READMEs | |
+
+Then a security review (SAST and SCA): [SECURITY-REVIEW.md](SECURITY-REVIEW.md).
+Seven issues fixed, three of them high (a repository's settings could run
+code or redirect your API key; Windows could start a program planted in the
+project), and a CI `security` job added.
+
 ## Hands-on check (Windows, real gateway)
 
 The last step before `STATUS.md`. In a real project, with the `.vsix`
@@ -242,6 +266,10 @@ installed:
 9. **cmcoder: Open in Terminal**: the CLI starts in the project folder.
 10. `uv run python evals/run.py --via both` against the gateway: same
     results through `-p` and the extension's protocol.
+11. Project trust: in a project whose `.cmcoder/settings*.json` has allow
+    rules or `env`, the CLI warns they're ignored; `cmcoder trust` lists them
+    and enables them. (Your own "Always" rules from Phase 1 were saved before
+    trust existed: run `cmcoder trust` once in that project.)
 
 ## Not in Phase 2
 

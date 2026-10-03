@@ -316,3 +316,22 @@ async def test_editor_context_and_ide_tools(mock_server: Any, project: Path) -> 
     assert "selected line 1 of app.py" in user and "app.py:1 error" in user
     tool_results = [m["content"] for m in server.requests[1]["messages"] if m["role"] == "tool"]
     assert "undefined_name is not defined (Pylance)" in tool_results[-1]
+
+
+async def test_editor_context_withholds_secret_files(mock_server: Any, project: Path) -> None:
+    (project / ".env").write_text("TOKEN=abc123\n")
+    server = mock_server([{"content": "ok"}])
+    agent = await Agent.start(project, server)
+    try:
+        await agent.next()
+        env = str(project / ".env")
+        context = {
+            "active_file": env,
+            "selection": {"path": env, "start_line": 1, "end_line": 1, "text": "TOKEN=abc123"},
+        }
+        await agent.send(type="user_message", text="what is this?", context=context)
+        await agent.until("result")
+    finally:
+        await agent.close()
+    sent = server.requests[0]["messages"][1]["content"]
+    assert "abc123" not in sent and "contents are not shared" in sent

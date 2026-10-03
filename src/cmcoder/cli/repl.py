@@ -25,7 +25,7 @@ from rich.text import Text
 
 from .. import __version__
 from ..compat import InterruptHandler
-from ..config.settings import Settings, config_dir
+from ..config.settings import Settings, config_dir, ignored_settings_message
 from ..core.agent import Agent, PermissionAnswer, PermissionRequest
 from ..core.permissions import MODES, ModeNotAllowed
 from ..core.sessions import SessionLog, age, list_sessions, load
@@ -587,6 +587,8 @@ class Repl:
                 border_style="cyan",
             )
         )
+        if warning := ignored_settings_message(self.settings):
+            self.console.print(Text(f"⚠ {warning}", style="yellow"))
         if len(agent.messages) > 1:
             self._show_resumed()
         bindings = KeyBindings()

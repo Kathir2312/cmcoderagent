@@ -161,3 +161,22 @@ test("a crash is reported as unexpected", async () => {
   assert.equal(exit()?.expected, false);
   assert.equal(exit()?.code, 2);
 });
+
+test("a program planted in the workspace is never started (Windows search order)", async () => {
+  const { resolveExecutable } = await import("../src/agentProcess");
+  const { chmodSync } = await import("node:fs");
+  const workspace = project();
+  const tools = mkdtempSync(join(tmpdir(), "cmcoder-bin-"));
+  const exe = process.platform === "win32" ? ".exe" : "";
+  for (const dir of [workspace, tools]) {
+    writeFileSync(join(dir, `cmcoder${exe}`), "#!/bin/sh\n");
+    chmodSync(join(dir, `cmcoder${exe}`), 0o755);
+  }
+  const sep = process.platform === "win32" ? ";" : ":";
+  for (const PATH of [`.${sep}${tools}`, `${workspace}${sep}${tools}`, `${sep}${tools}`]) {
+    assert.equal(resolveExecutable("cmcoder", workspace, { PATH, PATHEXT: ".EXE" }), join(tools, `cmcoder${exe}`), PATH);
+  }
+  assert.equal(resolveExecutable("cmcoder", workspace, { PATH: `.${sep}${workspace}` }), undefined);
+  // An explicit path (from a trusted setting) is used as given.
+  assert.equal(resolveExecutable(join(workspace, `cmcoder${exe}`), workspace, { PATH: "" }), join(workspace, `cmcoder${exe}`));
+});

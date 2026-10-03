@@ -9,7 +9,6 @@ from __future__ import annotations
 import asyncio
 import os
 import re
-import shutil
 import time
 from collections.abc import Iterator
 from pathlib import Path
@@ -18,6 +17,7 @@ from typing import Literal
 import pathspec
 from pydantic import Field
 
+from ..compat import find_program
 from ..sensitive import is_secret, ripgrep_exclude_globs
 from .base import Tool, ToolContext, ToolInput, ToolResult, truncate_middle
 
@@ -54,7 +54,7 @@ TYPE_EXTENSIONS: dict[str, tuple[str, ...]] = {
 
 
 def ripgrep() -> str | None:
-    return shutil.which("rg")
+    return find_program("rg")
 
 
 async def _run(argv: list[str], cwd: Path, timeout: float = SEARCH_TIMEOUT) -> tuple[int, str, str]:

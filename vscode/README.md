@@ -44,12 +44,18 @@ code --install-extension cmcoder.vsix
 |---|---|
 | `cmcoder.executable` | The `cmcoder` command, or its full path |
 | `cmcoder.executableArgs` | Arguments before cmcoder's own, e.g. `["run", "--project", "C:\\path\\to\\cmcoder", "cmcoder"]` with `uv` as the executable |
-| `cmcoder.permissionMode` | Permission mode for new conversations |
+| `cmcoder.permissionMode` | Permission mode for new conversations (user settings only) |
 | `cmcoder.diffReview` | Open proposed edits in the diff editor (default on) |
 | `cmcoder.autoContext` | Send the editor context with messages (default on) |
 
-The first two can't be set by an untrusted workspace, so opening someone
-else's repository can't change which program the extension runs.
+A workspace can't change which program runs or the permission mode: the
+first two can't be set by an untrusted workspace, and the third only in your
+user settings. The program is looked up on `PATH` only, never in the
+workspace folder.
+
+The project's own `.cmcoder` settings (`env`, allow rules, permissive modes)
+are used only when VS Code trusts the workspace; gateway settings are never
+read from a project. See "Project settings and trust" in the main README.
 
 cmcoder's own settings (gateway, models, rules) stay in
 `~/.cmcoder/settings.json`; **cmcoder: Open Settings File** opens it.

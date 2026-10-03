@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import os
 import platform
-import shutil
 import socket
 import ssl
 import tempfile
@@ -18,8 +17,13 @@ from urllib.parse import urlparse
 from rich.console import Console
 from rich.text import Text
 
-from ..compat import SHELL_HELP, find_shell
-from ..config.settings import Settings, find_project_root, managed_settings_path
+from ..compat import SHELL_HELP, find_program, find_shell
+from ..config.settings import (
+    Settings,
+    find_project_root,
+    ignored_settings_message,
+    managed_settings_path,
+)
 from ..providers.auth import ApiKeyAuth
 from ..providers.messages import Message, StreamDone, TextDelta, ToolSpec
 from ..providers.openai_compat import OpenAICompatProvider, ProviderError, no_tool_support
@@ -107,6 +111,14 @@ class Doctor:
             "the current one; reads inside it need no approval, so check it is the project "
             "you mean",
         )
+        if warning := ignored_settings_message(s):
+            self.report(WARN, "Project settings", warning)
+        else:
+            self.report(
+                INFO,
+                "Project settings",
+                "trusted (cmcoder trust)" if s.project_trusted else "not trusted; nothing ignored",
+            )
         self.report(
             INFO,
             f"Platform: {platform.system()} {platform.release()}, Python {platform.python_version()}",
@@ -116,7 +128,7 @@ class Doctor:
             self.report(OK, "bash found (Bash tool)", shell)
         else:
             self.report(FAIL, "bash not found (Bash tool)", SHELL_HELP)
-        rg = shutil.which("rg")
+        rg = find_program("rg")
         if rg:
             self.report(OK, "ripgrep found (fast Grep/Glob)", rg)
         else:
@@ -127,7 +139,7 @@ class Doctor:
                 "Install ripgrep for large repos (winget install BurntSushi.ripgrep.MSVC, "
                 "brew install ripgrep, or apt install ripgrep).",
             )
-        git = shutil.which("git")
+        git = find_program("git")
         if git:
             self.report(OK, "git found", git)
         else:
