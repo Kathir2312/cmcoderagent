@@ -107,6 +107,18 @@ class ListCommands(_Message):
     type: Literal["list_commands"] = "list_commands"
 
 
+class Rewind(_Message):
+    """Go back to before user message `turn` (from `rewind_points`): undo the
+    agent's file changes (`code`), the conversation, or both. Files outside the
+    project are only restored with `outside`."""
+
+    type: Literal["rewind"] = "rewind"
+    turn: int
+    code: bool = True
+    conversation: bool = True
+    outside: bool = False
+
+
 class Shutdown(_Message):
     """Stop the running turn, save the session and exit (EOF does the same)."""
 
@@ -123,6 +135,7 @@ ClientMessage = Annotated[
     | IdeToolResult
     | ListSessions
     | ListCommands
+    | Rewind
     | Shutdown,
     Field(discriminator="type"),
 ]

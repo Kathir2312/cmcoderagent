@@ -64,6 +64,17 @@ Ollama options in `openai_compat.build_request` (profile `backend: "ollama"`),
 - Decide whether the full-screen TUI becomes the default.
 - Node.js 22 for building the extension.
 
+**Status: VS Code commands done** (the TUI default and Node 22 are decisions /
+setup for you, below). `/rewind`, `/model [name]`, `/cost`, `/todos` and `/help`
+work in the panel and are offered in completion (`cli/stdio.py`
+`_panel_command`). `/rewind` asks with VS Code's pick lists (which message,
+then code / conversation / both, then files outside the project), new protocol
+pair `rewind_points` → `rewind` → `rewound` + `history`; the panel redraws the
+conversation and puts the message back in the input. Found on the way (also in
+the terminal): rewinding the conversation kept the todo list from after that
+point; it is now restored as it was. Tests: `tests/test_panel_commands.py`,
+`vscode/test/webview.test.ts`.
+
 ### 3. Bash sandbox
 
 - Linux: bubblewrap; macOS: `sandbox-exec`; Windows: inside WSL2 (the Linux

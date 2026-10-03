@@ -25,6 +25,18 @@ export interface HistoryItem {
   text: string;
 }
 
+export interface RewindAction {
+  path: string;
+  action: string;
+}
+
+export interface RewindPoint {
+  turn: number;
+  text: string;
+  files_changed: number;
+  outside_files: string[];
+}
+
 export interface SessionSummary {
   id: string;
   title: string;
@@ -173,6 +185,24 @@ export interface CommandList {
   commands: CommandInfo[];
 }
 
+/** Earlier user messages to rewind to (answer with a `rewind` message). */
+export interface RewindPoints {
+  type: "rewind_points";
+  points: RewindPoint[];
+}
+
+/**
+ * The result of a `rewind`. When the conversation was rewound, a
+ * `history` event follows with the conversation as it is now.
+ */
+export interface Rewound {
+  type: "rewound";
+  code: boolean;
+  conversation: boolean;
+  actions: RewindAction[];
+  prompt: string | null;
+}
+
 /** A resumed conversation so far, so the client can show it. */
 export interface History {
   type: "history";
@@ -209,6 +239,8 @@ export type AgentEvent =
   | IdeToolRequest
   | SessionList
   | CommandList
+  | RewindPoints
+  | Rewound
   | History
   | Result;
 
@@ -299,6 +331,19 @@ export interface ListCommands {
   type: "list_commands";
 }
 
+/**
+ * Go back to before user message `turn` (from `rewind_points`): undo the
+ * agent's file changes (`code`), the conversation, or both. Files outside the
+ * project are only restored with `outside`.
+ */
+export interface Rewind {
+  type: "rewind";
+  turn: number;
+  code?: boolean;
+  conversation?: boolean;
+  outside?: boolean;
+}
+
 /** Stop the running turn, save the session and exit (EOF does the same). */
 export interface Shutdown {
   type: "shutdown";
@@ -314,4 +359,5 @@ export type ClientMessage =
   | IdeToolResult
   | ListSessions
   | ListCommands
+  | Rewind
   | Shutdown;

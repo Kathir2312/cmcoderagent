@@ -6,7 +6,7 @@ import * as vscode from "vscode";
 import { AgentProcess } from "./agentProcess";
 import { DiffReview } from "./diffReview";
 import { contextLabel, currentEditor, editorContext, IDE_TOOLS, runIdeTool } from "./editorContext";
-import type { AgentEvent, FileChange } from "./protocol";
+import type { AgentEvent, FileChange, RewindPoint } from "./protocol";
 import type { AgentState, FromWebview, ToWebview } from "./webviewMessages";
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
@@ -178,7 +178,50 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       case "result":
         await this.clearReviews(); // an interrupted turn leaves no open requests
         break;
+      case "rewind_points":
+        void this.pickRewind(event.points);
+        break;
     }
+  }
+
+  /** /rewind: pick an earlier message, then what to undo (VS Code's pick lists). */
+  private async pickRewind(points: RewindPoint[]): Promise<void> {
+    const point = await vscode.window.showQuickPick(
+      [...points].reverse().map((p) => ({
+        label: p.text || "(empty message)",
+        description: p.files_changed ? `${p.files_changed} file(s) changed since` : "",
+        point: p,
+      })),
+      { placeHolder: "Rewind to before which message?" },
+    );
+    if (!point) return;
+    const choices = [
+      { label: "Code and conversation", code: true, conversation: true },
+      { label: "Conversation only", code: false, conversation: true },
+      { label: "Code only", code: true, conversation: false },
+    ];
+    const what = await vscode.window.showQuickPick(choices, {
+      placeHolder: "What should go back? (Changes made by Bash commands are not undone.)",
+    });
+    if (!what) return;
+    let outside = false;
+    if (what.code && point.point.outside_files.length) {
+      const answer = await vscode.window.showWarningMessage(
+        `${point.point.outside_files.length} changed file(s) are outside the project. Restore them too?`,
+        { modal: true, detail: point.point.outside_files.slice(0, 10).join("\n") },
+        "Restore them too",
+        "Only the project's files",
+      );
+      if (!answer) return;
+      outside = answer === "Restore them too";
+    }
+    this.agent?.send({
+      type: "rewind",
+      turn: point.point.turn,
+      code: what.code,
+      conversation: what.conversation,
+      outside,
+    });
   }
 
   private setState(state: AgentState, message?: string): void {

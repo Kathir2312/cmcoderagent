@@ -17,6 +17,7 @@ import time
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import suppress
+from pathlib import Path
 from typing import Any, BinaryIO
 
 from pydantic import ValidationError
@@ -36,6 +37,19 @@ from ..tools.files import ReadInput, ReadTool
 from .factory import AgentOptions, build_agent, resolve_model_profile
 
 IDE_TOOL_TIMEOUT = 30.0  # seconds
+
+# Built-in commands that work in the VS Code panel: (argument hint, description).
+# The others (/clear, /resume, /mode, ...) are the panel's own controls.
+BUILT_IN_HERE = {
+    "compact": ("[focus]", "Summarise the conversation so far to free context"),
+    "rewind": ("", "Go back to an earlier message: undo file changes, the conversation, or both"),
+    "model": ("[name]", "Show or switch the model"),
+    "cost": ("", "Token usage for this session"),
+    "todos": ("", "Show the todo list"),
+    "mcp": ("", "MCP servers: status and tools"),
+    "help": ("", "List the commands"),
+}
+PANEL_COMMANDS = set(BUILT_IN_HERE) - {"compact"}
 _READ = ReadTool()
 
 
@@ -188,6 +202,8 @@ class StdioServer:
                 if s.session_id != agent.session_id
             ]
             self.emit(ev.SessionList(sessions=sessions))
+        elif isinstance(message, msg.Rewind):
+            self._rewind(message)
         elif isinstance(message, msg.ListCommands):
             self.emit(ev.CommandList(commands=self.command_list()))
 
@@ -234,9 +250,9 @@ class StdioServer:
                 yield event
             yield self._result("success", "", False, started)
             return
-        if name == "mcp":  # the servers' state, shown as a reply (not sent to the model)
-            lines = "\n".join(status_lines(agent.mcp))
-            yield ev.AssistantMessage(text=f"**MCP servers**\n\n```text\n{lines}\n```")
+        if name in PANEL_COMMANDS:  # answered here, not sent to the model
+            for event in await self._panel_command(name, arguments):
+                yield event
             yield self._result("success", "", False, started)
             return
         try:
@@ -274,22 +290,62 @@ class StdioServer:
             self.error("internal", f"{type(e).__name__}: {e}")
             self.emit(self._result("error", str(e), True, started))
 
+    async def _panel_command(self, name: str, arguments: str) -> list[ev.Event]:
+        """/help, /mcp, /cost, /model, /todos, /rewind in the VS Code panel."""
+        agent = self.agent
+        assert agent is not None
+
+        def reply(title: str, body: str) -> ev.AssistantMessage:
+            return ev.AssistantMessage(text=f"**{title}**\n\n```text\n{body}\n```")
+
+        if name == "help":
+            lines = [
+                f"/{c.name} {c.argument_hint}".strip().ljust(28) + c.description
+                for c in self.command_list()
+            ]
+            return [reply("Commands", "\n".join(lines))]
+        if name == "mcp":
+            return [reply("MCP servers", "\n".join(status_lines(agent.mcp)))]
+        if name == "cost":
+            u = agent.usage
+            est = " (estimated)" if u.estimated else ""
+            cost = f"\ncost {u.cost:.4f}" if u.cost is not None else ""
+            text = f"{u.prompt_tokens:,} tokens in, {u.completion_tokens:,} out{est}{cost}"
+            return [reply("This session", text)]
+        if name == "model":
+            if arguments:
+                problem = await self._switch_model(arguments)
+                if problem:
+                    return [ev.Warning(message=problem)]
+            p = agent.profile
+            text = (
+                f"{agent.model} (provider {agent.provider.name})\n"
+                f"context {p.context_window:,} tokens ({p.context_window_source})"
+            )
+            return [reply("Model", text)]
+        if name == "todos":
+            if not agent.ctx.todos:
+                return [ev.AssistantMessage(text="No todo list in this conversation.")]
+            done = sum(t.get("status") == "completed" for t in agent.ctx.todos)
+            return [
+                ev.TodoUpdate(todos=agent.ctx.todos),
+                ev.AssistantMessage(
+                    text=f"Todo list: {done}/{len(agent.ctx.todos)} done (shown at the top)."
+                ),
+            ]
+        if name == "rewind":
+            points = self._rewind_points()
+            if not points.points:
+                return [ev.AssistantMessage(text="Nothing to rewind to yet.")]
+            return [points]
+        return []
+
     def command_list(self) -> list[ev.CommandInfo]:
         agent = self.agent
         assert agent is not None
         out = [
-            ev.CommandInfo(
-                name="compact",
-                description="Summarise the conversation so far to free context",
-                argument_hint="[focus]",
-                origin="built-in",
-            ),
-            ev.CommandInfo(
-                name="mcp",
-                description="MCP servers: status and tools",
-                argument_hint="",
-                origin="built-in",
-            ),
+            ev.CommandInfo(name=n, description=d, argument_hint=h, origin="built-in")
+            for n, (h, d) in BUILT_IN_HERE.items()
         ]
         for c in sorted(agent.command_list().values(), key=lambda c: c.name):
             out.append(
@@ -358,27 +414,75 @@ class StdioServer:
             self.ide_pending.pop(request_id, None)
 
     async def _set_model(self, ref: str) -> None:
-        agent = self.agent
-        assert agent is not None
         if self.busy:
             self.error("busy", "Can't switch models during a turn.")
             return
+        problem = await self._switch_model(ref)
+        if problem:
+            self.error("invalid_model", problem)
+
+    async def _switch_model(self, ref: str) -> str | None:
+        """Switch the model (emits model_changed); returns what's wrong, if anything."""
+        agent = self.agent
+        assert agent is not None
         try:
             provider_name, model = self.settings.resolve_model(ref)
         except (SettingsError, ValueError) as e:
-            self.error("invalid_model", str(e))
-            return
+            return str(e)
         if provider_name != agent.provider.name:
-            self.error(
-                "invalid_model",
-                f"{ref!r} is on provider {provider_name!r}; switching providers needs a restart.",
-            )
-            return
+            return f"{ref!r} is on provider {provider_name!r}; switching providers needs a restart."
         provider = agent.provider
         assert isinstance(provider, OpenAICompatProvider)
         agent.model = model
         agent.profile = await resolve_model_profile(self.settings, provider, model)
         self.emit(ev.ModelChanged(model=model, context_window=agent.profile.context_window))
+        return None
+
+    def _rewind_points(self) -> ev.RewindPoints:
+        agent = self.agent
+        assert agent is not None
+        root = agent.ctx.project_root.resolve()
+        points = []
+        for turn, text, changed in agent.rewind_points()[-20:]:
+            outside = [
+                e.path
+                for e in agent.checkpoints.changes_since(turn)
+                if not Path(e.path).is_relative_to(root)
+            ]
+            short = " ".join(REMINDER.sub("", text).split())
+            points.append(
+                ev.RewindPoint(
+                    turn=turn,
+                    text=short[:200],
+                    files_changed=changed,
+                    outside_files=[str(p) for p in outside],
+                )
+            )
+        return ev.RewindPoints(points=points)
+
+    def _rewind(self, m: msg.Rewind) -> None:
+        agent = self.agent
+        assert agent is not None
+        if self.busy:
+            self.error("busy", "Can't rewind during a turn; stop it first.")
+            return
+        if all(p[0] != m.turn for p in agent.rewind_points()):
+            self.error("protocol", f"No message {m.turn} to rewind to.")
+            return
+        actions, prompt = agent.rewind(
+            m.turn, code=m.code, conversation=m.conversation, outside=m.outside
+        )
+        self.emit(
+            ev.Rewound(
+                code=m.code,
+                conversation=m.conversation,
+                actions=[ev.RewindAction(path=str(a.path), action=a.action) for a in actions],
+                prompt=prompt,
+            )
+        )
+        if m.conversation:
+            self.emit(ev.History(messages=history(agent)))
+            self.emit(ev.TodoUpdate(todos=agent.ctx.todos))
 
 
 REMINDER = re.compile(r"<system-reminder>.*?</system-reminder>\s*", re.DOTALL)

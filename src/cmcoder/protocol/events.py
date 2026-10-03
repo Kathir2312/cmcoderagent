@@ -190,6 +190,36 @@ class CommandList(_Event):
     commands: list[CommandInfo]
 
 
+class RewindPoint(BaseModel):
+    turn: int
+    text: str  # the user message (shortened)
+    files_changed: int  # files the agent changed since, restorable
+    outside_files: list[str]  # of those, the ones outside the project
+
+
+class RewindPoints(_Event):
+    """Earlier user messages to rewind to (answer with a `rewind` message)."""
+
+    type: Literal["rewind_points"] = "rewind_points"
+    points: list[RewindPoint]
+
+
+class RewindAction(BaseModel):
+    path: str
+    action: str  # "restored", "deleted", "skipped (too big)", "failed: ..."
+
+
+class Rewound(_Event):
+    """The result of a `rewind`. When the conversation was rewound, a
+    `history` event follows with the conversation as it is now."""
+
+    type: Literal["rewound"] = "rewound"
+    code: bool
+    conversation: bool
+    actions: list[RewindAction]
+    prompt: str | None  # the rewound message, to edit and send again
+
+
 class HistoryItem(BaseModel):
     role: Literal["user", "assistant", "tool"]
     text: str  # for "tool": the call's label, e.g. Edit(app.py)
@@ -232,6 +262,8 @@ Event = Annotated[
     | IdeToolRequest
     | SessionList
     | CommandList
+    | RewindPoints
+    | Rewound
     | History
     | Result,
     Field(discriminator="type"),

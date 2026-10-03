@@ -305,6 +305,7 @@ class Agent:
                 self._keep_before_rewind(prompt)
                 self.messages = self.messages[:idx]
                 self.turn = turn - 1
+                self.ctx.todos = last_todos(self.messages)  # as it was at that point
                 self.save_session()
         return actions, prompt
 

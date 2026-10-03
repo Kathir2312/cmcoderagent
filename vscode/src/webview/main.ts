@@ -119,6 +119,7 @@ for (const mode of MODES) modeSelect.append(new Option(mode, mode));
 // --- state -------------------------------------------------------------------
 
 let busy = false;
+let rewound: string | undefined; // the note to show once the rewound history is drawn
 let ready = false;
 let reply: { el: HTMLElement; text: string } | undefined; // the streaming reply
 let renderQueued = false;
@@ -291,8 +292,31 @@ function onEvent(ev: AgentEvent): void {
         else if (item.role === "tool") append(el("div", "tool")).append(el("div", "label", `● ${item.text}`));
         else setMarkdown(append(el("div", "msg assistant")), item.text);
       }
-      if (ev.messages.length) note("Resumed this conversation.", "info");
+      if (rewound) note(rewound, "info");
+      else if (ev.messages.length) note("Resumed this conversation.", "info");
+      rewound = undefined;
       break;
+    case "rewind_points":
+      note("Choose the message to go back to in the list at the top of the window.", "info");
+      break;
+    case "rewound": {
+      const restored = ev.actions.filter((a) => a.action === "restored").length;
+      const deleted = ev.actions.filter((a) => a.action.startsWith("deleted")).length;
+      const files = ev.code ? ` Files: ${restored} restored, ${deleted} deleted (changes made by Bash commands are not undone).` : "";
+      if (ev.conversation) {
+        log.replaceChildren(); // the history that follows redraws it
+        toolCards.clear();
+        permissionCards.clear();
+        rewound = `Rewound the conversation.${files}`;
+        if (ev.prompt) {
+          input.value = ev.prompt;
+          input.focus();
+        }
+      } else {
+        note(`Rewound the code.${files}`, "info");
+      }
+      break;
+    }
     case "session_list":
       renderSessions(ev.sessions);
       break;

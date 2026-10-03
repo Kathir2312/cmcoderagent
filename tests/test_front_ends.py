@@ -85,7 +85,7 @@ async def test_mcp_status_over_stdio(mock_server: Any, project: Path) -> None:
         await agent.next()
         await agent.send(type="list_commands")
         names = [c["name"] for c in (await agent.until("command_list"))["commands"]]
-        assert names[:2] == ["compact", "mcp"]
+        assert {"compact", "mcp"} <= set(names)
         await agent.send(type="user_message", text="/mcp")
         reply = await agent.until("assistant_message")
         assert reply["text"].startswith("**MCP servers**") and "No MCP servers" in reply["text"]

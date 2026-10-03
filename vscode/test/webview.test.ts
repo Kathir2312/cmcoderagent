@@ -231,3 +231,23 @@ test("a subagent's steps are listed inside its Task card", async () => {
   assert.equal(await page.isVisible(".tool .steps .step"), false, "folded once the Task is done");
   await page.close();
 });
+
+test("rewind: the conversation is redrawn and the message is back in the input", async () => {
+  const { page, ev } = await panel();
+  await ev({ type: "history", messages: [{ role: "user", text: "first" }, { role: "user", text: "second" }] });
+  assert.equal(await page.locator(".msg.user").count(), 2);
+  await ev({ type: "rewind_points", points: [{ turn: 2, text: "second", files_changed: 1, outside_files: [] }] });
+  assert.match((await page.textContent(".log")) ?? "", /list at the top of the window/);
+  await ev({
+    type: "rewound",
+    code: true,
+    conversation: true,
+    actions: [{ path: "/p/new.txt", action: "deleted (created after that point)" }],
+    prompt: "second",
+  });
+  await ev({ type: "history", messages: [{ role: "user", text: "first" }] });
+  assert.deepEqual(await page.locator(".msg.user").allTextContents(), ["first"]);
+  assert.equal(await page.inputValue("textarea"), "second");
+  assert.match((await page.textContent(".log")) ?? "", /Rewound the conversation\. Files: 0 restored, 1 deleted/);
+  await page.close();
+});
