@@ -351,3 +351,41 @@ async def test_paths_use_forward_slashes_on_every_os(ctx: ToolContext, project: 
         assert "orders/store.py" in res.content and "\\" not in res.content, res.content
     res = await GlobTool().run(GlobInput(pattern="**/*.py"), ctx)
     assert "orders/store.py" in res.content and "\\" not in res.content
+
+
+async def test_proposed_change_matches_what_the_tool_writes(
+    ctx: ToolContext, project: Path
+) -> None:
+    """Diff review in VS Code shows `proposed_change`; it must be exactly what
+    the tool then writes."""
+    edit, write = EditTool(), WriteTool()
+    f = project / "m.py"
+    f.write_bytes(b"a = 1\r\nb = 2\r\nb = 2\r\n")  # CRLF, and a repeated line
+    await read(ctx, "m.py")
+    cases = [
+        EditInput(file_path="m.py", old_string="a = 1\n", new_string="a = 10\n"),
+        EditInput(file_path="m.py", old_string="b = 2", new_string="b = 3", replace_all=True),
+    ]
+    for args in cases:
+        change = edit.proposed_change(args, ctx)
+        assert change is not None and change.path == f
+        assert change.before == f.read_bytes().decode()
+        res = await edit.run(args, ctx)
+        assert not res.is_error and f.read_bytes().decode() == change.after
+    # No preview when the edit would fail.
+    assert (
+        edit.proposed_change(EditInput(file_path="m.py", old_string="zz", new_string="y"), ctx)
+        is None
+    )
+    assert (
+        edit.proposed_change(EditInput(file_path="nope.py", old_string="x", new_string="y"), ctx)
+        is None
+    )
+    # A new file, by Write or by Edit with an empty old_string.
+    new = write.proposed_change(WriteInput(file_path="n.py", content="x\n"), ctx)
+    assert new is not None and new.before is None and new.after == "x\n"
+    new = edit.proposed_change(EditInput(file_path="e.py", old_string="", new_string="y\n"), ctx)
+    assert new is not None and new.before is None
+    # Overwriting shows the old content.
+    over = write.proposed_change(WriteInput(file_path="m.py", content="z\n"), ctx)
+    assert over is not None and over.before == f.read_bytes().decode()

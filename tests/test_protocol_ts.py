@@ -31,3 +31,10 @@ def test_ts_type() -> None:
     assert ts_type({"enum": ["a", "b"]}) == '"a" | "b"'
     assert ts_type({"type": "array", "items": {"enum": ["a", "b"]}}) == '("a" | "b")[]'
     assert ts_type({"type": "object"}) == "Record<string, unknown>"
+
+
+def test_nested_models_are_generated() -> None:
+    ts = generate_typescript()
+    assert "export interface FileChange {" in ts
+    assert "  change: FileChange | null;" in ts
+    assert ts_type({"$ref": "#/$defs/FileChange"}) == "FileChange"

@@ -27,14 +27,20 @@ const app = document.getElementById("app")!;
 app.innerHTML = `
   <header>
     <span class="model" title="Model"></span>
+    <button class="history secondary" title="Past conversations in this project">History</button>
     <select class="mode" title="Permission mode (Shift+Tab in the CLI)"></select>
   </header>
+  <section class="sessions" hidden></section>
   <section class="todos" hidden></section>
   <main class="log" aria-live="polite"></main>
   <div class="status" hidden></div>
   <footer>
+    <label class="context" hidden title="Send the active file, selection and problems with this message">
+      <input type="checkbox" checked> <span></span>
+    </label>
     <textarea rows="3" placeholder="Ask cmcoder… (Enter to send, Shift+Enter for a new line)"></textarea>
     <div class="actions">
+      <button class="attach secondary" title="Attach a file (@)">@</button>
       <span class="usage"></span>
       <button class="stop secondary" hidden title="Stop (Esc)">Stop</button>
       <button class="send">Send</button>
@@ -51,6 +57,12 @@ const modelLabel = $<HTMLElement>(".model");
 const usageLabel = $<HTMLElement>(".usage");
 const statusLine = $<HTMLElement>(".status");
 const todosPanel = $<HTMLElement>(".todos");
+const sessionsPanel = $<HTMLElement>(".sessions");
+const historyButton = $<HTMLButtonElement>(".history");
+const attachButton = $<HTMLButtonElement>(".attach");
+const contextChip = $<HTMLLabelElement>(".context");
+const contextBox = contextChip.querySelector("input") as HTMLInputElement;
+const contextText = contextChip.querySelector("span") as HTMLElement;
 
 for (const mode of MODES) modeSelect.append(new Option(mode, mode));
 
@@ -191,6 +203,17 @@ function onEvent(ev: AgentEvent): void {
     case "mode_changed":
       modeSelect.value = ev.mode;
       break;
+    case "history":
+      for (const item of ev.messages) {
+        if (item.role === "user") append(el("div", "msg user", item.text));
+        else if (item.role === "tool") append(el("div", "tool")).append(el("div", "label", `● ${item.text}`));
+        else append(el("div", "msg assistant")).innerHTML = marked.parse(item.text, { async: false }) as string;
+      }
+      if (ev.messages.length) note("Resumed this conversation.", "info");
+      break;
+    case "session_list":
+      renderSessions(ev.sessions);
+      break;
     case "model_changed":
       modelLabel.textContent = ev.model;
       break;
@@ -230,10 +253,17 @@ function toolResult(ev: ToolResult): void {
 function permissionCard(ev: PermissionRequest): void {
   showStatus();
   const card = el("div", "permission");
+  card.dataset.toolUseId = ev.tool_use_id;
   card.append(el("div", "title", `Allow ${ev.label}?`));
   if (ev.reason) card.append(el("div", "reason", ev.reason));
   const preview = permissionPreview(ev);
   if (preview) card.append(el("pre", "preview", preview));
+  if (ev.change) {
+    const show = el("button", "link", "Show diff");
+    show.title = "Open the proposed change in VS Code's diff editor";
+    show.onclick = () => post({ kind: "showDiff", requestId: ev.request_id });
+    card.append(show);
+  }
 
   const feedback = document.createElement("input");
   feedback.type = "text";
@@ -307,11 +337,30 @@ function renderTodos(todos: Record<string, unknown>[]): void {
 function send(): void {
   const text = input.value.trim();
   if (!text || busy || !ready) return;
-  append(el("div", "msg user", text));
+  const includeContext = !contextChip.hidden && contextBox.checked;
+  const bubble = append(el("div", "msg user", text));
+  if (includeContext) bubble.append(el("div", "attached", `📎 ${contextText.textContent}`));
   input.value = "";
+  contextBox.checked = true; // turning it off counts for one message
   setBusy(true);
   showStatus("Thinking…");
-  post({ kind: "send", text });
+  post({ kind: "send", text, includeContext });
+}
+
+function renderSessions(sessions: { id: string; title: string; updated: number; messages: number }[]): void {
+  sessionsPanel.replaceChildren(el("div", "title", "Past conversations"));
+  if (!sessions.length) sessionsPanel.append(el("div", "empty", "None yet in this project."));
+  for (const s of sessions.slice(0, 50)) {
+    const row = el("button", "session secondary");
+    row.append(el("span", "name", s.title || "(untitled)"));
+    row.append(el("span", "when", `${new Date(s.updated * 1000).toLocaleString()} · ${s.messages} messages`));
+    row.onclick = () => {
+      sessionsPanel.hidden = true;
+      post({ kind: "resume", id: s.id });
+    };
+    sessionsPanel.append(row);
+  }
+  sessionsPanel.hidden = false;
 }
 
 input.addEventListener("keydown", (e) => {
@@ -322,6 +371,11 @@ input.addEventListener("keydown", (e) => {
 });
 sendButton.onclick = send;
 stopButton.onclick = () => post({ kind: "interrupt" });
+attachButton.onclick = () => post({ kind: "attachFile" });
+historyButton.onclick = () => {
+  if (!sessionsPanel.hidden) sessionsPanel.hidden = true;
+  else if (!busy) post({ kind: "listSessions" });
+};
 modeSelect.onchange = () => post({ kind: "setMode", mode: modeSelect.value });
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && busy) post({ kind: "interrupt" });
@@ -361,6 +415,7 @@ window.addEventListener("message", (e: MessageEvent<ToWebview>) => {
       }
       break;
     case "reset":
+      sessionsPanel.hidden = true;
       log.replaceChildren();
       renderTodos([]);
       toolCards.clear();
@@ -373,6 +428,19 @@ window.addEventListener("message", (e: MessageEvent<ToWebview>) => {
       input.value = m.text + input.value;
       input.focus();
       break;
+    case "context":
+      contextChip.hidden = !m.label;
+      contextText.textContent = m.label ?? "";
+      break;
+    case "permissionAnswered": {
+      const card = permissionCards.get(m.requestId);
+      if (card) {
+        permissionCards.delete(m.requestId);
+        if (m.text === "Denied" && card.dataset.toolUseId) deniedHere.add(card.dataset.toolUseId);
+        answered(card, m.text);
+      }
+      break;
+    }
   }
 });
 

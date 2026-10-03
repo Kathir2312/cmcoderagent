@@ -130,3 +130,70 @@ you'd usually derive them from raw tool calls in the front end.
 In `webview/main.ts`, find where `permission_request` is rendered. Compare it
 with the "human-in-the-loop" example of Agent Chat UI: what does each show
 the user before they approve an edit?
+
+---
+
+## 6. Native diff review
+
+### The LangGraph way
+
+The usual human-in-the-loop pattern is "approve / edit / reject a tool
+call": `interrupt({"tool_call": call})`, and the UI renders the arguments.
+Showing the *effect* (the file after the edit) is left to you.
+
+### The cmcoder way
+
+The tool itself computes the effect (`proposed_change`) and the interrupt
+payload carries it (`permission_request.change`). The UI is VS Code's diff
+editor. Think of it as `interrupt()` with a payload produced by a **dry run**
+of the tool.
+
+### Exercise
+
+In a LangGraph agent with a file-editing tool, add a `dry_run(args)` method
+and include its result in the `interrupt()` payload. What has to be shared
+between `dry_run` and the real tool so they can't disagree?
+
+---
+
+## 7–8. Editor context and IDE tools
+
+### The LangGraph way
+
+- Extra context goes into the **run input** (e.g. a `context` key in state,
+  read by the prompt template) or as a message.
+- Tools that must run on the *client* are a known pattern: the graph
+  interrupts with the tool call, the client runs it, and resumes with the
+  result.
+
+### The cmcoder way
+
+| LangGraph | cmcoder |
+|---|---|
+| `context` in the run input / state | `user_message.context`, turned into a `<system-reminder>` note |
+| client-side tool via `interrupt()` + resume | `ide_tool_request` / `ide_tool_result`, awaited inside the tool's `run` |
+| tools bound at graph build time (`bind_tools`) | tools added when the client sends `ide_capabilities` |
+
+---
+
+## 9. Sessions
+
+### The LangGraph way
+
+`client.threads.search()` lists threads; you continue one by passing its
+`thread_id`, and `get_state(thread_id)` gives the messages to render.
+
+### The cmcoder way
+
+`list_sessions` → `session_list`; resuming restarts the process with
+`--resume <id>`, which sends a `history` event first (the equivalent of
+reading `get_state(...).values["messages"]` to draw the chat).
+
+---
+
+## 11–12. Tests and parity
+
+LangSmith lets you run the same dataset against two versions of an app and
+compare. `evals/run.py --via both` is that comparison between two **front
+ends** of one agent: `-p` and the VS Code protocol, task by task, on result
+and on trajectory (the tool calls).

@@ -3,11 +3,19 @@
 from __future__ import annotations
 
 import difflib
+from dataclasses import dataclass
 from pathlib import Path
 
 from pydantic import Field
 
-from .base import Tool, ToolContext, ToolInput, ToolResult
+from .base import (
+    MAX_CHANGE_PREVIEW_CHARS,
+    FileChange,
+    Tool,
+    ToolContext,
+    ToolInput,
+    ToolResult,
+)
 
 DEFAULT_READ_LINES = 2000
 MAX_READ_BYTES = 20 * 1024 * 1024
@@ -119,6 +127,17 @@ class WriteTool(Tool):
     def describe(self, args: WriteInput, ctx: ToolContext) -> str:
         return f"Write({ctx.display(ctx.resolve(args.file_path))})"
 
+    def proposed_change(self, args: WriteInput, ctx: ToolContext) -> FileChange | None:
+        path = ctx.resolve(args.file_path)
+        if path.is_dir() or len(args.content) > MAX_CHANGE_PREVIEW_CHARS:
+            return None
+        before = None
+        if path.exists():
+            before, err = _read_text(path)
+            if err or before is None or len(before) > MAX_CHANGE_PREVIEW_CHARS:
+                return None
+        return FileChange(path, before, args.content)
+
     async def run(self, args: WriteInput, ctx: ToolContext) -> ToolResult:
         path = ctx.resolve(args.file_path)
         if err := ctx.check_fresh(path):
@@ -187,6 +206,18 @@ class EditTool(Tool):
     def describe(self, args: EditInput, ctx: ToolContext) -> str:
         return f"Edit({ctx.display(ctx.resolve(args.file_path))})"
 
+    def proposed_change(self, args: EditInput, ctx: ToolContext) -> FileChange | None:
+        path = ctx.resolve(args.file_path)
+        if not path.exists():
+            if args.old_string == "" and len(args.new_string) <= MAX_CHANGE_PREVIEW_CHARS:
+                return FileChange(path, None, args.new_string)
+            return None
+        text, err = _read_text(path)
+        if err or text is None or len(text) > MAX_CHANGE_PREVIEW_CHARS:
+            return None
+        done = _replace(text, args)
+        return FileChange(path, text, done.updated) if isinstance(done, _Replaced) else None
+
     async def run(self, args: EditInput, ctx: ToolContext) -> ToolResult:
         path = ctx.resolve(args.file_path)
         if not path.exists():
@@ -207,34 +238,10 @@ class EditTool(Tool):
         if err or text is None:
             return ToolResult(err or "read failed", is_error=True)
 
-        old, new = args.old_string, args.new_string
-        if "\r\n" in text and "\r\n" not in old:
-            old, new = old.replace("\n", "\r\n"), new.replace("\n", "\r\n")
-        count = text.count(old) if old else 0
-        if count == 0:
-            hint = ""
-            if old.strip() and old.strip() in text:
-                hint = (
-                    " The text exists with different leading/trailing whitespace; copy it exactly."
-                )
-            elif near := closest_match(text, old):
-                start, block = near
-                hint = (
-                    f" The closest text is at line {start}; check indentation, quotes and "
-                    f"spelling against it:\n{block}\n"
-                )
-            return ToolResult(
-                f"old_string was not found in {ctx.display(path)}.{hint} Re-read the file and try again.",
-                is_error=True,
-            )
-        if count > 1 and not args.replace_all:
-            return ToolResult(
-                f"old_string occurs {count} times in {ctx.display(path)}. Add more surrounding "
-                "context to make it unique, or set replace_all to true.",
-                is_error=True,
-            )
-        first = text.index(old)
-        updated = text.replace(old, new) if args.replace_all else text.replace(old, new, 1)
+        done = _replace(text, args)
+        if isinstance(done, str):
+            return ToolResult(done.format(path=ctx.display(path)), is_error=True)
+        updated, count, first, new, old = done.updated, done.count, done.first, done.new, done.old
         try:
             path.write_text(updated, encoding="utf-8", newline="")
         except OSError as e:
@@ -254,3 +261,41 @@ class EditTool(Tool):
             f"Edited {ctx.display(path)}{times}. Result:\n{snippet}",
             summary=f"+{added} -{removed} lines{times}",
         )
+
+
+@dataclass
+class _Replaced:
+    updated: str
+    count: int
+    first: int  # offset of the first replacement in the original text
+    old: str  # the strings as applied (line endings matched to the file)
+    new: str
+
+
+def _replace(text: str, args: EditInput) -> _Replaced | str:
+    """Apply an Edit to `text`: the result, or an error message with a `{path}`
+    placeholder. Shared by the edit itself and its diff preview, so the two
+    can never disagree."""
+    old, new = args.old_string, args.new_string
+    if "\r\n" in text and "\r\n" not in old:
+        old, new = old.replace("\n", "\r\n"), new.replace("\n", "\r\n")
+    count = text.count(old) if old else 0
+    if count == 0:
+        hint = ""
+        if old.strip() and old.strip() in text:
+            hint = " The text exists with different leading/trailing whitespace; copy it exactly."
+        elif near := closest_match(text, old):
+            start, block = near
+            hint = (
+                f" The closest text is at line {start}; check indentation, quotes and "
+                f"spelling against it:\n{block}\n"
+            )
+        hint = hint.replace("{", "{{").replace("}", "}}")
+        return f"old_string was not found in {{path}}.{hint} Re-read the file and try again."
+    if count > 1 and not args.replace_all:
+        return (
+            f"old_string occurs {count} times in {{path}}. Add more surrounding "
+            "context to make it unique, or set replace_all to true."
+        )
+    updated = text.replace(old, new) if args.replace_all else text.replace(old, new, 1)
+    return _Replaced(updated, count, text.index(old), old, new)

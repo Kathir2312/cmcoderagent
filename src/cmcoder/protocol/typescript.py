@@ -24,6 +24,8 @@ HEADER = """\
 
 
 def ts_type(schema: dict[str, Any]) -> str:
+    if "$ref" in schema:  # a nested model, e.g. "#/$defs/FileChange"
+        return schema["$ref"].split("/")[-1]
     if "const" in schema:
         return json.dumps(schema["const"])
     if "enum" in schema:
@@ -71,6 +73,10 @@ def _union(
 ) -> tuple[list[str], list[str]]:
     names = [ref["$ref"].split("/")[-1] for ref in schema["oneOf"]]
     lines: list[str] = []
+    # Nested models (not members of the union) first, e.g. FileChange.
+    for name in sorted(set(schema["$defs"]) - set(names)):
+        lines += _interface(name, schema["$defs"][name], defaults_optional)
+        lines.append("")
     for name in names:
         lines += _interface(name, schema["$defs"][name], defaults_optional)
         lines.append("")

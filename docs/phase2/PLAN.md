@@ -114,26 +114,60 @@ is interrupted.
 vs proposed). Accept makes the edit; Reject denies it, optionally with a
 message.
 
+**Status: done.** The agent computes the change (`Tool.proposed_change`:
+Write and Edit return the whole file before and after; Edit shares one
+`_replace` helper between the preview and the real edit, so they can't
+disagree) and sends it in `permission_request.change`. The extension
+(`vscode/src/diffReview.ts`) opens both sides as read-only virtual documents
+in VS Code's diff editor, with **Accept** / **Reject** in its title bar
+(Reject asks for an optional message). Answering anywhere (diff editor or
+chat card) closes the diff and updates the card. No preview for files over
+1 MB. Setting `cmcoder.diffReview` (default on).
+
 ### 7. Editor context
 
 **What:** each message carries the active file, the selection and the
 file's problems (can be turned off). "Ask cmcoder about selection" command;
 `@` to attach a file.
 
+**Status: done.** `user_message.context` (active file, selection, errors and
+warnings, at most 30); the agent adds it to the message as a
+`<system-reminder>` note (`core/ide.py`), not to the visible prompt or the
+title. In the panel, a 📎 chip shows what will be sent (e.g.
+`app.py:10-14 · 2 problems`) with a checkbox to leave it out for one
+message. **Ask cmcoder About Selection** (editor context menu,
+Ctrl+Alt+L) and **@** (pick a workspace file to mention). Setting
+`cmcoder.autoContext` (default on).
+
 ### 8. IDE tools
 
 **What:** `getDiagnostics` and `openFile`, offered to the model only when the
 client says it supports them (`ide_tool_request` / `ide_tool_result`).
+
+**Status: done.** The client sends `ide_capabilities` after `system_init`;
+the agent registers proxy tools (`core/ide.py`) that send
+`ide_tool_request` and wait (30 s) for `ide_tool_result`. Both tools are
+read-only, so they need no permission. The CLI never offers them.
 
 ### 9. Sessions in VS Code
 
 **What:** a list of this project's conversations (the same files the CLI
 uses) and resume; "continue last conversation".
 
+**Status: done.** `list_sessions` → `session_list`; the panel's **History**
+button lists them, and picking one restarts cmcoder with `--resume <id>`.
+A resumed conversation starts with a `history` event (prompts, replies and
+tool labels, editor notes removed) so the panel shows it. **Continue Last
+Conversation** in the view's `…` menu.
+
 ### 10. Open in terminal
 
 **What:** a command that runs the CLI in VS Code's integrated terminal, for
 those who prefer it.
+
+**Status: done.** **cmcoder: Open in Terminal** (also a button in the chat
+view's title bar) starts the configured `cmcoder` program directly as the
+terminal's process, so there are no shell-quoting issues.
 
 ### 11. Tests and CI
 
@@ -142,15 +176,48 @@ against a real `cmcoder` and the mock model server; an extension
 integration test in a real VS Code (`@vscode/test-electron`, headless on
 Linux); the `.vsix` as a CI artifact.
 
+**Status: done** (the real-VS Code test runs in CI only: VS Code can't be
+downloaded from this development environment).
+
+- Python: `tests/test_stdio.py` (protocol, editor context, IDE tools, history,
+  sessions, shutdown), `tests/test_ide.py`, `tests/test_protocol_ts.py`,
+  `proposed_change` tests in `tests/test_tools.py`.
+- TypeScript (`npm test`): `AgentProcess` against the real cmcoder, and the
+  chat panel in Chromium (Playwright) with a stand-in for the VS Code API:
+  streaming, raw-HTML escaping, tool cards, todos, permission cards, diff
+  button, history and resume.
+- Real VS Code (`npm run test:integration`, Linux CI under xvfb): opens the
+  chat, sends a prompt, reviews the Edit in the diff editor, accepts it there,
+  checks the file; then the model calls `getDiagnostics` and gets a problem
+  the test added.
+- Found by CI on the way: Windows path tests still expected `\`, and Glob
+  printed `\` on Windows (fixed: `/` everywhere); the extension tests needed
+  Node 22.
+- Security: `cmcoder.executable` / `cmcoder.executableArgs` can't be set by
+  an untrusted workspace (`restrictedConfigurations`), so opening a
+  repository can't make the extension run another program.
+
 ### 12. Parity check
 
 **What:** the eval runner also drives tasks through `--protocol stdio`; the
 results must match the CLI's.
 
+**Status: done.** `evals/run.py --via cli|stdio|both`. Over stdio it drives
+`cmcoder --protocol stdio` as the extension does, denying permission requests
+like `-p`. With `both`, each task runs both ways and must give the same
+result, status, turns and tool calls. Mock run: **40/40 passed, parity
+20/20.** CI runs `--mock --via both`. Against the real gateway, run
+`uv run python evals/run.py --via both`.
+
 ### 13. Guides and install docs
 
 **What:** install and use guide for the extension; `python-guide.md` and
 `langgraph-guide.md` sections for each item; `STATUS.md` at the end.
+
+**Status: done** (apart from `STATUS.md`, written after the hands-on run):
+[`vscode/README.md`](../../vscode/README.md) (install, features, settings),
+the main README's "VS Code extension" section, and sections 1–12 in
+[python-guide.md](python-guide.md) and [langgraph-guide.md](langgraph-guide.md).
 
 ## Not in Phase 2
 
@@ -165,12 +232,12 @@ OpenTelemetry, standalone binary, platform-specific VSIX, Windows sandboxing
 - [x] 3. Extension skeleton
 - [x] 4. Chat panel
 - [x] 5. Permission prompts
-- [ ] 6. Native diff review
-- [ ] 7. Editor context
-- [ ] 8. IDE tools
-- [ ] 9. Sessions in VS Code
-- [ ] 10. Open in terminal
-- [ ] 11. Tests and CI
-- [ ] 12. Parity check
-- [ ] 13. Guides and install docs
+- [x] 6. Native diff review
+- [x] 7. Editor context
+- [x] 8. IDE tools
+- [x] 9. Sessions in VS Code
+- [x] 10. Open in terminal
+- [x] 11. Tests and CI
+- [x] 12. Parity check
+- [x] 13. Guides and install docs
 - [ ] Hands-on use in VS Code on Windows, and `STATUS.md`

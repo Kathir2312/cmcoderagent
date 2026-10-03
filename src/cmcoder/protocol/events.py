@@ -104,6 +104,14 @@ class Compacted(_Event):
     model: str
 
 
+class FileChange(BaseModel):
+    """A proposed file change, for review in a diff editor."""
+
+    path: str  # absolute
+    before: str | None  # None: a new file
+    after: str
+
+
 class PermissionRequest(_Event):
     """The agent needs the user's approval for a tool call (stdio protocol).
 
@@ -119,6 +127,8 @@ class PermissionRequest(_Event):
     reason: str = ""
     # False for high-risk commands: offer "allow once" only, never "always".
     can_remember: bool = True
+    # Write/Edit: the whole file before and after (absent for big files).
+    change: FileChange | None = None
 
 
 class TodoUpdate(_Event):
@@ -137,6 +147,39 @@ class ModelChanged(_Event):
     type: Literal["model_changed"] = "model_changed"
     model: str
     context_window: int | None = None
+
+
+class IdeToolRequest(_Event):
+    """Run an IDE tool in the client; answer with `ide_tool_result`."""
+
+    type: Literal["ide_tool_request"] = "ide_tool_request"
+    request_id: str
+    name: str
+    input: dict[str, Any]
+
+
+class SessionSummary(BaseModel):
+    id: str
+    title: str
+    updated: float  # Unix time
+    messages: int
+
+
+class SessionList(_Event):
+    type: Literal["session_list"] = "session_list"
+    sessions: list[SessionSummary]
+
+
+class HistoryItem(BaseModel):
+    role: Literal["user", "assistant", "tool"]
+    text: str  # for "tool": the call's label, e.g. Edit(app.py)
+
+
+class History(_Event):
+    """A resumed conversation so far, so the client can show it."""
+
+    type: Literal["history"] = "history"
+    messages: list[HistoryItem]
 
 
 class Result(_Event):
@@ -166,6 +209,9 @@ Event = Annotated[
     | TodoUpdate
     | ModeChanged
     | ModelChanged
+    | IdeToolRequest
+    | SessionList
+    | History
     | Result,
     Field(discriminator="type"),
 ]

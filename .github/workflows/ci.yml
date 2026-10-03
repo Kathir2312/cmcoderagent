@@ -42,8 +42,8 @@ jobs:
         continue-on-error: true
       - name: Tests
         run: uv run pytest -q
-      - name: Evals (scripted model)
-        run: uv run python evals/run.py --mock
+      - name: Evals (scripted model), through -p and the VS Code protocol, with a parity check
+        run: uv run python evals/run.py --mock --via both
 
   litellm-gateway:
     name: integration (real LiteLLM proxy)
@@ -87,8 +87,13 @@ jobs:
         run: npm run typecheck
       - name: Build
         run: npm run build
+      - name: Browser for the chat panel tests
+        run: npx playwright install ${{ runner.os == 'Linux' && '--with-deps' || '' }} chromium
       - name: Tests (against the real cmcoder and the mock model server)
         run: uv run --project .. npm test
+      - name: Integration tests in a real VS Code
+        if: runner.os == 'Linux'
+        run: xvfb-run -a uv run --project .. npm run test:integration
       - name: Package
         if: runner.os == 'Linux'
         run: npm run package

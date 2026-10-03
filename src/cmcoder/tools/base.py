@@ -98,6 +98,19 @@ def _strip_titles(schema: Any) -> Any:
     return schema
 
 
+# Bigger files get no diff preview (the edit still works).
+MAX_CHANGE_PREVIEW_CHARS = 1_000_000
+
+
+@dataclass
+class FileChange:
+    """What a file-changing tool call would do, for diff review before approval."""
+
+    path: Path
+    before: str | None  # None: the file doesn't exist yet
+    after: str
+
+
 class Tool(ABC):
     name: ClassVar[str]
     description: ClassVar[str]
@@ -119,6 +132,10 @@ class Tool(ABC):
     def describe(self, args: Any, ctx: ToolContext) -> str:
         """Short label for the UI, e.g. `Read(src/app.py)`."""
         return self.name
+
+    def proposed_change(self, args: Any, ctx: ToolContext) -> FileChange | None:
+        """The file change this call would make (Write, Edit), or None."""
+        return None
 
 
 def truncate_middle(text: str, limit: int = MAX_RESULT_CHARS) -> str:

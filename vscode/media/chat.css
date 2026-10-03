@@ -178,3 +178,56 @@ button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-
 }
 
 [hidden] { display: none !important; }
+
+/* Phase 2 items 6-9: history, context chip, attach, diff button */
+
+header .history { margin-left: auto; padding: 2px 8px; }
+
+.sessions {
+  max-height: 50vh;
+  overflow-y: auto;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--vscode-panel-border, transparent);
+}
+
+.sessions .title { opacity: 0.7; margin-bottom: 4px; }
+.sessions .empty { opacity: 0.7; font-style: italic; }
+
+.sessions .session {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  margin: 2px 0;
+  text-align: left;
+}
+
+.sessions .session .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.sessions .session .when { opacity: 0.7; font-size: 0.9em; }
+
+footer .context {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 4px;
+  opacity: 0.85;
+  cursor: pointer;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+footer .context span::before { content: "📎 "; }
+footer .attach { padding: 4px 8px; }
+
+.msg.user .attached { margin-top: 4px; opacity: 0.7; font-size: 0.9em; }
+
+button.link {
+  background: none;
+  color: var(--vscode-textLink-foreground);
+  padding: 0;
+  margin: 4px 0 0;
+  text-decoration: underline;
+}
+
+button.link:hover { background: none; color: var(--vscode-textLink-activeForeground, var(--vscode-textLink-foreground)); }

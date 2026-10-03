@@ -89,6 +89,11 @@ class Agent:
         return self.proc.returncode or 0
 
 
+def same_file(a: str | Path, b: str | Path) -> bool:
+    """Equal paths, ignoring symlinks (macOS temp folders live under /private)."""
+    return Path(a).resolve() == Path(b).resolve()
+
+
 def write(path: str, content: str) -> dict[str, Any]:
     return {"tool_calls": [{"name": "Write", "arguments": {"file_path": path, "content": content}}]}
 
@@ -119,6 +124,9 @@ async def test_a_conversation_over_stdio(mock_server: Any, project: Path) -> Non
         await agent.send(type="user_message", text="create a.py")
         ask = await agent.until("permission_request")
         assert ask["name"] == "Write" and ask["input"]["file_path"] == "a.py"
+        change = ask["change"]  # for the diff editor
+        assert same_file(change["path"], project / "a.py")
+        assert change["before"] is None and change["after"] == "x = 1\n"
         await agent.send(
             type="permission_response",
             request_id=ask["request_id"],
@@ -226,7 +234,17 @@ async def test_resumed_conversation_sends_its_todos(mock_server: Any, project: P
     second = await Agent.start(project, server, "--continue")
     try:
         await second.next()
+        assert (await second.next())["messages"] == [  # shown again by the client
+            {"role": "user", "text": "plan"},
+            {"role": "tool", "text": "TodoWrite(0/1 done)"},
+            {"role": "assistant", "text": "Planned."},
+        ]
         assert (await second.next()) == {"type": "todo_update", "todos": plan}
+
+        await second.send(type="list_sessions")
+        listed = await second.next()
+        assert listed["type"] == "session_list"
+        assert [x["id"] for x in listed["sessions"]] == []  # only itself, which is left out
     finally:
         await second.close()
 
@@ -241,3 +259,60 @@ async def test_shutdown_never_aborts(mock_server: Any, project: Path) -> None:
         await agent.next()
         await agent.send(type="shutdown")
         assert await agent.close() == 0
+
+
+async def test_editor_context_and_ide_tools(mock_server: Any, project: Path) -> None:
+    (project / "app.py").write_text("x = undefined_name\n")
+    server = mock_server(
+        [
+            {"tool_calls": [{"name": "getDiagnostics", "arguments": {"file_path": "app.py"}}]},
+            {"tool_calls": [{"name": "openFile", "arguments": {"file_path": "app.py", "line": 1}}]},
+            {"content": "Line 1 uses an undefined name."},
+        ]
+    )
+    agent = await Agent.start(project, server)
+    try:
+        await agent.next()
+        await agent.send(type="ide_capabilities", tools=["getDiagnostics", "openFile", "nope"])
+        context = {
+            "active_file": str(project / "app.py"),
+            "selection": {
+                "path": str(project / "app.py"),
+                "start_line": 1,
+                "end_line": 1,
+                "text": "x = undefined_name",
+            },
+            "diagnostics": [
+                {
+                    "path": str(project / "app.py"),
+                    "line": 1,
+                    "severity": "error",
+                    "message": '"undefined_name" is not defined',
+                    "source": "Pylance",
+                }
+            ],
+        }
+        await agent.send(type="user_message", text="what's wrong here?", context=context)
+        call = await agent.until("ide_tool_request")
+        assert call["name"] == "getDiagnostics"
+        assert same_file(call["input"]["file_path"], project / "app.py")
+        await agent.send(
+            type="ide_tool_result",
+            request_id=call["request_id"],
+            content="app.py:1:5 error: undefined_name is not defined (Pylance)",
+        )
+        call = await agent.until("ide_tool_request")
+        assert call["name"] == "openFile" and call["input"]["line"] == 1
+        await agent.send(type="ide_tool_result", request_id=call["request_id"], content="Opened.")
+        assert (await agent.until("result"))["result"] == "Line 1 uses an undefined name."
+    finally:
+        await agent.close()
+    first = server.requests[0]
+    names = {t["function"]["name"] for t in first["tools"]}
+    assert {"getDiagnostics", "openFile"} <= names and "nope" not in names
+    user = first["messages"][1]["content"]
+    assert user.endswith("what's wrong here?")
+    assert "The user has app.py open" in user and "lines" not in user  # one line: "line 1"
+    assert "selected line 1 of app.py" in user and "app.py:1 error" in user
+    tool_results = [m["content"] for m in server.requests[1]["messages"] if m["role"] == "tool"]
+    assert "undefined_name is not defined (Pylance)" in tool_results[-1]

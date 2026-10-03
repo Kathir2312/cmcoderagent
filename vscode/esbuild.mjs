@@ -1,5 +1,7 @@
 // Bundles the extension (Node) and the chat webview (browser) into dist/.
-// --tests bundles test/*.test.ts into dist-test/ for `node --test`.
+// --tests bundles test/*.test.ts into dist-test/ for `node --test`
+// (run `npm run build` first: the webview test loads dist/webview.js).
+// --integration bundles the real-VS Code tests into dist-integration/.
 import * as esbuild from "esbuild";
 import { readdirSync } from "node:fs";
 
@@ -7,7 +9,19 @@ const args = new Set(process.argv.slice(2));
 const production = args.has("--production");
 const common = { bundle: true, sourcemap: !production, minify: production, logLevel: "info" };
 
-const builds = args.has("--tests")
+const integration = {
+  ...common,
+  entryPoints: ["test/integration/runTest.ts", "test/integration/suite.ts"],
+  outdir: "dist-integration",
+  platform: "node",
+  format: "cjs",
+  target: "node20",
+  packages: "external",
+};
+
+const builds = args.has("--integration")
+  ? [integration]
+  : args.has("--tests")
   ? [
       {
         ...common,
@@ -18,7 +32,8 @@ const builds = args.has("--tests")
         platform: "node",
         format: "cjs",
         target: "node20",
-        external: ["vscode"],
+        // Tests load npm packages (e.g. Playwright) from node_modules, unbundled.
+        packages: "external",
       },
     ]
   : [

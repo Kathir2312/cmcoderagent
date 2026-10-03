@@ -15,11 +15,36 @@ class _Message(BaseModel):
     pass
 
 
+class IdeSelection(BaseModel):
+    path: str
+    start_line: int  # 1-based, inclusive
+    end_line: int
+    text: str
+
+
+class IdeDiagnostic(BaseModel):
+    path: str
+    line: int  # 1-based
+    severity: Literal["error", "warning", "info", "hint"]
+    message: str
+    source: str | None = None
+
+
+class IdeContext(BaseModel):
+    """What the user has open in the editor, sent with a message."""
+
+    active_file: str | None = None
+    selection: IdeSelection | None = None
+    diagnostics: list[IdeDiagnostic] = Field(default_factory=list)
+
+
 class UserMessage(_Message):
     """Start a turn. Only one turn runs at a time."""
 
     type: Literal["user_message"] = "user_message"
     text: str = Field(min_length=1)
+    # The editor's state; given to the model as a note, not shown as the prompt.
+    context: IdeContext | None = None
 
 
 class Interrupt(_Message):
@@ -50,6 +75,31 @@ class SetModel(_Message):
     model: str = Field(min_length=1)
 
 
+class IdeCapabilities(_Message):
+    """The client can run these IDE tools (e.g. getDiagnostics, openFile).
+
+    Send once after `system_init`; the agent offers them to the model and
+    asks the client to run them with `ide_tool_request`."""
+
+    type: Literal["ide_capabilities"] = "ide_capabilities"
+    tools: list[str]
+
+
+class IdeToolResult(_Message):
+    """The answer to an `ide_tool_request`."""
+
+    type: Literal["ide_tool_result"] = "ide_tool_result"
+    request_id: str
+    content: str
+    is_error: bool = False
+
+
+class ListSessions(_Message):
+    """Ask for this project's saved conversations (answered with `session_list`)."""
+
+    type: Literal["list_sessions"] = "list_sessions"
+
+
 class Shutdown(_Message):
     """Stop the running turn, save the session and exit (EOF does the same)."""
 
@@ -57,7 +107,15 @@ class Shutdown(_Message):
 
 
 ClientMessage = Annotated[
-    UserMessage | Interrupt | PermissionResponse | SetMode | SetModel | Shutdown,
+    UserMessage
+    | Interrupt
+    | PermissionResponse
+    | SetMode
+    | SetModel
+    | IdeCapabilities
+    | IdeToolResult
+    | ListSessions
+    | Shutdown,
     Field(discriminator="type"),
 ]
 

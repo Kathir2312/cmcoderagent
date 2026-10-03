@@ -2,3 +2,5 @@ node_modules/
 dist/
 dist-test/
 *.vsix
+dist-integration/
+.vscode-test/

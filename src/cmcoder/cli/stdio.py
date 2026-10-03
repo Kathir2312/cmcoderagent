@@ -10,22 +10,28 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 import sys
 import threading
 import time
 import uuid
 from contextlib import suppress
-from typing import BinaryIO
+from typing import Any, BinaryIO
 
 from pydantic import ValidationError
 
 from ..config.settings import Settings, SettingsError
-from ..core.agent import Agent, PermissionAnswer, PermissionRequest
+from ..core.agent import Agent, PermissionAnswer, PermissionRequest, parse_tool_arguments
+from ..core.ide import IDE_TOOLS, format_ide_context
 from ..core.permissions import MODES, ModeNotAllowed
+from ..core.sessions import list_sessions
 from ..protocol import events as ev
 from ..protocol import messages as msg
 from ..providers.openai_compat import OpenAICompatProvider, ProviderError
+from ..tools.base import ToolResult
 from .factory import AgentOptions, build_agent, resolve_model_profile
+
+IDE_TOOL_TIMEOUT = 30.0  # seconds
 
 
 class StdioServer:
@@ -36,6 +42,7 @@ class StdioServer:
         self.agent: Agent | None = None
         self.turn: asyncio.Task[None] | None = None
         self.pending: dict[str, asyncio.Future[PermissionAnswer]] = {}
+        self.ide_pending: dict[str, asyncio.Future[ToolResult]] = {}
         self.inbox: asyncio.Queue[bytes] = asyncio.Queue()
 
     def emit(self, event: ev.Event) -> None:
@@ -91,7 +98,9 @@ class StdioServer:
             return 2
         self._start_reader(stdin_fd)
         self.emit(self.agent.init_event())
-        if self.agent.ctx.todos:  # a resumed conversation
+        if len(self.agent.messages) > 1:  # a resumed conversation
+            self.emit(ev.History(messages=history(self.agent)))
+        if self.agent.ctx.todos:
             self.emit(ev.TodoUpdate(todos=self.agent.ctx.todos))
         try:
             while True:
@@ -120,7 +129,12 @@ class StdioServer:
             if self.busy:
                 self.error("busy", "A turn is already running; interrupt it first.")
                 return
-            self.turn = asyncio.create_task(self._run_turn(message.text))
+            note = (
+                format_ide_context(message.context, agent.ctx.project_root)
+                if message.context
+                else None
+            )
+            self.turn = asyncio.create_task(self._run_turn(message.text, note))
         elif isinstance(message, msg.Interrupt):
             await self._stop_turn()
         elif isinstance(message, msg.PermissionResponse):
@@ -148,17 +162,36 @@ class StdioServer:
             self.emit(ev.ModeChanged(mode=agent.policy.mode))
         elif isinstance(message, msg.SetModel):
             await self._set_model(message.model)
+        elif isinstance(message, msg.IdeCapabilities):
+            for name in message.tools:
+                if tool := IDE_TOOLS.get(name):
+                    agent.tools[name] = tool(self.ide_call)
+        elif isinstance(message, msg.IdeToolResult):
+            pending = self.ide_pending.pop(message.request_id, None)
+            if pending is None or pending.done():
+                self.error("protocol", f"No pending IDE tool request {message.request_id!r}.")
+                return
+            pending.set_result(ToolResult(message.content, is_error=message.is_error))
+        elif isinstance(message, msg.ListSessions):
+            sessions = [
+                ev.SessionSummary(
+                    id=s.session_id, title=s.title, updated=s.updated, messages=s.messages
+                )
+                for s in list_sessions(agent.ctx.project_root)
+                if s.session_id != agent.session_id
+            ]
+            self.emit(ev.SessionList(sessions=sessions))
 
     @property
     def busy(self) -> bool:
         return self.turn is not None and not self.turn.done()
 
-    async def _run_turn(self, text: str) -> None:
+    async def _run_turn(self, text: str, context: str | None = None) -> None:
         agent = self.agent
         assert agent is not None
         started = time.monotonic()
         try:
-            async for event in agent.run(text):
+            async for event in agent.run(text, context):
                 self.emit(event)
                 if isinstance(event, ev.ToolResult) and event.name == "TodoWrite":
                     self.emit(ev.TodoUpdate(todos=agent.ctx.todos))
@@ -190,9 +223,10 @@ class StdioServer:
             )
 
     async def _stop_turn(self) -> None:
-        for future in self.pending.values():
+        for future in [*self.pending.values(), *self.ide_pending.values()]:
             future.cancel()
         self.pending.clear()
+        self.ide_pending.clear()
         if self.busy:
             assert self.turn is not None
             self.turn.cancel()
@@ -215,6 +249,11 @@ class StdioServer:
                 suggested_rule=req.suggested_rule,
                 reason=req.reason,
                 can_remember=req.can_remember,
+                change=ev.FileChange(
+                    path=str(req.change.path), before=req.change.before, after=req.change.after
+                )
+                if req.change
+                else None,
             )
         )
         try:
@@ -224,6 +263,19 @@ class StdioServer:
         if answer.remember and not req.can_remember:
             answer.remember = False
         return answer
+
+    async def ide_call(self, name: str, data: dict[str, Any]) -> ToolResult:
+        """Run an IDE tool in the client and wait for its answer."""
+        request_id = uuid.uuid4().hex[:12]
+        future: asyncio.Future[ToolResult] = asyncio.get_running_loop().create_future()
+        self.ide_pending[request_id] = future
+        self.emit(ev.IdeToolRequest(request_id=request_id, name=name, input=data))
+        try:
+            return await asyncio.wait_for(future, IDE_TOOL_TIMEOUT)
+        except TimeoutError:
+            return ToolResult(f"The editor did not answer {name} in time.", is_error=True)
+        finally:
+            self.ide_pending.pop(request_id, None)
 
     async def _set_model(self, ref: str) -> None:
         agent = self.agent
@@ -247,6 +299,38 @@ class StdioServer:
         agent.model = model
         agent.profile = await resolve_model_profile(self.settings, provider, model)
         self.emit(ev.ModelChanged(model=model, context_window=agent.profile.context_window))
+
+
+REMINDER = re.compile(r"<system-reminder>.*?</system-reminder>\s*", re.DOTALL)
+
+
+def history(agent: Agent) -> list[ev.HistoryItem]:
+    """The conversation so far, as a client shows it: prompts, replies and tool labels."""
+    items: list[ev.HistoryItem] = []
+    for m in agent.messages[1:]:
+        if m.role == "user":
+            text = REMINDER.sub("", m.content).strip()
+            if text:
+                items.append(ev.HistoryItem(role="user", text=text))
+        elif m.role == "assistant":
+            if m.content.strip():
+                items.append(ev.HistoryItem(role="assistant", text=m.content.strip()))
+            for call in m.tool_calls or []:
+                items.append(
+                    ev.HistoryItem(role="tool", text=_label(agent, call.name, call.arguments))
+                )
+    return items
+
+
+def _label(agent: Agent, name: str, arguments: str) -> str:
+    tool = agent.tools.get(name)
+    data, _ = parse_tool_arguments(arguments)
+    if tool is None or data is None:
+        return name
+    try:
+        return tool.describe(tool.Input.model_validate(data), agent.ctx)
+    except ValidationError:
+        return name
 
 
 def _first_error(e: ValidationError) -> str:

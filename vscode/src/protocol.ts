@@ -6,6 +6,25 @@ export const PROTOCOL_VERSION = 1;
 
 // ---- Agent -> client (stdout) ----
 
+/** A proposed file change, for review in a diff editor. */
+export interface FileChange {
+  path: string;
+  before: string | null;
+  after: string;
+}
+
+export interface HistoryItem {
+  role: "user" | "assistant" | "tool";
+  text: string;
+}
+
+export interface SessionSummary {
+  id: string;
+  title: string;
+  updated: number;
+  messages: number;
+}
+
 export interface SystemInit {
   type: "system_init";
   protocol_version: number;
@@ -105,6 +124,7 @@ export interface PermissionRequest {
   suggested_rule: string;
   reason: string;
   can_remember: boolean;
+  change: FileChange | null;
 }
 
 /** The todo list changed (stdio protocol). */
@@ -122,6 +142,25 @@ export interface ModelChanged {
   type: "model_changed";
   model: string;
   context_window: number | null;
+}
+
+/** Run an IDE tool in the client; answer with `ide_tool_result`. */
+export interface IdeToolRequest {
+  type: "ide_tool_request";
+  request_id: string;
+  name: string;
+  input: Record<string, unknown>;
+}
+
+export interface SessionList {
+  type: "session_list";
+  sessions: SessionSummary[];
+}
+
+/** A resumed conversation so far, so the client can show it. */
+export interface History {
+  type: "history";
+  messages: HistoryItem[];
 }
 
 export interface Result {
@@ -151,14 +190,40 @@ export type AgentEvent =
   | TodoUpdate
   | ModeChanged
   | ModelChanged
+  | IdeToolRequest
+  | SessionList
+  | History
   | Result;
 
 // ---- Client -> agent (stdin) ----
+
+/** What the user has open in the editor, sent with a message. */
+export interface IdeContext {
+  active_file?: string | null;
+  selection?: IdeSelection | null;
+  diagnostics?: IdeDiagnostic[];
+}
+
+export interface IdeDiagnostic {
+  path: string;
+  line: number;
+  severity: "error" | "warning" | "info" | "hint";
+  message: string;
+  source?: string | null;
+}
+
+export interface IdeSelection {
+  path: string;
+  start_line: number;
+  end_line: number;
+  text: string;
+}
 
 /** Start a turn. Only one turn runs at a time. */
 export interface UserMessage {
   type: "user_message";
   text: string;
+  context?: IdeContext | null;
 }
 
 /** Stop the running turn (like Ctrl+C in the CLI). */
@@ -185,6 +250,30 @@ export interface SetModel {
   model: string;
 }
 
+/**
+ * The client can run these IDE tools (e.g. getDiagnostics, openFile).
+ *
+ * Send once after `system_init`; the agent offers them to the model and
+ * asks the client to run them with `ide_tool_request`.
+ */
+export interface IdeCapabilities {
+  type: "ide_capabilities";
+  tools: string[];
+}
+
+/** The answer to an `ide_tool_request`. */
+export interface IdeToolResult {
+  type: "ide_tool_result";
+  request_id: string;
+  content: string;
+  is_error?: boolean;
+}
+
+/** Ask for this project's saved conversations (answered with `session_list`). */
+export interface ListSessions {
+  type: "list_sessions";
+}
+
 /** Stop the running turn, save the session and exit (EOF does the same). */
 export interface Shutdown {
   type: "shutdown";
@@ -196,4 +285,7 @@ export type ClientMessage =
   | PermissionResponse
   | SetMode
   | SetModel
+  | IdeCapabilities
+  | IdeToolResult
+  | ListSessions
   | Shutdown;

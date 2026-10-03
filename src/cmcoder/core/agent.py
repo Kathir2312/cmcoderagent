@@ -29,7 +29,7 @@ from ..providers.messages import (
 from ..providers.openai_compat import ContextTooLong, ProviderError, no_tool_support
 from ..providers.profiles import ModelProfile
 from ..providers.text_tools import Holdback, extract
-from ..tools.base import Tool, ToolContext, ToolResult, truncate_middle
+from ..tools.base import FileChange, Tool, ToolContext, ToolResult, truncate_middle
 from .checkpoints import Checkpoints, RestoreAction
 from .compaction import CompactionError, Summarizer, compact
 from .context import WARN_RATIO, ContextBudget
@@ -90,6 +90,8 @@ class PermissionRequest:
     reason: str = ""
     # False for high-risk commands: approve this once only, never "always".
     can_remember: bool = True
+    # For Write/Edit: the file before and after, for a diff review.
+    change: FileChange | None = None
 
 
 @dataclass
@@ -395,11 +397,14 @@ class Agent:
 
     # ------------------------------------------------------------------
 
-    async def run(self, prompt: str) -> AsyncIterator[ev.Event]:
-        """Run one user turn. Yields protocol events, ending with a Result."""
+    async def run(self, prompt: str, context: str | None = None) -> AsyncIterator[ev.Event]:
+        """Run one user turn. Yields protocol events, ending with a Result.
+
+        `context` (e.g. the editor's open file and selection) goes into the
+        user message ahead of the prompt; titles and history use the prompt."""
         started = time.monotonic()
         self.turn += 1
-        user_message = Message.user(prompt)
+        user_message = Message.user(f"{context}\n\n{prompt}" if context else prompt)
         user_message.turn = self.turn
         self.messages.append(user_message)
         turn_usage = Usage()
@@ -761,6 +766,7 @@ class Agent:
                     suggested_rule=rule,
                     reason=check.reason,
                     can_remember=not check.high_risk and not self.policy.allow_rules_locked,
+                    change=tool.proposed_change(args, self.ctx),
                 )
             )
             if not answer.allow:
