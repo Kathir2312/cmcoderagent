@@ -222,4 +222,4 @@ binary). Output styles and the status line (later). Plugins and marketplaces.
 - [x] 6. Front ends (VS Code, doctor, trust)
 - [x] 7. Tests, evals and security review
 - [x] 8. Guides and docs
-- [ ] Hands-on use on Windows (CLI and VS Code), and `STATUS.md`
+- [ ] Hands-on use on Windows (CLI and VS Code): [TESTING.md](TESTING.md), and `STATUS.md`
