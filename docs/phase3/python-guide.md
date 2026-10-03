@@ -77,3 +77,60 @@ cmcoder mcp add demo -- python tests/mcp_servers/demo_server.py
 cmcoder mcp list --check
 cmcoder          # then: "use the demo server to add 2 and 40"
 ```
+
+---
+
+## 2. Hooks
+
+*Done.* Code: `src/cmcoder/core/hooks.py` (`HookRunner`), hook points in
+`core/agent.py` (`_hook`, `_run_call`, `run`, `compact`). Tests:
+`tests/test_hooks.py`.
+
+### The problem
+
+Teams have rules the model should follow every time: run the formatter after
+an edit, never touch `migrations/`, add the ticket number to every prompt.
+Writing them in `CMCODER.md` is a request; a hook is a **guarantee**, because
+it's code that runs whether or not the model remembers.
+
+### The idea
+
+At fixed points of the agent loop (before and after each tool call, when a
+prompt is submitted, when the model wants to stop, ...), cmcoder runs your
+commands and listens to their answer: exit code 2 means "no", JSON can say
+allow/ask/deny, and other output can be added to the model's context.
+
+### The code
+
+- `HookRunner.__init__` flattens the settings into `Hook` objects (event,
+  matcher, command, origin). Managed hooks are read separately so they can't
+  be overwritten by merging; `allowManagedHooksOnly` drops the others.
+- `run(event, payload, match=...)` runs each matching hook with
+  `asyncio.create_subprocess_exec(bash, "-c", command)`, sends the payload as
+  JSON on stdin with `communicate()`, and enforces a timeout (killing the
+  whole process tree). The answers of several hooks are combined into one
+  `HookOutcome`; the strictest permission decision wins.
+- In the agent, `_run_call` runs `PreToolUse` **after** the deny rules have
+  been checked, so a hook's "allow" can never undo a deny rule; it only
+  replaces an `ASK` (and never for high-risk commands).
+- `Stop`: when the model answers without tool calls, a blocking hook adds its
+  reason as a `<system-reminder>` message and the loop `continue`s, at most
+  three times per turn.
+
+### New Python ideas
+
+- **`asyncio.subprocess` with stdin**: `proc.communicate(input=bytes)` writes
+  stdin, closes it and reads both outputs without deadlocking.
+- **Combining decisions**: an ordering dict (`allow < ask < deny`) to pick the
+  strictest answer.
+
+### Try it
+
+Add to `~/.cmcoder/settings.json`:
+
+```json
+{"hooks": {"PostToolUse": [{"matcher": "Write|Edit",
+  "hooks": [{"type": "command", "command": "echo 'remember the changelog' >&2; exit 2"}]}]}}
+```
+
+Ask cmcoder to edit a file and watch the model react to the hook's message.

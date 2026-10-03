@@ -34,7 +34,14 @@ from ..tools.base import FileChange, Tool, ToolContext, ToolResult, truncate_mid
 from .checkpoints import Checkpoints, RestoreAction
 from .compaction import CompactionError, Summarizer, compact
 from .context import WARN_RATIO, ContextBudget
-from .permissions import FILE_EDIT_TOOLS, Decision, PermissionPolicy, suggest_rule
+from .hooks import Hook, HookEvent, HookOutcome, HookRunner
+from .permissions import (
+    FILE_EDIT_TOOLS,
+    Decision,
+    PermissionCheck,
+    PermissionPolicy,
+    suggest_rule,
+)
 from .sessions import SessionLog
 from .steer import file_work_redirect
 from .titles import make_title
@@ -42,6 +49,7 @@ from .titles import make_title
 TITLE_WAIT_ON_CLOSE = 2.0  # seconds a pending title may still take when closing
 
 MAX_IDENTICAL_CALLS = 3
+MAX_STOP_HOOK_BLOCKS = 3  # a Stop hook can't keep a turn going forever
 
 # Models often skip the optional TodoWrite tool. Like Claude Code, remind them
 # once per turn when a task turns out to have several steps.
@@ -170,6 +178,7 @@ class Agent:
         auto_compact: bool = True,
         compact_threshold: float = 0.8,
         mcp: McpManager | None = None,
+        hooks: HookRunner | None = None,
     ) -> None:
         self.provider = provider
         self.model = model
@@ -199,6 +208,9 @@ class Agent:
         self.summarizer = summarizer
         # MCP servers: started at the beginning of the first turn.
         self.mcp = mcp
+        # Hooks (core/hooks.py); SessionStart runs with the first turn.
+        self.hooks = hooks
+        self._session_hooks_done = False
         # Called with (model, tokens) when the server states a smaller window.
         self.on_context_window = on_context_window
         self.auto_compact = auto_compact
@@ -342,6 +354,56 @@ class Agent:
         self._background.add(task)
         task.add_done_callback(self._background.discard)
 
+    async def _hook(
+        self, event: HookEvent, payload: dict[str, Any], match: str | None = None
+    ) -> HookOutcome:
+        """Runs one event's hooks with the common fields every hook gets."""
+        assert self.hooks is not None
+        base = {
+            "session_id": self.session_id,
+            "transcript_path": str(self.session.path) if self.session else None,
+            "cwd": str(self.ctx.cwd),
+            "permission_mode": self.policy.mode,
+        }
+        return await self.hooks.run(
+            event, {**base, **payload}, match=match, approve_fn=self._approve_hook
+        )
+
+    def _notify(self, message: str) -> None:
+        """Notification hooks, in the background (a desktop popup must not delay the prompt)."""
+        if self.hooks is None or not self.hooks.has("Notification"):
+            return
+
+        async def notify() -> None:
+            await self._hook("Notification", {"message": message})
+
+        task = asyncio.create_task(notify())
+        self._background.add(task)
+        task.add_done_callback(self._background.discard)
+
+    async def _approve_hook(self, hook: Hook) -> bool:
+        """Asks once before a project's hook first runs (it runs as you)."""
+        if self.ask is None:
+            return False
+        answer = await self.ask(
+            PermissionRequest(
+                call_id=f"hook-{hook.event}",
+                tool_name="Hook",
+                label=f"Run this project's {hook.event} hook",
+                input={
+                    "event": hook.event,
+                    "matcher": hook.matcher or "*",
+                    "command": hook.command.command,
+                },
+                suggested_rule="",
+                reason="This project's settings want to run a command on every "
+                f"{hook.event} event; it runs with your permissions. Allowing is "
+                "remembered until the command changes.",
+                can_remember=False,
+            )
+        )
+        return answer.allow
+
     async def _approve_mcp_server(self, server: McpServer) -> bool:
         """Asks once before a project's MCP server first starts (it runs as you)."""
         if self.ask is None:
@@ -389,6 +451,12 @@ class Agent:
         """Summarise the older part of the conversation (`/compact`, or
         automatically when the window fills). The conversation is only
         replaced once the summary is ready, so cancelling leaves it intact."""
+        if self.hooks is not None:
+            outcome = await self._hook(
+                "PreCompact", {"trigger": trigger, "custom_instructions": focus or ""}
+            )
+            for w in outcome.warnings:
+                yield ev.Warning(message=w)
         budget = self.budget()
         before = budget.estimate(self.messages)
         try:
@@ -436,10 +504,46 @@ class Agent:
                 yield warning
             for tool in self.mcp.tools():
                 self.tools.setdefault(tool.name, tool)
+        if self.hooks is not None:
+            notes: list[str] = []
+            if not self._session_hooks_done:
+                self._session_hooks_done = True
+                source = "resume" if len(self.messages) > 2 else "startup"
+                outcome = await self._hook("SessionStart", {"source": source})
+                for w in outcome.warnings:
+                    yield ev.Warning(message=w)
+                notes += outcome.context
+            outcome = await self._hook("UserPromptSubmit", {"prompt": prompt})
+            for w in outcome.warnings:
+                yield ev.Warning(message=w)
+            if outcome.block:
+                self.messages.pop()
+                self.turn -= 1
+                yield ev.Warning(
+                    message=f"A UserPromptSubmit hook blocked this prompt: {outcome.reason}"
+                )
+                yield ev.Result(
+                    subtype="error",
+                    is_error=True,
+                    result=f"Blocked by a hook: {outcome.reason}",
+                    num_turns=0,
+                    duration_ms=int((time.monotonic() - started) * 1000),
+                    usage={},
+                    session_id=self.session_id,
+                )
+                return
+            notes += outcome.context
+            if notes:
+                hook_note = "\n".join(notes)
+                user_message.content = (
+                    f"<system-reminder>\nFrom the user's hooks:\n{hook_note}\n</system-reminder>"
+                    f"\n\n{user_message.content}"
+                )
         turn_usage = Usage()
         last_text = ""
         steps = 0
         recent_calls: list[str] = []
+        stop_blocks = 0  # times a Stop hook sent the model back to work this turn
         todo_reminded = False  # sent at most once, and not after TodoWrite was used
         warned_context = False
         overflow_retried = False
@@ -641,6 +745,23 @@ class Agent:
                         yield ev.Warning(message="The reply was cut off at the max output length.")
                     if not msg.content and not msg.tool_calls:
                         yield ev.Warning(message="The model returned an empty reply.")
+                    if self.hooks is not None and stop_blocks < MAX_STOP_HOOK_BLOCKS:
+                        outcome = await self._hook("Stop", {"stop_hook_active": stop_blocks > 0})
+                        for w in outcome.warnings:
+                            yield ev.Warning(message=w)
+                        if outcome.block:
+                            # Not done yet, says a hook (e.g. "the tests fail"): continue.
+                            stop_blocks += 1
+                            yield ev.Warning(
+                                message=f"A Stop hook asked to continue: {outcome.reason}"
+                            )
+                            self.messages.append(
+                                Message.user(
+                                    "<system-reminder>A Stop hook says the task isn't finished: "
+                                    f"{outcome.reason}</system-reminder>"
+                                )
+                            )
+                            continue
                     yield result("success", last_text)
                     return
 
@@ -766,6 +887,29 @@ class Agent:
             self._redirected = None
 
         check = self.policy.check(tool, args, self.ctx)
+        if self.hooks is not None and check.decision != Decision.DENY:
+            outcome = await self._hook(
+                "PreToolUse",
+                {"tool_name": tool.name, "tool_input": args.model_dump()},
+                match=tool.name,
+            )
+            for w in outcome.warnings:
+                yield ev.Warning(message=w)
+            if outcome.block:
+                reason = f"blocked by a PreToolUse hook: {outcome.reason}"
+                yield ev.PermissionDenied(id=call.id, name=tool.name, reason=reason)
+                yield finish(ToolResult(f"Not run: {reason}", is_error=True))
+                return
+            if (
+                outcome.permission == "allow"
+                and check.decision == Decision.ASK
+                and not check.high_risk
+            ):
+                check = PermissionCheck(Decision.ALLOW, "allowed by a PreToolUse hook")
+            elif outcome.permission == "ask" and check.decision == Decision.ALLOW:
+                check = PermissionCheck(
+                    Decision.ASK, outcome.reason or "a PreToolUse hook asks to confirm"
+                )
         if check.decision == Decision.DENY:
             yield ev.PermissionDenied(id=call.id, name=tool.name, reason=check.reason)
             yield finish(ToolResult(f"Permission denied: {check.reason}", is_error=True))
@@ -786,6 +930,7 @@ class Agent:
                 yield ev.PermissionDenied(id=call.id, name=tool.name, reason=reason)
                 yield finish(ToolResult(f"Permission denied: {reason}", is_error=True))
                 return
+            self._notify(f"cmcoder needs your permission to use {label}")
             answer = await self.ask(
                 PermissionRequest(
                     call_id=call.id,
@@ -828,6 +973,23 @@ class Agent:
             raise
         except Exception as e:  # a tool bug must not kill the session
             res = ToolResult(f"{tool.name} failed: {type(e).__name__}: {e}", is_error=True)
+        if self.hooks is not None:
+            outcome = await self._hook(
+                "PostToolUse",
+                {
+                    "tool_name": tool.name,
+                    "tool_input": args.model_dump(),
+                    "tool_response": {"content": res.content, "is_error": res.is_error},
+                },
+                match=tool.name,
+            )
+            for w in outcome.warnings:
+                yield ev.Warning(message=w)
+            notes = (
+                [f"A PostToolUse hook objected: {outcome.reason}"] if outcome.block else []
+            ) + outcome.context
+            if notes:
+                res = ToolResult(res.content + "\n\n" + "\n".join(notes), res.is_error, res.summary)
         yield finish(res)
 
     def _repair_after_interrupt(self) -> None:

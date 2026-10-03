@@ -61,6 +61,18 @@ over stdio and HTTP.
   timeout. Project hooks: trusted project + one-time approval each. Managed
   setting `allowManagedHooksOnly`.
 
+**Status: done.** `src/cmcoder/core/hooks.py`, hook points in `core/agent.py`;
+`tests/test_hooks.py` (16 tests with real bash hooks).
+- PreToolUse runs after the permission check's deny rules: a hook can block
+  anything, and its "allow" only skips a normal prompt (never a deny rule or a
+  high-risk command); "ask" makes a normally allowed call ask.
+- Stop: a blocking hook sends the model back to work at most 3 times a turn.
+- UserPromptSubmit: a blocked prompt never reaches the model.
+- Notification runs in the background, so it can't delay a permission prompt.
+- Managed hooks are kept apart from yours (never merged away); project hooks
+  are approved per command, like MCP servers. `cmcoder doctor` lists hooks.
+- `SubagentStop` comes with item 4.
+
 ### 3. Custom slash commands
 
 - Markdown files in `.cmcoder/commands/` and `~/.cmcoder/commands/`
@@ -116,7 +128,7 @@ binary). Output styles and the status line (later). Plugins and marketplaces.
 ## Checklist
 
 - [x] 1. MCP client
-- [ ] 2. Hooks
+- [x] 2. Hooks
 - [ ] 3. Custom slash commands
 - [ ] 4. Subagents (`Task`)
 - [ ] 5. Skills

@@ -20,10 +20,13 @@ from rich.text import Text
 from ..compat import SHELL_HELP, find_program, find_shell
 from ..config.settings import (
     Settings,
+    config_fingerprint,
     find_project_root,
     ignored_settings_message,
+    is_approved,
     managed_settings_path,
 )
+from ..core.hooks import HookRunner
 from ..mcp_client import McpManager
 from ..providers.auth import ApiKeyAuth
 from ..providers.messages import Message, StreamDone, TextDelta, ToolSpec
@@ -446,6 +449,27 @@ class Doctor:
                 "The backend may not support tool calling for this model.",
             )
 
+    def check_hooks(self) -> None:
+        runner = HookRunner(self.settings, find_project_root(Path.cwd().resolve()))
+        if not runner.hooks:
+            return
+        self.section("Hooks")
+        for hook in runner.hooks:
+            match = f" [{hook.matcher}]" if hook.matcher else ""
+            approved = ""
+            if hook.origin == "project":
+                fp = config_fingerprint(hook.command)
+                approved = (
+                    " · approved"
+                    if is_approved(runner.root, hook.key, fp)
+                    else " · asks before it first runs"
+                )
+            self.report(
+                INFO, f"{hook.event}{match}: {hook.command.command}", f"{hook.origin}{approved}"
+            )
+        if find_shell() is None:
+            self.report(FAIL, "Hooks need bash to run", SHELL_HELP)
+
     async def check_mcp(self, probe: bool) -> None:
         """MCP servers: configured, approved, and (with probes) whether they start."""
         s = self.settings
@@ -491,6 +515,7 @@ class Doctor:
             if await self.check_network(provider_name):
                 await self.check_api(provider_name, models, probe)
         await self.check_mcp(probe)
+        self.check_hooks()
         self.console.print()
         if self.failed:
             self.console.print(

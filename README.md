@@ -115,6 +115,29 @@ A project can list servers in `.mcp.json` (Claude Code's format). They are used 
 one asks once before it first starts (`cmcoder mcp approve NAME` approves it ahead of time); a changed command asks
 again. Administrators can restrict servers with `allowedMcpServers` / `deniedMcpServers` in the managed settings.
 
+### Hooks
+
+Hooks run your own commands on agent events, e.g. a linter after every edit or a check that blocks risky commands
+(same format as Claude Code):
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [{"matcher": "Edit|Write", "hooks": [{"type": "command", "command": "ruff check --quiet ."}]}],
+    "PreToolUse":  [{"matcher": "Bash", "hooks": [{"type": "command", "command": "./scripts/check-command.sh"}]}]
+  }
+}
+```
+
+Events: `PreToolUse`, `PostToolUse`, `UserPromptSubmit`, `SessionStart`, `Stop`, `PreCompact`, `Notification`
+(`SubagentStop` with subagents). A hook gets the event as JSON on stdin and runs in the project folder with the
+Bash tool's shell (Git Bash on Windows), with `CMCODER_PROJECT_DIR` set. **Exit 2** blocks (stderr tells the model
+why: the tool doesn't run, the prompt isn't sent, or the model keeps working after `Stop`); other non-zero exits
+are warnings. JSON on stdout can decide too: `{"hookSpecificOutput": {"permissionDecision": "allow"|"ask"|"deny"}}`
+for `PreToolUse` (an "allow" skips a normal prompt but never a deny rule or a high-risk command), and plain
+stdout from `UserPromptSubmit`/`SessionStart` is added as context. A project's hooks are used only in a trusted
+project and ask once before they first run; administrators can set `allowManagedHooksOnly`.
+
 ### Project memory
 
 cmcoder reads `CMCODER.md` (and `AGENTS.md`) from `~/.cmcoder/`, the project root and each folder down to the

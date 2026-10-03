@@ -20,7 +20,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
 PermissionModeName = Literal["default", "acceptEdits", "plan", "bypassPermissions"]
 
@@ -77,6 +77,33 @@ class McpServerConfig(_Model):
         return f"{self.url} ({self.transport})"
 
 
+class HookCommand(_Model):
+    type: Literal["command"] = "command"
+    command: str
+    timeout: float = 60.0
+
+
+class HookMatcher(_Model):
+    # A tool name or regular expression (PreToolUse/PostToolUse); empty: all.
+    matcher: str | None = None
+    hooks: list[HookCommand] = Field(default_factory=list)
+
+
+HookConfig = dict[
+    Literal[
+        "PreToolUse",
+        "PostToolUse",
+        "UserPromptSubmit",
+        "SessionStart",
+        "Stop",
+        "SubagentStop",
+        "PreCompact",
+        "Notification",
+    ],
+    list[HookMatcher],
+]
+
+
 class PermissionsConfig(_Model):
     allow: list[str] = Field(default_factory=list)
     deny: list[str] = Field(default_factory=list)
@@ -117,6 +144,10 @@ class Settings(_Model):
     # Managed settings only: server names allowed (if set) and denied.
     allowed_mcp_servers: list[str] | None = Field(None, alias="allowedMcpServers")
     denied_mcp_servers: list[str] = Field(default_factory=list, alias="deniedMcpServers")
+    # Hooks from your user settings (see core/hooks.py).
+    hooks: HookConfig = Field(default_factory=dict)
+    # Managed settings only: run only the managed settings' hooks.
+    allow_managed_hooks_only: bool = Field(False, alias="allowManagedHooksOnly")
     # Where each layer came from, for `cmcoder doctor`.
     sources: list[str] = Field(default_factory=list, exclude=True)
     # Project trust (see load_settings): whether this project's own settings
@@ -126,6 +157,9 @@ class Settings(_Model):
     # A trusted project's MCP servers (.mcp.json, .cmcoder/settings*.json);
     # each one still needs approval before it first starts.
     project_mcp_servers: dict[str, McpServerConfig] = Field(default_factory=dict, exclude=True)
+    # Hooks from the managed settings, and from a trusted project (approved one by one).
+    managed_hooks: HookConfig = Field(default_factory=dict, exclude=True)
+    project_hooks: HookConfig = Field(default_factory=dict, exclude=True)
     # The managed settings file in force, if any.
     managed_path: str | None = Field(None, exclude=True)
 
@@ -179,7 +213,12 @@ def managed_settings_path() -> Path:
 # Keys that only count in the managed file: in any other file they would let
 # a project (or a user) speak for the organisation.
 _MANAGED_ONLY_PERMISSIONS = ("disableBypassPermissionsMode", "allowManagedPermissionRulesOnly")
-_MANAGED_ONLY_TOP = ("lockProviders", "allowedMcpServers", "deniedMcpServers")
+_MANAGED_ONLY_TOP = (
+    "lockProviders",
+    "allowedMcpServers",
+    "deniedMcpServers",
+    "allowManagedHooksOnly",
+)
 
 
 def _strip_managed_only(layer: dict[str, Any]) -> dict[str, Any]:
@@ -425,6 +464,9 @@ def _filter_project_layer(layer: dict[str, Any], trusted: bool) -> tuple[dict[st
         return out, dropped
     if out.pop("env", None):
         dropped.append("env")
+    if hooks := out.pop("hooks", None):
+        events = ", ".join(hooks) if isinstance(hooks, dict) else "?"
+        dropped.append(f"hooks ({events})")
     if servers := out.pop("mcpServers", None):
         names = ", ".join(servers) if isinstance(servers, dict) else "?"
         dropped.append(f"mcpServers ({names})")
@@ -474,6 +516,7 @@ def load_settings(
     sources: list[str] = []
     ignored: list[str] = []
     project_mcp: dict[str, Any] = {}
+    project_hooks: dict[str, list[Any]] = {}
     mcp_json = root / ".mcp.json"
     if (servers := _read_json(mcp_json).get("mcpServers")) and isinstance(servers, dict):
         if trusted:
@@ -493,6 +536,9 @@ def load_settings(
             ignored += [f"{path.name}: {d}" for d in dropped]
             if servers := layer.pop("mcpServers", None):
                 project_mcp.update(servers if isinstance(servers, dict) else {})
+            if hooks := layer.pop("hooks", None):
+                for event, matchers in hooks.items() if isinstance(hooks, dict) else []:
+                    project_hooks.setdefault(event, []).extend(matchers or [])
         if layer:
             merged = deep_merge(merged, layer)
             sources.append(str(path))
@@ -506,6 +552,8 @@ def load_settings(
         # with providers configured it overrides only "default" if present.
         merged = deep_merge(merged, env)
         sources.append("environment")
+    managed = dict(managed)
+    managed_hooks = managed.pop("hooks", None) or {}  # kept apart: never merged with yours
     if managed:
         merged = deep_merge(merged, managed)
         sources.append(f"{managed_file} (managed)")
@@ -542,8 +590,11 @@ def load_settings(
         settings.project_mcp_servers = {
             name: McpServerConfig.model_validate(cfg) for name, cfg in project_mcp.items()
         }
+        hooks_adapter: TypeAdapter[HookConfig] = TypeAdapter(HookConfig)
+        settings.project_hooks = hooks_adapter.validate_python(project_hooks)
+        settings.managed_hooks = hooks_adapter.validate_python(managed_hooks)
     except ValueError as e:
-        raise SettingsError(f"Invalid MCP server in this project's settings: {e}") from e
+        raise SettingsError(f"Invalid MCP server or hook in the settings: {e}") from e
     if managed:
         settings.managed_path = str(managed_file)
     return settings

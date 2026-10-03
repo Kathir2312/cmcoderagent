@@ -21,6 +21,7 @@ from ..config.settings import (
 )
 from ..core.agent import Agent, AskFn
 from ..core.compaction import Summarizer
+from ..core.hooks import HookRunner
 from ..core.permissions import ModeNotAllowed, PermissionPolicy
 from ..core.prompt import build_system_prompt, load_memory_files
 from ..core.sessions import SessionLog, cleanup, find_session, list_sessions, load
@@ -244,6 +245,7 @@ async def build_agent(settings: Settings, opts: AgentOptions) -> Agent:
         mcp=McpManager(settings, root)
         if settings.mcp_servers or settings.project_mcp_servers
         else None,
+        hooks=runner if (runner := HookRunner(settings, root)).hooks else None,
     )
     if opts.continue_session or opts.resume:
         resume_session(agent, settings, root, opts.resume)

@@ -56,3 +56,30 @@ Load the demo server (`tests/mcp_servers/demo_server.py`) with
 `MultiServerMCPClient` in a small LangGraph agent, and with
 `cmcoder mcp add demo -- python tests/mcp_servers/demo_server.py`. Compare
 what each shows the model as the tool's name and schema.
+
+---
+
+## 2. Hooks
+
+### The LangGraph way
+
+LangChain v1 agents have **middleware**: functions that run before/after the
+model or wrap tool calls (`before_model`, `after_model`, `wrap_tool_call`), and
+can change state or stop the run. Callbacks (`on_tool_start`, ...) observe
+without changing anything.
+
+### The cmcoder way
+
+| LangChain / LangGraph | cmcoder hooks |
+|---|---|
+| `wrap_tool_call` middleware that refuses | `PreToolUse` hook, exit 2 or `permissionDecision: "deny"` |
+| middleware that edits the tool result | `PostToolUse` hook output added to the result |
+| `before_model` middleware adding context | `UserPromptSubmit` / `SessionStart` stdout |
+| `after_model` middleware with `jump_to="model"` | `Stop` hook that blocks: the model keeps working |
+| Python functions in your app | shell commands in settings: any language, no code change |
+
+### Why they differ
+
+cmcoder's users configure it, they don't program it: hooks are commands in a
+JSON file, so a team can share them in a repository. That's also why a
+repository's hooks need trust and approval before they run.
