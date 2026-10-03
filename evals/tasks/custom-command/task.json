@@ -1,0 +1,6 @@
+{
+  "prompt": "/changelog Fixed a crash when the config file is empty",
+  "check": "grep -qx -- '- Fixed a crash when the config file is empty' CHANGELOG.md && grep -qx -- '- Added the export command' CHANGELOG.md",
+  "permission_mode": "acceptEdits",
+  "max_turns": 10
+}

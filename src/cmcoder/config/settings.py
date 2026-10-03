@@ -20,7 +20,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
 PermissionModeName = Literal["default", "acceptEdits", "plan", "bypassPermissions"]
 
@@ -307,6 +307,22 @@ def _read_json(path: Path) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise SettingsError(f"{path} must contain a JSON object")
     return data
+
+
+def add_mcp_config(settings: Settings, path: Path) -> None:
+    """`--mcp-config FILE`: MCP servers for this run, used like your own (you named
+    the file), in `.mcp.json`'s format. Managed allow/deny lists still apply."""
+    if not path.is_file():
+        raise SettingsError(f"--mcp-config: {path} not found")
+    data = _read_json(path)
+    servers = data.get("mcpServers", data)
+    if not isinstance(servers, dict):
+        raise SettingsError(f"--mcp-config: {path} needs an mcpServers object")
+    try:
+        parsed = Settings.model_validate({"mcpServers": servers}).mcp_servers
+    except ValidationError as e:
+        raise SettingsError(f"--mcp-config: {path}: {e.errors()[0]['msg']}") from e
+    settings.mcp_servers = {**settings.mcp_servers, **parsed}
 
 
 def _parse_headers(raw: str) -> dict[str, str]:

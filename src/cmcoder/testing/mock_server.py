@@ -235,6 +235,11 @@ def make_handler(state: MockState) -> type[BaseHTTPRequestHandler]:
                 reply = {"content": state.title}
             else:
                 reply = state.next_reply()
+                # "expect": text the last message must contain (e.g. an expanded
+                # slash command); otherwise the scripted step is not played.
+                expected = reply.get("expect")
+                if expected and expected not in str(messages[-1].get("content", "")):
+                    reply = {"content": f"(mock expectation failed: {expected!r} not sent)"}
             if "error" in reply:
                 err = reply["error"]
                 self._json(

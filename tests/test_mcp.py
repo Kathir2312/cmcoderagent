@@ -275,3 +275,21 @@ def test_server_rule_matches_only_its_own_tools(project: Path) -> None:
     ctx = ToolContext(cwd=project, project_root=project)
     assert policy.check(git, McpArgs(), ctx).decision == Decision.ALLOW
     assert policy.check(github, McpArgs(), ctx).decision == Decision.ASK  # not a prefix match
+
+
+def test_mcp_config_file(tmp_path: Path) -> None:
+    import json
+
+    from cmcoder.config.settings import SettingsError, add_mcp_config
+
+    s = Settings.model_validate({"mcpServers": {"mine": stdio()}})
+    path = tmp_path / "extra.json"
+    path.write_text(json.dumps({"mcpServers": {"extra": {"url": "https://mcp.example.com"}}}))
+    add_mcp_config(s, path)
+    assert set(s.mcp_servers) == {"mine", "extra"}
+    assert McpManager(s, tmp_path).servers[1].origin == "user"  # you named the file
+    with pytest.raises(SettingsError, match="not found"):
+        add_mcp_config(s, tmp_path / "missing.json")
+    path.write_text(json.dumps({"mcpServers": {"bad": {"startupTimeout": "soon"}}}))
+    with pytest.raises(SettingsError, match="extra.json"):
+        add_mcp_config(s, path)

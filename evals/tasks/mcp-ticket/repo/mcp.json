@@ -1,0 +1,1 @@
+{"mcpServers": {"tickets": {"command": "${CMCODER_EVAL_PYTHON}", "args": ["tickets_server.py"]}}}

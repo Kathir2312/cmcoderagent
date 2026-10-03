@@ -1,0 +1,5 @@
+[
+ {"tool_calls": [{"name": "mcp__tickets__get_ticket", "arguments": {"ticket_id": "ABC-42"}}]},
+ {"tool_calls": [{"name": "Write", "arguments": {"file_path": "TITLE.txt", "content": "Add a --version flag\n"}}]},
+ {"content": "Ticket ABC-42 is \"Add a --version flag\"; its title is in TITLE.txt."}
+]

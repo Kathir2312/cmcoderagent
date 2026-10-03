@@ -1,0 +1,6 @@
+{
+  "prompt": "Use the explore subagent (Task tool) to find which file defines DEFAULT_TIMEOUT and its value. Then write a file answer.txt containing one line: the file's path relative to this folder, an equals sign and the value, like app/x.py=5.",
+  "check": "grep -qx 'app/net.py=30' answer.txt",
+  "permission_mode": "acceptEdits",
+  "max_turns": 10
+}

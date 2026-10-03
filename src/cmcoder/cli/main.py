@@ -14,7 +14,13 @@ from rich.console import Console
 
 from .. import __version__
 from ..compat import stdin_has_data, use_utf8_stdio
-from ..config.settings import Settings, SettingsError, env_api_key_source, load_settings
+from ..config.settings import (
+    Settings,
+    SettingsError,
+    add_mcp_config,
+    env_api_key_source,
+    load_settings,
+)
 from ..core.permissions import MODES
 from ..protocol.events import protocol_json_schema
 from ..providers.auth import ApiKeyAuth, delete_api_key, mask_key, store_api_key
@@ -136,6 +142,13 @@ def main(
             "for this run, as if you had run `cmcoder trust`.",
         ),
     ] = False,
+    mcp_config: Annotated[
+        list[Path] | None,
+        typer.Option(
+            "--mcp-config",
+            help="MCP servers for this run, from a JSON file in .mcp.json's format (repeatable).",
+        ),
+    ] = None,
     protocol: Annotated[
         str | None,
         typer.Option(
@@ -166,6 +179,12 @@ def main(
         raise typer.Exit(2)
 
     settings = _load(trust_project=trust_project)
+    for path in mcp_config or []:
+        try:
+            add_mcp_config(settings, path)
+        except SettingsError as e:
+            err_console.print(f"[red]error:[/red] {e}")
+            raise typer.Exit(2) from e
     opts = AgentOptions(
         cwd=Path.cwd(),
         model=model,

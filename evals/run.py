@@ -12,7 +12,8 @@
   uv run python evals/run.py --mock --via both
 
 Each task folder holds:
-  task.json         {"prompt": ..., "check": "<shell command>", "permission_mode": ..., "max_turns": ...}
+  task.json         {"prompt": ..., "check": "<shell command>", "permission_mode": ...,
+                     "max_turns": ..., "args": [extra cmcoder arguments, e.g. --mcp-config]}
   repo/             the starting files (copied to a fresh git repo per run)
   mock_script.json  scripted model replies used with --mock
 
@@ -24,7 +25,8 @@ how often it tried to do file work through Bash (cat > f << EOF, cat f,
 grep -r, ...; see cmcoder/core/steer.py). The summary shows the share of
 file work done with the file tools. CMCODER_EVAL_OUTPUT points at a file holding the agent's
 final answer, and $PYTHON is the current Python interpreter (`python3` is not
-available on most Windows machines).
+available on most Windows machines); CMCODER_EVAL_PYTHON is the same
+interpreter as a native path, for commands cmcoder starts itself (MCP servers).
 """
 
 from __future__ import annotations
@@ -154,6 +156,7 @@ def run_task(
 
     env = dict(os.environ)
     env["PYTHON"] = to_shell_path(sys.executable)
+    env["CMCODER_EVAL_PYTHON"] = sys.executable  # native path, e.g. for an MCP server command
     server = None
     if args.mock:
         from cmcoder.testing.mock_server import MockServer, MockState
@@ -181,6 +184,7 @@ def run_task(
         "--max-turns",
         str(spec.get("max_turns", 30)),
     ]
+    cmd += [str(a) for a in spec.get("args", [])]  # e.g. --mcp-config
     if args.model:
         cmd += ["--model", args.model]
     started = time.monotonic()

@@ -29,7 +29,18 @@ async def run_headless(
     try:
         if output_format == "stream-json":
             _emit(agent.init_event())
-        async for event in agent.run(prompt):
+        allow: list[str] = []
+        if prompt.startswith("/"):  # a custom command or an MCP prompt
+            try:
+                expansion, warnings = await agent.expand_command(prompt)
+            except ValueError as e:
+                print(f"error: {e}", file=sys.stderr)
+                return 1
+            for w in warnings:
+                print(f"warning: {w}", file=sys.stderr)
+            if expansion is not None:
+                prompt, allow = expansion.prompt, expansion.allowed_tools
+        async for event in agent.run(prompt, allow=allow):
             if output_format == "stream-json":
                 _emit(event)
             if isinstance(event, ev.Result):

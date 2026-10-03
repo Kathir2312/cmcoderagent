@@ -1,0 +1,28 @@
+[
+ {
+  "tool_calls": [
+   {
+    "name": "Read",
+    "arguments": {
+     "file_path": "CHANGELOG.md"
+    }
+   }
+  ],
+  "expect": "Add this entry as a new bullet"
+ },
+ {
+  "tool_calls": [
+   {
+    "name": "Edit",
+    "arguments": {
+     "file_path": "CHANGELOG.md",
+     "old_string": "## Unreleased\n\n",
+     "new_string": "## Unreleased\n\n- Fixed a crash when the config file is empty\n"
+    }
+   }
+  ]
+ },
+ {
+  "content": "Added the entry under Unreleased in CHANGELOG.md."
+ }
+]
