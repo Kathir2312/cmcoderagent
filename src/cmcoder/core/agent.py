@@ -30,6 +30,7 @@ from ..providers.messages import (
 from ..providers.openai_compat import ContextTooLong, ProviderError, no_tool_support
 from ..providers.profiles import ModelProfile
 from ..providers.text_tools import Holdback, extract
+from ..telemetry import Telemetry
 from ..tools.base import FileChange, Tool, ToolContext, ToolResult, truncate_middle
 from .checkpoints import Checkpoints, RestoreAction
 from .commands import (
@@ -192,6 +193,7 @@ class Agent:
         hooks: HookRunner | None = None,
         commands: CommandSource | None = None,
         subagents: SubagentRuntime | None = None,
+        telemetry: Telemetry | None = None,
     ) -> None:
         self.provider = provider
         self.model = model
@@ -229,6 +231,8 @@ class Agent:
         # A subagent (started by the Task tool) skips the prompt hooks and runs
         # SubagentStop instead of Stop.
         self.is_subagent = False
+        # OpenTelemetry metrics (cmcoder/telemetry.py), shared with subagents.
+        self.telemetry = telemetry
         # Shown with the first turn (e.g. a sandbox that was asked for but can't run).
         self.startup_warnings: list[str] = []
         if subagents is not None:
@@ -455,6 +459,8 @@ class Agent:
         await self.ctx.close_shells()
         if self.ctx.sandbox is not None and not self.is_subagent:
             await self.ctx.sandbox.close()
+        if self.telemetry is not None and not self.is_subagent:
+            await self.telemetry.close()
         providers = [self.provider]
         if self.summarizer is not None and self.summarizer.provider is not self.provider:
             providers.append(self.summarizer.provider)
@@ -536,6 +542,7 @@ class Agent:
             auto_compact=self.auto_compact,
             compact_threshold=self.compact_threshold,
             hooks=self.hooks,
+            telemetry=self.telemetry,
         )
         child.is_subagent = True
         child._session_hooks_done = True
@@ -595,8 +602,14 @@ class Agent:
         user message ahead of the prompt; titles and history use the prompt.
         `allow`: extra allow rules for this turn only (a command's allowed-tools)."""
         self.policy.set_turn_allow(allow or [])
+        telemetry = self.telemetry
+        if telemetry is not None:
+            telemetry.turn_started(self.session_id + ("/sub" if self.is_subagent else ""))
         try:
             async for event in self._run(prompt, context):
+                if telemetry is not None:
+                    sid = self.session_id + ("/sub" if self.is_subagent else "")
+                    telemetry.observe(event, self.model, sid)
                 yield event
         finally:
             self.policy.set_turn_allow([])

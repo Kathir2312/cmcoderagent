@@ -440,6 +440,7 @@ class CmcoderApp(App[int]):
 async def run_tui(settings: Settings, opts: AgentOptions, initial_prompt: str | None) -> int:
     app = CmcoderApp(settings, initial_prompt)
     opts.ask = app.ask
+    opts.frontend = "tui"
     app.agent = await build_agent(settings, opts)
     try:
         code = await app.run_async()

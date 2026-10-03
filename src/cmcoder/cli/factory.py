@@ -35,6 +35,7 @@ from ..providers.openwebui import OpenWebUIProvider
 from ..providers.profiles import ModelProfile, resolve_profile
 from ..providers.transport import TransportOptions, build_client
 from ..sandbox import make_sandbox
+from ..telemetry import from_settings as telemetry_from_settings
 from ..tools.base import ToolContext, output_budget_chars
 from ..tools.registry import default_tools
 
@@ -171,6 +172,7 @@ class AgentOptions:
     persist_rules: bool = True
     continue_session: bool = False  # --continue: the latest session in this project
     resume: str | None = None  # --resume ID (or a unique prefix of it)
+    frontend: str = "cli"  # "cli", "tui", "print" (-p) or "vscode", for telemetry
 
 
 async def resolve_model_profile(
@@ -226,6 +228,7 @@ async def build_agent(settings: Settings, opts: AgentOptions) -> Agent:
     profile = await resolve_model_profile(settings, provider, model)
     memory = load_memory_files(cwd, root)
     sandbox, sandbox_warning = make_sandbox(settings.sandbox, root)
+    telemetry = telemetry_from_settings(settings.telemetry)
     skills = load_skills(root)
     skills_section = skills_prompt(skills)
     system_prompt = build_system_prompt(
@@ -277,6 +280,7 @@ async def build_agent(settings: Settings, opts: AgentOptions) -> Agent:
         else None,
         hooks=runner if (runner := HookRunner(settings, root)).hooks else None,
         commands=CommandSource(root, settings.project_trusted),
+        telemetry=telemetry,
         subagents=SubagentRuntime(
             root,
             settings.project_trusted,
@@ -288,6 +292,8 @@ async def build_agent(settings: Settings, opts: AgentOptions) -> Agent:
     )
     if sandbox_warning:
         agent.startup_warnings.append(sandbox_warning)
+    if telemetry is not None:
+        telemetry.session_started(opts.frontend, agent.session_id)
     if opts.continue_session or opts.resume:
         resume_session(agent, settings, root, opts.resume)
     return agent

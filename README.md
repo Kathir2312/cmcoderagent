@@ -297,6 +297,26 @@ the project is trusted; managed settings can force it. On Linux/WSL2 it needs `b
 (`sudo apt install bubblewrap`). Native Windows has no sandbox: run cmcoder inside WSL2 to get one there.
 `cmcoder doctor` shows whether it is active.
 
+### Usage metrics (OpenTelemetry)
+
+Off by default. An administrator (managed settings) or you can send usage metrics to an OpenTelemetry collector
+over OTLP/HTTP:
+
+```json
+"telemetry": {
+  "enabled": true,
+  "endpoint": "https://otel.corp.example:4318",
+  "headers": { "Authorization": "Bearer ${OTEL_TOKEN}" },
+  "resourceAttributes": { "team": "payments", "user.name": "${USERNAME}" }
+}
+```
+
+Metrics: sessions (by front end), tokens and cost per model, tool calls by tool and result (MCP tools by server),
+model errors, compactions, turns and their duration. **Only counts and timings**: never prompts, replies, code, file
+paths or command text. The standard `OTEL_EXPORTER_OTLP_ENDPOINT` / `_HEADERS`, `OTEL_RESOURCE_ATTRIBUTES` and
+`CMCODER_TELEMETRY=1` work too; a repository's settings can't turn it on or point it elsewhere unless the project is
+trusted. `cmcoder doctor` checks the collector. Details: `src/cmcoder/telemetry.py`.
+
 ### Managed settings (for administrators)
 
 An organisation can enforce rules that users and repositories can't loosen, in an admin-only file:

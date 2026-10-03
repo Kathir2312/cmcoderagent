@@ -124,6 +124,18 @@ class SandboxConfig(_Model):
     allow_unsandboxed_commands: bool = Field(True, alias="allowUnsandboxedCommands")
 
 
+class TelemetryConfig(_Model):
+    """OpenTelemetry metrics (cmcoder/telemetry.py). Off by default."""
+
+    enabled: bool = False
+    # OTLP/HTTP base URL of the collector (metrics go to <endpoint>/v1/metrics).
+    endpoint: str | None = None
+    headers: dict[str, str] = Field(default_factory=dict)  # values may use ${VAR}
+    resource_attributes: dict[str, str] = Field(default_factory=dict, alias="resourceAttributes")
+    export_interval_seconds: float = Field(60.0, alias="exportIntervalSeconds")
+    ca_cert_path: str | None = Field(None, alias="caCertPath")
+
+
 class HookCommand(_Model):
     type: Literal["command"] = "command"
     command: str
@@ -191,6 +203,7 @@ class Settings(_Model):
     # MCP servers from your user (and managed) settings.
     mcp_servers: dict[str, McpServerConfig] = Field(default_factory=dict, alias="mcpServers")
     sandbox: SandboxConfig = Field(default_factory=lambda: SandboxConfig.model_validate({}))
+    telemetry: TelemetryConfig = Field(default_factory=lambda: TelemetryConfig.model_validate({}))
     # Managed settings only: server names allowed (if set) and denied.
     allowed_mcp_servers: list[str] | None = Field(None, alias="allowedMcpServers")
     denied_mcp_servers: list[str] = Field(default_factory=list, alias="deniedMcpServers")
@@ -546,6 +559,8 @@ def _filter_project_layer(layer: dict[str, Any], trusted: bool) -> tuple[dict[st
         dropped.append(f"hooks ({events})")
     if out.pop("sandbox", None) is not None:
         dropped.append("sandbox settings")
+    if out.pop("telemetry", None) is not None:
+        dropped.append("telemetry settings")
     if servers := out.pop("mcpServers", None):
         names = ", ".join(servers) if isinstance(servers, dict) else "?"
         dropped.append(f"mcpServers ({names})")

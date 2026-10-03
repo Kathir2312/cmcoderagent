@@ -21,6 +21,7 @@ async def run_headless(
     settings: Settings, opts: AgentOptions, prompt: str, output_format: OutputFormat, verbose: bool
 ) -> int:
     opts.ask = None  # nobody to ask: ASK decisions become denials with a hint
+    opts.frontend = "print"
     opts.persist_rules = False
     agent = await build_agent(settings, opts)
     if warning := ignored_settings_message(settings):

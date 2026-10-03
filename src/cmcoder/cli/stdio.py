@@ -110,6 +110,7 @@ class StdioServer:
 
     async def serve(self, stdin_fd: int) -> int:
         self.opts.ask = self.ask
+        self.opts.frontend = "vscode"
         try:
             self.agent = await build_agent(self.settings, self.opts)
         except (SettingsError, ProviderError, ValueError) as e:

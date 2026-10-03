@@ -120,6 +120,24 @@ Linux, `sandbox-exec` on macOS; the evals run sandboxed there too).
   variables too): sessions, tokens and cost per model, tool calls by name and
   permission decision, errors, latency.
 
+**Status: done.** `src/cmcoder/telemetry.py`, settings `telemetry`, recorded
+from the agent's events (`Agent.run`), shared with subagents, exported every
+60 s and at the end of a session; `doctor` checks the collector (an empty
+export, no fake data). Tests: `tests/test_telemetry.py` (a stand-in
+collector; the prompt and file names never appear in what is sent).
+- No new packages: OTLP/HTTP with JSON encoding, cumulative sums, written
+  directly (the official SDK would add ~10 packages for a handful of
+  counters). Checked against a real OpenTelemetry Collector (0.115), which
+  decoded every metric.
+- Recorded: sessions by front end, tokens and cost per model, tool calls by
+  tool and result (ok/error/denied; MCP tools grouped by server), model
+  errors by kind, compactions, turns and total turn time. Each point carries
+  the session id; the resource a random installation id plus your
+  `resourceAttributes` (`${VAR}` expanded, e.g. a user name if the company
+  wants it).
+- A repository's `telemetry` settings need trust (it could otherwise send
+  your usage to its own collector).
+
 ### 5. Standalone binary and per-platform VS Code extension
 
 - PyInstaller builds for Windows x64, Linux x64, macOS arm64; each `.vsix`
@@ -147,7 +165,7 @@ client certificates: later, if needed.
 - [x] 1. Open WebUI gateway
 - [x] 2. Carry-overs (VS Code commands, TUI default, Node 22)
 - [x] 3. Bash sandbox
-- [ ] 4. OpenTelemetry
+- [x] 4. OpenTelemetry
 - [ ] 5. Standalone binary and per-platform VSIX
 - [ ] 6. Tests, evals and security review
 - [ ] 7. Guides and docs

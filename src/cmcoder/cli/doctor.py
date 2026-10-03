@@ -519,6 +519,29 @@ class Doctor:
             f"leaving the sandbox: {'asks each time' if cfg.allow_unsandboxed_commands else 'not allowed'}",
         )
 
+    async def check_telemetry(self) -> None:
+        from ..telemetry import from_settings
+
+        telemetry = from_settings(self.settings.telemetry)
+        if telemetry is None:
+            if self.settings.telemetry.enabled:
+                self.section("Telemetry")
+                self.report(WARN, "Telemetry is on but has no endpoint", "Set telemetry.endpoint.")
+            return
+        self.section("Telemetry")
+        try:
+            problem = await telemetry.check()
+        finally:
+            await telemetry.client.aclose()
+        if problem:
+            self.report(FAIL, f"OpenTelemetry collector not reachable: {telemetry.url}", problem)
+        else:
+            self.report(
+                OK,
+                f"OpenTelemetry metrics go to {telemetry.url}",
+                "Counts and timings only: no prompts, code, paths or commands.",
+            )
+
     def check_extensions(self) -> None:
         """Custom commands, subagents and skills: what's found, and from where."""
         from ..core.commands import load_commands
@@ -604,6 +627,7 @@ class Doctor:
         await self.check_mcp(probe)
         self.check_hooks()
         self.check_sandbox()
+        await self.check_telemetry()
         self.check_extensions()
         self.console.print()
         if self.failed:
