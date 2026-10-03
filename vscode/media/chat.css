@@ -231,3 +231,20 @@ button.link {
 }
 
 button.link:hover { background: none; color: var(--vscode-textLink-activeForeground, var(--vscode-textLink-foreground)); }
+
+/* Slash-command completion, above the input box. */
+footer .commands {
+  max-height: 40vh;
+  overflow-y: auto;
+  margin-bottom: 4px;
+  border: 1px solid var(--vscode-editorSuggestWidget-border, var(--vscode-panel-border));
+  background: var(--vscode-editorSuggestWidget-background, var(--vscode-editor-background));
+}
+footer .commands .command { padding: 2px 6px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+footer .commands .command.selected {
+  background: var(--vscode-editorSuggestWidget-selectedBackground, var(--vscode-list-activeSelectionBackground));
+  color: var(--vscode-editorSuggestWidget-selectedForeground, inherit);
+}
+footer .commands .name { font-weight: 600; }
+footer .commands .hint { opacity: 0.7; }
+footer .commands .description { opacity: 0.7; margin-left: 8px; }

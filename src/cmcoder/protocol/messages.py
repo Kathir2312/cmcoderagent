@@ -100,6 +100,13 @@ class ListSessions(_Message):
     type: Literal["list_sessions"] = "list_sessions"
 
 
+class ListCommands(_Message):
+    """Ask for the slash commands (answered with `command_list`). A
+    `user_message` whose text starts with one of them runs it."""
+
+    type: Literal["list_commands"] = "list_commands"
+
+
 class Shutdown(_Message):
     """Stop the running turn, save the session and exit (EOF does the same)."""
 
@@ -115,6 +122,7 @@ ClientMessage = Annotated[
     | IdeCapabilities
     | IdeToolResult
     | ListSessions
+    | ListCommands
     | Shutdown,
     Field(discriminator="type"),
 ]

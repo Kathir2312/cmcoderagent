@@ -6,6 +6,13 @@ export const PROTOCOL_VERSION = 1;
 
 // ---- Agent -> client (stdout) ----
 
+export interface CommandInfo {
+  name: string;
+  description: string;
+  argument_hint: string;
+  origin: "built-in" | "user" | "project" | "mcp";
+}
+
 /** A proposed file change, for review in a diff editor. */
 export interface FileChange {
   path: string;
@@ -157,6 +164,12 @@ export interface SessionList {
   sessions: SessionSummary[];
 }
 
+/** The slash commands a `user_message` can start with (for completion). */
+export interface CommandList {
+  type: "command_list";
+  commands: CommandInfo[];
+}
+
 /** A resumed conversation so far, so the client can show it. */
 export interface History {
   type: "history";
@@ -192,6 +205,7 @@ export type AgentEvent =
   | ModelChanged
   | IdeToolRequest
   | SessionList
+  | CommandList
   | History
   | Result;
 
@@ -274,6 +288,14 @@ export interface ListSessions {
   type: "list_sessions";
 }
 
+/**
+ * Ask for the slash commands (answered with `command_list`). A
+ * `user_message` whose text starts with one of them runs it.
+ */
+export interface ListCommands {
+  type: "list_commands";
+}
+
 /** Stop the running turn, save the session and exit (EOF does the same). */
 export interface Shutdown {
   type: "shutdown";
@@ -288,4 +310,5 @@ export type ClientMessage =
   | IdeCapabilities
   | IdeToolResult
   | ListSessions
+  | ListCommands
   | Shutdown;

@@ -15,6 +15,7 @@ import sys
 import threading
 import time
 import uuid
+from collections.abc import AsyncIterator
 from contextlib import suppress
 from typing import Any, BinaryIO
 
@@ -22,6 +23,7 @@ from pydantic import ValidationError
 
 from ..config.settings import Settings, SettingsError, ignored_settings_message
 from ..core.agent import Agent, PermissionAnswer, PermissionRequest, parse_tool_arguments
+from ..core.commands import BUILT_IN, split_line
 from ..core.ide import IDE_TOOLS, format_ide_context
 from ..core.permissions import MODES, Decision, ModeNotAllowed
 from ..core.sessions import list_sessions
@@ -185,6 +187,8 @@ class StdioServer:
                 if s.session_id != agent.session_id
             ]
             self.emit(ev.SessionList(sessions=sessions))
+        elif isinstance(message, msg.ListCommands):
+            self.emit(ev.CommandList(commands=self.command_list()))
 
     def _withheld(self, path: str) -> bool:
         """Files whose contents Read would refuse (secrets, deny rules)."""
@@ -200,41 +204,91 @@ class StdioServer:
     def busy(self) -> bool:
         return self.turn is not None and not self.turn.done()
 
+    def _result(self, subtype: str, text: str, is_error: bool, started: float) -> ev.Result:
+        agent = self.agent
+        assert agent is not None
+        return ev.Result(
+            subtype=subtype,  # type: ignore[arg-type]
+            is_error=is_error,
+            result=text,
+            num_turns=0,
+            duration_ms=int((time.monotonic() - started) * 1000),
+            usage={},
+            session_id=agent.session_id,
+        )
+
+    async def _turn_events(
+        self, text: str, context: str | None, started: float
+    ) -> AsyncIterator[ev.Event]:
+        """A prompt, or a slash command: `/compact`, a custom command or an MCP prompt."""
+        agent = self.agent
+        assert agent is not None
+        if not text.startswith("/"):
+            async for event in agent.run(text, context):
+                yield event
+            return
+        name, arguments = split_line(text)
+        if name == "compact":
+            async for event in agent.compact(arguments or None):
+                yield event
+            yield self._result("success", "", False, started)
+            return
+        try:
+            expansion, warnings = await agent.expand_command(text)
+        except ValueError as e:
+            yield ev.Warning(message=str(e))
+            yield self._result("error", str(e), True, started)
+            return
+        for w in warnings:
+            yield ev.Warning(message=w)
+        if expansion is not None:
+            async for event in agent.run(expansion.prompt, context, allow=expansion.allowed_tools):
+                yield event
+        elif name in BUILT_IN:
+            message = f"/{name} isn't available here; use the panel's buttons or the terminal."
+            yield ev.Warning(message=message)
+            yield self._result("error", message, True, started)
+        else:  # not a command (e.g. a path): an ordinary prompt
+            async for event in agent.run(text, context):
+                yield event
+
     async def _run_turn(self, text: str, context: str | None = None) -> None:
         agent = self.agent
         assert agent is not None
         started = time.monotonic()
         try:
-            async for event in agent.run(text, context):
+            async for event in self._turn_events(text, context, started):
                 self.emit(event)
                 if isinstance(event, ev.ToolResult) and event.name == "TodoWrite":
                     self.emit(ev.TodoUpdate(todos=agent.ctx.todos))
         except asyncio.CancelledError:
-            self.emit(
-                ev.Result(
-                    subtype="interrupted",
-                    is_error=False,
-                    result="Interrupted by the user.",
-                    num_turns=0,
-                    duration_ms=int((time.monotonic() - started) * 1000),
-                    usage={},
-                    session_id=agent.session_id,
-                )
-            )
+            self.emit(self._result("interrupted", "Interrupted by the user.", False, started))
             raise
         except Exception as e:  # a bug: report it instead of dying silently
             self.error("internal", f"{type(e).__name__}: {e}")
-            self.emit(
-                ev.Result(
-                    subtype="error",
-                    is_error=True,
-                    result=str(e),
-                    num_turns=0,
-                    duration_ms=int((time.monotonic() - started) * 1000),
-                    usage={},
-                    session_id=agent.session_id,
+            self.emit(self._result("error", str(e), True, started))
+
+    def command_list(self) -> list[ev.CommandInfo]:
+        agent = self.agent
+        assert agent is not None
+        out = [
+            ev.CommandInfo(
+                name="compact",
+                description="Summarise the conversation so far to free context",
+                argument_hint="[focus]",
+                origin="built-in",
+            )
+        ]
+        for c in sorted(agent.command_list().values(), key=lambda c: c.name):
+            out.append(
+                ev.CommandInfo(
+                    name=c.name,
+                    description=c.description,
+                    argument_hint=c.argument_hint,
+                    origin=c.origin,
                 )
             )
+        return out
 
     async def _stop_turn(self) -> None:
         for future in [*self.pending.values(), *self.ide_pending.values()]:

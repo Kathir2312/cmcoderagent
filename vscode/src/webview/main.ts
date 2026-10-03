@@ -2,7 +2,7 @@
 // Plain DOM code: it receives protocol events from the extension and renders them.
 
 import { marked } from "marked";
-import type { AgentEvent, PermissionRequest, ToolResult, ToolUse } from "../protocol";
+import type { AgentEvent, CommandInfo, PermissionRequest, ToolResult, ToolUse } from "../protocol";
 import type { FromWebview, ToWebview } from "../webviewMessages";
 
 declare function acquireVsCodeApi(): { postMessage(message: FromWebview): void };
@@ -86,6 +86,7 @@ app.innerHTML = `
     <label class="context" hidden title="Send the active file, selection and problems with this message">
       <input type="checkbox" checked> <span></span>
     </label>
+    <div class="commands" role="listbox" hidden></div>
     <textarea rows="3" placeholder="Ask cmcoder… (Enter to send, Shift+Enter for a new line)"></textarea>
     <div class="actions">
       <button class="attach secondary" title="Attach a file (@)">@</button>
@@ -109,6 +110,7 @@ const sessionsPanel = $<HTMLElement>(".sessions");
 const historyButton = $<HTMLButtonElement>(".history");
 const attachButton = $<HTMLButtonElement>(".attach");
 const contextChip = $<HTMLLabelElement>(".context");
+const commandsPopup = $<HTMLElement>(".commands");
 const contextBox = contextChip.querySelector("input") as HTMLInputElement;
 const contextText = contextChip.querySelector("span") as HTMLElement;
 
@@ -262,6 +264,10 @@ function onEvent(ev: AgentEvent): void {
     case "session_list":
       renderSessions(ev.sessions);
       break;
+    case "command_list":
+      commands = ev.commands;
+      updateCommands();
+      break;
     case "model_changed":
       modelLabel.textContent = ev.model;
       break;
@@ -389,6 +395,7 @@ function send(): void {
   const bubble = append(el("div", "msg user", text));
   if (includeContext) bubble.append(el("div", "attached", `📎 ${contextText.textContent}`));
   input.value = "";
+  commandsPopup.hidden = true;
   contextBox.checked = true; // turning it off counts for one message
   setBusy(true);
   showStatus("Thinking…");
@@ -411,7 +418,73 @@ function renderSessions(sessions: { id: string; title: string; updated: number; 
   sessionsPanel.hidden = false;
 }
 
+// --- slash-command completion ---------------------------------------------------
+
+let commands: CommandInfo[] = [];
+let matches: CommandInfo[] = [];
+let selected = 0;
+
+/** The `/name` being typed (nothing after it yet), or undefined. */
+function typedCommand(): string | undefined {
+  const m = /^\/([^\s]*)$/.exec(input.value);
+  return m ? m[1] : undefined;
+}
+
+function updateCommands(): void {
+  const typed = typedCommand();
+  matches = typed === undefined ? [] : commands.filter((c) => c.name.startsWith(typed)).slice(0, 12);
+  selected = Math.min(selected, Math.max(matches.length - 1, 0));
+  commandsPopup.replaceChildren(
+    ...matches.map((c, i) => {
+      const row = el("div", i === selected ? "command selected" : "command");
+      row.setAttribute("role", "option");
+      row.append(el("span", "name", `/${c.name}`));
+      if (c.argument_hint) row.append(el("span", "hint", ` ${c.argument_hint}`));
+      const where = c.origin === "project" ? " (project)" : c.origin === "mcp" ? " (MCP)" : "";
+      row.append(el("span", "description", `${c.description}${where}`));
+      row.onmousedown = (e) => {
+        e.preventDefault();
+        acceptCommand(i);
+      };
+      return row;
+    }),
+  );
+  commandsPopup.hidden = matches.length === 0;
+}
+
+function acceptCommand(i: number): void {
+  const c = matches[i];
+  if (!c) return;
+  input.value = `/${c.name} `;
+  matches = [];
+  commandsPopup.hidden = true;
+  input.focus();
+}
+
+input.addEventListener("input", () => {
+  if (input.value === "/") post({ kind: "listCommands" }); // fresh: files may have changed
+  updateCommands();
+});
+
 input.addEventListener("keydown", (e) => {
+  if (!commandsPopup.hidden && matches.length) {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      selected = (selected + (e.key === "ArrowDown" ? 1 : matches.length - 1)) % matches.length;
+      updateCommands();
+      return;
+    }
+    if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey && !e.isComposing && matches[selected]?.name !== typedCommand())) {
+      e.preventDefault();
+      acceptCommand(selected);
+      return;
+    }
+    if (e.key === "Escape") {
+      e.stopPropagation();
+      commandsPopup.hidden = true;
+      return;
+    }
+  }
   if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
     e.preventDefault();
     send();

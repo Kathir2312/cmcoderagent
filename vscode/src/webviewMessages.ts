@@ -27,6 +27,7 @@ export type FromWebview =
   | { kind: "setMode"; mode: string }
   | { kind: "newConversation" }
   | { kind: "listSessions" }
+  | { kind: "listCommands" }
   | { kind: "resume"; id: string }
   | { kind: "attachFile" }
   | { kind: "restart" }

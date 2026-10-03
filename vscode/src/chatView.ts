@@ -219,6 +219,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       case "listSessions":
         this.agent?.send({ type: "list_sessions" });
         break;
+      case "listCommands":
+        this.agent?.send({ type: "list_commands" });
+        break;
       case "resume":
         // Only a session id (from session_list) can become an argument.
         if (/^[A-Za-z0-9][A-Za-z0-9-]{0,63}$/.test(m.id)) void this.newConversation([`--resume=${m.id}`]);

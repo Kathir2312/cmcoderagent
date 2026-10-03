@@ -134,3 +134,54 @@ Add to `~/.cmcoder/settings.json`:
 ```
 
 Ask cmcoder to edit a file and watch the model react to the hook's message.
+
+## 3. Custom slash commands
+
+*Done.* Code: `src/cmcoder/core/commands.py`, `Agent.expand_command` in
+`core/agent.py`, the `else:` branch of each front end's command handler
+(`cli/repl.py`, `cli/tui.py`, `cli/stdio.py`). Tests: `tests/test_commands.py`.
+
+### The problem
+
+Teams type the same long prompts again and again ("review this file for our
+security checklist, then ..."). A command saves that prompt in a file the team
+can share, with a short name and arguments.
+
+### The idea
+
+A command is just text: `/review app.py` reads `review.md`, puts `app.py` in
+place of `$1` / `$ARGUMENTS`, and runs the result as an ordinary prompt. The
+only power a file adds is `allowed-tools`: allow rules that last one turn.
+
+### The code
+
+- `parse_file` splits simple `key: value` frontmatter from the body (no YAML
+  library needed); `split_tools` splits `Read, Bash(a, b)` on commas outside
+  parentheses.
+- `_load_dir` turns `db/migrate.md` into `db:migrate` with
+  `Path.relative_to(...).with_suffix("").parts`. `load_commands` loads the
+  project's, then yours with `dict.update`, so yours win.
+- `CommandSource.load` strips `allowed_tools` from an untrusted project's
+  commands: a repository can't grant itself tools.
+- `Agent.run(..., allow=[...])` wraps the real loop (`_run`) in
+  `try/finally`, so the turn's rules are cleared even when the turn is
+  interrupted (`aclose()` of an async generator runs its `finally`).
+- MCP prompts: `client.get_prompt(name, arguments)` returns messages; their
+  text becomes the prompt.
+
+### New Python ideas
+
+- **`shlex.split`**: splits arguments like a shell, so `"my file.py"` is one
+  word. An unbalanced quote raises `ValueError`; we fall back to `str.split`.
+- **`re.sub` with a function**: `$1`..`$9` are replaced by looking each number
+  up, with `""` for a missing word.
+- **`finally` in an async generator**: cleanup that runs however the consumer
+  stops (end, exception, `break`, cancellation).
+
+### Try it
+
+```bash
+mkdir -p ~/.cmcoder/commands
+printf -- '---\ndescription: Explain a file\n---\nExplain $1 to a new team member.\n' > ~/.cmcoder/commands/explain.md
+cmcoder        # then type /ex and press Tab, or /explain README.md
+```

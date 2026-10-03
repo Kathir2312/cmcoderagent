@@ -32,6 +32,16 @@ from ..providers.profiles import ModelProfile
 from ..providers.text_tools import Holdback, extract
 from ..tools.base import FileChange, Tool, ToolContext, ToolResult, truncate_middle
 from .checkpoints import Checkpoints, RestoreAction
+from .commands import (
+    CommandSource,
+    Expansion,
+    SlashCommand,
+    mcp_prompt_commands,
+    prompt_arguments,
+    prompt_text,
+    split_line,
+    substitute,
+)
 from .compaction import CompactionError, Summarizer, compact
 from .context import WARN_RATIO, ContextBudget
 from .hooks import Hook, HookEvent, HookOutcome, HookRunner
@@ -179,6 +189,7 @@ class Agent:
         compact_threshold: float = 0.8,
         mcp: McpManager | None = None,
         hooks: HookRunner | None = None,
+        commands: CommandSource | None = None,
     ) -> None:
         self.provider = provider
         self.model = model
@@ -211,6 +222,8 @@ class Agent:
         # Hooks (core/hooks.py); SessionStart runs with the first turn.
         self.hooks = hooks
         self._session_hooks_done = False
+        # Custom slash commands (core/commands.py); MCP prompts are added to them.
+        self.commands = commands
         # Called with (model, tokens) when the server states a smaller window.
         self.on_context_window = on_context_window
         self.auto_compact = auto_compact
@@ -489,21 +502,71 @@ class Agent:
 
     # ------------------------------------------------------------------
 
-    async def run(self, prompt: str, context: str | None = None) -> AsyncIterator[ev.Event]:
-        """Run one user turn. Yields protocol events, ending with a Result.
-
-        `context` (e.g. the editor's open file and selection) goes into the
-        user message ahead of the prompt; titles and history use the prompt."""
-        started = time.monotonic()
-        self.turn += 1
-        user_message = Message.user(f"{context}\n\n{prompt}" if context else prompt)
-        user_message.turn = self.turn
-        self.messages.append(user_message)
+    async def _start_mcp(self) -> AsyncIterator[ev.Warning]:
         if self.mcp is not None and not self.mcp.started:
             async for warning in self.mcp.start(self._approve_mcp_server):
                 yield warning
             for tool in self.mcp.tools():
                 self.tools.setdefault(tool.name, tool)
+
+    def command_list(self) -> dict[str, SlashCommand]:
+        """Custom commands and the prompts of connected MCP servers."""
+        found = self.commands.load() if self.commands is not None else {}
+        if self.mcp is not None:
+            found.update(mcp_prompt_commands(self.mcp.connected()))
+        return found
+
+    async def expand_command(self, line: str) -> tuple[Expansion | None, list[str]]:
+        """`/name args` as a prompt: (None, ...) when no such command exists.
+        The list is warnings to show (e.g. an MCP server that didn't start).
+        Raises ValueError when the command exists but can't be expanded."""
+        name, arguments = split_line(line)
+        warnings: list[str] = []
+        if name.startswith("mcp__"):
+            async for w in self._start_mcp():  # prompts are known once servers run
+                warnings.append(w.message)
+        command = self.command_list().get(name)
+        if command is None:
+            return None, warnings
+        if command.mcp is not None:
+            server, p = command.mcp
+            names = [a.name for a in (p.arguments or [])]
+            values = prompt_arguments(names, arguments)
+            missing = [a.name for a in (p.arguments or []) if a.required and a.name not in values]
+            if missing:
+                raise ValueError(f"/{name} needs: {' '.join(f'<{m}>' for m in missing)}")
+            try:
+                result = await asyncio.wait_for(
+                    server.client.get_prompt(p.name, values), server.config.tool_timeout
+                )
+            except Exception as e:  # the server's problem
+                raise ValueError(f"MCP server {server.name} could not give /{name}: {e}") from e
+            return Expansion(name, prompt_text(result), []), warnings
+        return Expansion(name, substitute(command.body, arguments), command.allowed_tools), warnings
+
+    async def run(
+        self, prompt: str, context: str | None = None, *, allow: list[str] | None = None
+    ) -> AsyncIterator[ev.Event]:
+        """Run one user turn. Yields protocol events, ending with a Result.
+
+        `context` (e.g. the editor's open file and selection) goes into the
+        user message ahead of the prompt; titles and history use the prompt.
+        `allow`: extra allow rules for this turn only (a command's allowed-tools)."""
+        self.policy.set_turn_allow(allow or [])
+        try:
+            async for event in self._run(prompt, context):
+                yield event
+        finally:
+            self.policy.set_turn_allow([])
+
+    async def _run(self, prompt: str, context: str | None) -> AsyncIterator[ev.Event]:
+        started = time.monotonic()
+        self.turn += 1
+        user_message = Message.user(f"{context}\n\n{prompt}" if context else prompt)
+        user_message.turn = self.turn
+        self.messages.append(user_message)
+        async for warning in self._start_mcp():
+            yield warning
         if self.hooks is not None:
             notes: list[str] = []
             if not self._session_hooks_done:

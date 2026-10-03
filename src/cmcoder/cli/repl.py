@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from prompt_toolkit import PromptSession
+from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.key_binding import KeyBindings
 from rich.console import Console
@@ -27,6 +28,7 @@ from .. import __version__
 from ..compat import InterruptHandler
 from ..config.settings import Settings, config_dir, ignored_settings_message
 from ..core.agent import Agent, PermissionAnswer, PermissionRequest
+from ..core.commands import BUILT_IN, help_lines
 from ..core.permissions import MODES, ModeNotAllowed
 from ..core.sessions import SessionLog, age, list_sessions, load
 from ..mcp_client import status_lines
@@ -101,6 +103,25 @@ HELP = """\
   Shift+Tab          cycle permission mode
   Ctrl+C             interrupt the current turn (twice at the prompt to quit)
 """
+
+
+class SlashCompleter(Completer):
+    """Completes `/name` at the start of the input: built-in and your commands."""
+
+    def __init__(self, agent: Agent) -> None:
+        self.agent = agent
+
+    def get_completions(self, document: Any, complete_event: Any) -> Any:
+        text = document.text_before_cursor
+        if not text.startswith("/") or " " in text or "\n" in text:
+            return
+        typed = text[1:]
+        custom = self.agent.command_list()
+        for name in sorted({*BUILT_IN, *custom}):
+            if name.startswith(typed):
+                c = custom.get(name)
+                meta = c.description if c else "built-in"
+                yield Completion("/" + name, start_position=-len(text), display_meta=meta)
 
 
 class Repl:
@@ -329,6 +350,9 @@ class Repl:
             return False
         if name == "help":
             c.print(HELP)
+            if custom := help_lines(self.agent.command_list()):
+                c.print("[bold]Your commands[/bold]")
+                c.print(Text("\n".join(custom)))
         elif name == "compact":
             await self._run_stream(
                 self.agent.compact(arg or None),
@@ -386,7 +410,17 @@ class Repl:
             cost = f", cost {u.cost:.4f}" if u.cost is not None else ""
             c.print(f"Tokens: {u.prompt_tokens} in, {u.completion_tokens} out{est}{cost}")
         else:
-            c.print(f"[red]Unknown command /{name}. Type /help.[/red]")
+            try:
+                expansion, warnings = await self.agent.expand_command(line)
+            except ValueError as e:
+                c.print(Text(str(e), style="red"))
+                return True
+            for w in warnings:
+                c.print(Text(f"⚠ {w}", style="yellow"))
+            if expansion is None:
+                c.print(f"[red]Unknown command /{name}. Type /help.[/red]")
+            else:
+                await self._run_turn(expansion.prompt, expansion.allowed_tools)
         return True
 
     async def _resume(self, arg: str) -> None:
@@ -537,9 +571,9 @@ class Repl:
         if task is not None and not task.done() and self._interrupt is not None:
             self._interrupt.arm(task.cancel)
 
-    async def _run_turn(self, prompt: str) -> None:
+    async def _run_turn(self, prompt: str, allow: list[str] | None = None) -> None:
         assert self.agent is not None
-        await self._run_stream(self.agent.run(prompt))
+        await self._run_stream(self.agent.run(prompt, allow=allow))
 
     async def _run_stream(
         self,
@@ -612,7 +646,11 @@ class Repl:
         hist = config_dir() / "history"
         hist.parent.mkdir(parents=True, exist_ok=True)
         self.session = PromptSession(
-            history=FileHistory(str(hist)), key_bindings=bindings, bottom_toolbar=self._toolbar
+            history=FileHistory(str(hist)),
+            key_bindings=bindings,
+            bottom_toolbar=self._toolbar,
+            completer=SlashCompleter(agent),
+            complete_while_typing=True,
         )
         pending = initial_prompt
         ctrl_c = False

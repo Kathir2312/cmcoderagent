@@ -170,6 +170,20 @@ class SessionList(_Event):
     sessions: list[SessionSummary]
 
 
+class CommandInfo(BaseModel):
+    name: str  # without the "/"
+    description: str
+    argument_hint: str
+    origin: Literal["built-in", "user", "project", "mcp"]
+
+
+class CommandList(_Event):
+    """The slash commands a `user_message` can start with (for completion)."""
+
+    type: Literal["command_list"] = "command_list"
+    commands: list[CommandInfo]
+
+
 class HistoryItem(BaseModel):
     role: Literal["user", "assistant", "tool"]
     text: str  # for "tool": the call's label, e.g. Edit(app.py)
@@ -211,6 +225,7 @@ Event = Annotated[
     | ModelChanged
     | IdeToolRequest
     | SessionList
+    | CommandList
     | History
     | Result,
     Field(discriminator="type"),

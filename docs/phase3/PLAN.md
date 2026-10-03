@@ -48,7 +48,7 @@ over stdio and HTTP.
   anyone to ask (`-p`) they stay off.
 - `cmcoder doctor` has an "MCP servers" section; `cmcoder trust` lists a
   project's servers.
-- Prompts as slash commands come with item 3.
+- Prompts as slash commands: done with item 3.
 
 ### 2. Hooks
 
@@ -80,6 +80,25 @@ over stdio and HTTP.
   (`description`, `argument-hint`, `model`, `allowed-tools`).
 - They expand to a prompt; no command runs shell code on its own.
 - Listed in `/help`, completed in the REPL, the TUI and the VS Code panel.
+
+**Status: done.** `src/cmcoder/core/commands.py`, `Agent.expand_command` and
+`Agent.command_list` in `core/agent.py`; tests in `tests/test_commands.py`
+(and a completion test in `vscode/test/webview.test.ts`).
+- Files are read again each time, so a new or edited command works at once.
+  Built-in names (`/help`, `/compact`, ...) can't be replaced.
+- `allowed-tools` become allow rules for that turn only
+  (`PermissionPolicy.turn_allow`, cleared when the turn ends, even if it's
+  interrupted); deny rules and high-risk commands still win. A repository's
+  commands get them only in a trusted project; managed-only rules switch them
+  off.
+- MCP prompts: `/mcp__<server>__<prompt> args` (words fill the prompt's
+  arguments in order; the last one takes the rest; missing required ones are
+  reported).
+- VS Code: `list_commands` → `command_list` in the protocol; a `user_message`
+  starting with a command runs it (`/compact` too); text like `/usr/bin/x
+  fails` that isn't a command is sent as an ordinary prompt.
+- `model` in the frontmatter is not used yet (it needs a per-turn model
+  switch; it comes with subagents' models in item 4).
 
 ### 4. Subagents (`Task` tool)
 
@@ -129,7 +148,7 @@ binary). Output styles and the status line (later). Plugins and marketplaces.
 
 - [x] 1. MCP client
 - [x] 2. Hooks
-- [ ] 3. Custom slash commands
+- [x] 3. Custom slash commands
 - [ ] 4. Subagents (`Task`)
 - [ ] 5. Skills
 - [ ] 6. Front ends (VS Code, doctor, trust)

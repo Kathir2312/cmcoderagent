@@ -168,3 +168,29 @@ test("model output can't inject markup: allowlist after escaping", async () => {
   assert.equal(await page.evaluate(() => (window as unknown as { pwned?: number }).pwned), undefined);
   await page.close();
 });
+
+test("slash-command completion: list, filter, Tab to complete, then send", async () => {
+  const { page, ev, sent } = await panel();
+  await page.type("textarea", "/");
+  assert.deepEqual((await sent()).at(-1), { kind: "listCommands" });
+  await ev({
+    type: "command_list",
+    commands: [
+      { name: "compact", description: "Summarise", argument_hint: "[focus]", origin: "built-in" },
+      { name: "review", description: "Review a <b>file</b>", argument_hint: "<file>", origin: "project" },
+      { name: "release:notes", description: "Notes", argument_hint: "", origin: "user" },
+    ],
+  });
+  assert.equal(await page.locator(".commands .command").count(), 3);
+  await page.type("textarea", "re");
+  assert.equal(await page.locator(".commands .command").count(), 2);
+  assert.equal(await page.textContent(".commands .selected"), "/review <file>Review a <b>file</b> (project)");
+  await page.press("textarea", "ArrowDown");
+  await page.press("textarea", "Tab");
+  assert.equal(await page.inputValue("textarea"), "/release:notes ");
+  assert.equal(await page.isHidden(".commands"), true);
+  await page.type("textarea", "v2");
+  await page.press("textarea", "Enter");
+  assert.deepEqual((await sent()).at(-1), { kind: "send", text: "/release:notes v2", includeContext: false });
+  await page.close();
+});

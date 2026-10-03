@@ -20,6 +20,7 @@ from ..config.settings import (
     find_project_root,
 )
 from ..core.agent import Agent, AskFn
+from ..core.commands import CommandSource
 from ..core.compaction import Summarizer
 from ..core.hooks import HookRunner
 from ..core.permissions import ModeNotAllowed, PermissionPolicy
@@ -246,6 +247,7 @@ async def build_agent(settings: Settings, opts: AgentOptions) -> Agent:
         if settings.mcp_servers or settings.project_mcp_servers
         else None,
         hooks=runner if (runner := HookRunner(settings, root)).hooks else None,
+        commands=CommandSource(root, settings.project_trusted),
     )
     if opts.continue_session or opts.resume:
         resume_session(agent, settings, root, opts.resume)

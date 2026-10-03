@@ -138,6 +138,28 @@ for `PreToolUse` (an "allow" skips a normal prompt but never a deny rule or a hi
 stdout from `UserPromptSubmit`/`SessionStart` is added as context. A project's hooks are used only in a trusted
 project and ask once before they first run; administrators can set `allowManagedHooksOnly`.
 
+### Custom slash commands
+
+A Markdown file is a command: `~/.cmcoder/commands/review.md` is `/review` in every project,
+`.cmcoder/commands/review.md` only in this one (yours win on a name clash), and subfolders are namespaces
+(`.cmcoder/commands/db/migrate.md` is `/db:migrate`). Same format as Claude Code:
+
+```markdown
+---
+description: Review a file for bugs
+argument-hint: <file>
+allowed-tools: Read, Grep, Bash(git log:*)
+---
+Review $1 for bugs, then suggest tests. Extra notes: $ARGUMENTS
+```
+
+`$ARGUMENTS` is everything after the command and `$1`..`$9` its words (quotes group words); with no placeholder the
+arguments are added at the end. `allowed-tools` are allow rules for that one turn (a repository's commands get
+them only in a trusted project, and never with managed-only rules). A command only becomes a prompt: it never
+runs anything by itself. MCP servers' prompts are commands too: `/mcp__<server>__<prompt> args`. Commands are
+listed in `/help` and completed as you type in the terminal, the TUI and the VS Code panel (`/compact` works
+there too).
+
 ### Project memory
 
 cmcoder reads `CMCODER.md` (and `AGENTS.md`) from `~/.cmcoder/`, the project root and each folder down to the

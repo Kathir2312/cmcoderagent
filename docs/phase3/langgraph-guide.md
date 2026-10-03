@@ -83,3 +83,28 @@ without changing anything.
 cmcoder's users configure it, they don't program it: hooks are commands in a
 JSON file, so a team can share them in a repository. That's also why a
 repository's hooks need trust and approval before they run.
+
+## 3. Custom slash commands
+
+### The LangGraph way
+
+LangChain has **prompt templates** (`ChatPromptTemplate.from_template("Review
+{file}")`) filled in code, and LangSmith's prompt hub to share them. MCP
+servers' prompts can be loaded with `langchain-mcp-adapters`
+(`load_mcp_prompt`).
+
+### The cmcoder way
+
+| LangChain / LangGraph | cmcoder |
+|---|---|
+| `PromptTemplate` with `{file}` | a Markdown file with `$1` / `$ARGUMENTS` |
+| prompt hub / a Python module | `.cmcoder/commands/` in the repository, `~/.cmcoder/commands/` for you |
+| `load_mcp_prompt(session, "review", arguments=...)` | `/mcp__server__review app.py` |
+| tools bound for one call (`bind_tools`) | `allowed-tools`: allow rules for one turn |
+
+### Why they differ
+
+The person at the keyboard picks a command; the program doesn't. So commands
+are files with a name, a description and completion, and the only thing they
+can change besides the prompt is the permission rules for that turn, which a
+repository gets only when the project is trusted.

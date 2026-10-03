@@ -199,6 +199,8 @@ class PermissionPolicy:
         self.high_risk = high_risk
         self.allow = [Rule.parse(r) for r in allow or []]
         self.deny = [Rule.parse(r) for r in deny or []]
+        # A slash command's `allowed-tools`: allow rules for one turn only.
+        self.turn_allow: list[Rule] = []
 
     @property
     def mode(self) -> str:
@@ -223,6 +225,10 @@ class PermissionPolicy:
         parsed = Rule.parse(rule)
         if all(str(r) != str(parsed) for r in self.allow):
             self.allow.append(parsed)
+
+    def set_turn_allow(self, rules: list[str]) -> None:
+        """Allow rules for the current turn (none with managed-only rules)."""
+        self.turn_allow = [] if self.allow_rules_locked else [Rule.parse(r) for r in rules]
 
     def _rule_matches(
         self, rule: Rule, tool: Tool, target: str | Path | None, ctx: ToolContext
@@ -279,6 +285,9 @@ class PermissionPolicy:
         for rule in self.allow:
             if self._rule_matches(rule, tool, target, ctx):
                 return PermissionCheck(Decision.ALLOW, f"allowed by rule {rule}")
+        for rule in self.turn_allow:
+            if self._rule_matches(rule, tool, target, ctx):
+                return PermissionCheck(Decision.ALLOW, f"allowed by the command ({rule})")
 
         if isinstance(target, Path) and is_secret(target, ctx.project_root):
             return PermissionCheck(

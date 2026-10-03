@@ -22,18 +22,36 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
+from textual.suggester import Suggester
 from textual.widgets import Button, Input, Label, Markdown, Static
 from textual.worker import Worker
 
 from .. import __version__
 from ..config.settings import Settings, ignored_settings_message
 from ..core.agent import Agent, PermissionAnswer, PermissionRequest
+from ..core.commands import BUILT_IN, help_lines
 from ..core.permissions import MODES, ModeNotAllowed
 from ..mcp_client import status_lines
 from ..protocol import events as ev
 from ..tools.todo import MARKS
 from .factory import AgentOptions, build_agent
 from .repl import Repl, output_preview, short_rule
+
+
+class SlashSuggester(Suggester):
+    """Suggests the rest of a `/name` (built-in or yours); Right arrow accepts."""
+
+    def __init__(self, app: Any) -> None:
+        super().__init__(use_cache=False, case_sensitive=True)
+        self.app = app
+
+    async def get_suggestion(self, value: str) -> str | None:
+        agent = self.app.agent
+        if agent is None or not value.startswith("/") or " " in value:
+            return None
+        names = sorted({*BUILT_IN, *agent.command_list()})
+        return next(("/" + n for n in names if n.startswith(value[1:]) and n != value[1:]), None)
+
 
 HELP = """\
 /help              show this help
@@ -152,7 +170,11 @@ class CmcoderApp(App[int]):
 
     def compose(self) -> ComposeResult:
         yield VerticalScroll(id="log")
-        yield Input(placeholder="Ask cmcoder…  (/help for commands)", id="prompt")
+        yield Input(
+            placeholder="Ask cmcoder…  (/help for commands)",
+            id="prompt",
+            suggester=SlashSuggester(self),
+        )
         yield Static(id="status")
 
     async def on_mount(self) -> None:
@@ -326,6 +348,8 @@ class CmcoderApp(App[int]):
             self.exit(0)
         elif name == "help":
             self.write(HELP, "dim")
+            if custom := help_lines(a.command_list()):
+                self.write(Text("Your commands\n" + "\n".join(custom)), "dim")
         elif name == "clear":
             a.clear()
             self._prompt_tokens = 0
@@ -371,7 +395,22 @@ class CmcoderApp(App[int]):
         elif name in ("resume", "rewind"):
             self.write(f"/{name} is in the classic UI for now: run cmcoder without --tui.", "warn")
         else:
-            self.write(f"Unknown command /{name}. Type /help.", "err")
+            try:
+                expansion, warnings = await a.expand_command(line)
+            except ValueError as e:
+                self.write(str(e), "err")
+                expansion, warnings = None, []
+                name = ""
+            for w in warnings:
+                self.write(f"⚠ {w}", "warn")
+            if expansion is not None:
+                self.turn = self.run_worker(
+                    self.stream(a.run(expansion.prompt, allow=expansion.allowed_tools)),
+                    exclusive=True,
+                    group="turn",
+                )
+            elif name:
+                self.write(f"Unknown command /{name}. Type /help.", "err")
         self.update_status()
 
     def action_interrupt(self) -> None:
