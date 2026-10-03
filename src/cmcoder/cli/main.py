@@ -380,7 +380,8 @@ def trust(
         console.print("Its .cmcoder settings currently set nothing that needs trust.")
     console.print("[dim]Gateways (providers) are never read from a project, trusted or not.[/dim]")
     if not yes:
-        if not sys.stdin.isatty():
+        # Both ends: on Windows the NUL device counts as a terminal for stdin.
+        if not (sys.stdin.isatty() and sys.stdout.isatty()):
             err_console.print("[red]error:[/red] not a terminal; use --yes to confirm.")
             raise typer.Exit(2)
         if not typer.confirm("Trust this project?", default=False):

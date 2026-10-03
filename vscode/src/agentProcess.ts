@@ -177,9 +177,9 @@ export function resolveExecutable(command: string, cwd: string, env: NodeJS.Proc
     .filter((d) => d && path.isAbsolute(d))
     .filter((d) => (windows ? path.resolve(d).toLowerCase() !== here.toLowerCase() : path.resolve(d) !== here));
   const exts = windows
-    ? (env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD").split(";").filter(Boolean)
+    ? (env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD").toLowerCase().split(";").filter(Boolean)
     : [""];
-  const named = windows && exts.some((e) => command.toLowerCase().endsWith(e.toLowerCase()));
+  const named = windows && exts.some((e) => command.toLowerCase().endsWith(e));
   for (const dir of dirs) {
     for (const ext of named ? [""] : exts) {
       const candidate = path.join(dir, command + ext);
