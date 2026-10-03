@@ -11,6 +11,10 @@
   # both ways, checking that each task gives the same result and tool calls:
   uv run python evals/run.py --mock --via both
 
+  # With scripted replies served the way Open WebUI serves them (an Ollama
+  # model, or a model on an OpenAI-compatible backend):
+  uv run python evals/run.py --mock --gateway openwebui-ollama
+
 Each task folder holds:
   task.json         {"prompt": ..., "check": "<shell command>", "permission_mode": ...,
                      "max_turns": ..., "args": [extra cmcoder arguments, e.g. --mcp-config]}
@@ -47,6 +51,14 @@ from cmcoder.core.steer import file_work_redirect
 FILE_TOOLS = ("Read", "Write", "Edit", "Glob", "Grep")
 
 ROOT = Path(__file__).resolve().parent
+
+# --mock --gateway: how the scripted replies are served (testing/mock_server.py).
+# Name -> (Open WebUI models and their backends, or None for LiteLLM; model).
+GATEWAYS: dict[str, tuple[dict[str, str] | None, str]] = {
+    "litellm": (None, "qwen3-27b"),
+    "openwebui-ollama": ({"qwen3:32b": "ollama"}, "qwen3:32b"),
+    "openwebui-openai": ({"qwen3-vllm": "openai"}, "qwen3-vllm"),
+}
 TASKS = ROOT / "tasks"
 
 
@@ -162,16 +174,19 @@ def run_task(
         from cmcoder.testing.mock_server import MockServer, MockState
 
         script = json.loads((task_dir / "mock_script.json").read_text(encoding="utf-8"))
-        server = MockServer(MockState(script, api_key="sk-eval"))
+        webui, model = GATEWAYS[args.gateway]
+        server = MockServer(MockState(script, api_key="sk-eval", openwebui=webui))
         server.__enter__()
         env.update(
             {
-                "CMCODER_BASE_URL": server.base_url,
+                "CMCODER_BASE_URL": server.root_url if webui is not None else server.base_url,
                 "CMCODER_API_KEY": "sk-eval",
-                "CMCODER_MODEL": "qwen3-27b",
+                "CMCODER_MODEL": model,
                 "CMCODER_CONFIG_DIR": str(run_dir / ".config"),
             }
         )
+        if webui is not None:
+            env["CMCODER_PROVIDER_TYPE"] = "openwebui"
         for var in ("HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"):
             env.pop(var, None)
 
@@ -214,6 +229,7 @@ def run_task(
             command = (data.get("input") or {}).get("command")
             if name == "Bash" and isinstance(command, str) and file_work_redirect(command):
                 bash_file_work += 1
+    truncated = list(server.state.truncated) if server is not None else []
     output_file = work / ".cmcoder_eval_output.txt"
     output_file.write_text(str(result.get("result", "")), encoding="utf-8")
     (work / ".cmcoder_eval_stderr.txt").write_text(stderr, encoding="utf-8")
@@ -232,7 +248,8 @@ def run_task(
     assert isinstance(usage, dict)
     return {
         "task": task_dir.name,
-        "passed": check.returncode == 0 and not timed_out,
+        # Ollama drops the start of a prompt longer than num_ctx without an error.
+        "passed": check.returncode == 0 and not timed_out and not truncated,
         "agent_status": "timeout" if timed_out else result.get("subtype", "no result"),
         "turns": result.get("num_turns"),
         "prompt_tokens": usage.get("prompt_tokens"),
@@ -241,7 +258,8 @@ def run_task(
         "tools": tools,
         "file_tool_calls": sum(tools.get(t, 0) for t in FILE_TOOLS),
         "bash_file_work": bash_file_work,
-        "check_output": (check.stdout + check.stderr)[-500:],
+        "check_output": (check.stdout + check.stderr)[-500:]
+        + (f"\nOllama truncated the prompt ({len(truncated)} requests)" if truncated else ""),
         "workdir": str(work),
     }
 
@@ -252,6 +270,12 @@ def main() -> int:
     )
     ap.add_argument(
         "--mock", action="store_true", help="use scripted replies instead of a real model"
+    )
+    ap.add_argument(
+        "--gateway",
+        choices=sorted(GATEWAYS),
+        default="litellm",
+        help="with --mock: serve the replies like LiteLLM (default) or Open WebUI",
     )
     ap.add_argument("--model", help="model to evaluate (default: settings)")
     ap.add_argument("--task", action="append", help="run only these tasks")

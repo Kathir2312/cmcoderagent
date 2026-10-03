@@ -36,8 +36,8 @@ jobs:
       - run: uv sync
       - name: Lint
         run: |
-          uv run ruff check src tests evals
-          uv run ruff format --check src tests evals
+          uv run ruff check src tests evals packaging
+          uv run ruff format --check src tests evals packaging
       - name: Type check
         run: uv run pyright
       - name: Show environment (cmcoder doctor, local checks)
@@ -47,6 +47,8 @@ jobs:
         run: uv run pytest -q
       - name: Evals (scripted model), through -p and the VS Code protocol, with a parity check
         run: uv run python evals/run.py --mock --via both
+      - name: Evals (scripted model) served the way Open WebUI serves an Ollama model
+        run: uv run python evals/run.py --mock --gateway openwebui-ollama
 
   litellm-gateway:
     name: integration (real LiteLLM proxy)
