@@ -227,5 +227,7 @@ test("a subagent's steps are listed inside its Task card", async () => {
   assert.equal(await page.locator(".tool").count(), 1, "one card: the subagent's steps are inside it");
   assert.deepEqual(await page.locator(".tool .steps .step").allTextContents(), ["● Grep(parse)", "● Read(x.py) — No such file"]);
   assert.match((await page.textContent(".tool")) ?? "", /└ 2 tool uses/);
+  assert.equal(await page.textContent(".tool details.steps summary"), "2 subagent steps");
+  assert.equal(await page.isVisible(".tool .steps .step"), false, "folded once the Task is done");
   await page.close();
 });

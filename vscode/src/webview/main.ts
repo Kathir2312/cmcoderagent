@@ -197,7 +197,13 @@ function subagentStep(ev: ToolUse | ToolResult | PermissionDenied, parentId: str
   const card = toolCards.get(parentId);
   if (ev.type === "tool_use") {
     if (!card) return;
-    const steps = card.querySelector(".steps") ?? card.appendChild(el("div", "steps"));
+    let steps = card.querySelector<HTMLDetailsElement>("details.steps");
+    if (!steps) {
+      steps = card.appendChild(document.createElement("details"));
+      steps.className = "steps";
+      steps.open = true; // folded when the subagent finishes
+      steps.append(el("summary", "", "Subagent steps"));
+    }
     subagentSteps.set(ev.id, steps.appendChild(el("div", "step", `● ${ev.label}`)));
     showStatus("Subagent working…");
     return;
@@ -320,6 +326,13 @@ function toolResult(ev: ToolResult): void {
   if (ev.name === "TodoWrite") return;
   const card = toolCards.get(ev.id) ?? append(el("div", "tool"));
   toolCards.delete(ev.id);
+  const steps = card.querySelector<HTMLDetailsElement>("details.steps");
+  if (steps) {
+    // A finished subagent: fold its steps away (a click shows them again).
+    const n = steps.querySelectorAll(".step").length;
+    steps.open = false;
+    steps.querySelector("summary")!.textContent = `${n} subagent step${n === 1 ? "" : "s"}`;
+  }
   if (ev.is_error) {
     card.append(el("pre", "result error", clip(ev.content, 4)));
     return;

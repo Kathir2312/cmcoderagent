@@ -470,6 +470,44 @@ class Doctor:
         if find_shell() is None:
             self.report(FAIL, "Hooks need bash to run", SHELL_HELP)
 
+    def check_extensions(self) -> None:
+        """Custom commands, subagents and skills: what's found, and from where."""
+        from ..core.commands import load_commands
+        from ..core.skills import load_skills
+        from ..core.subagents import load_agents, untrusted_project_agents
+
+        root = find_project_root(Path.cwd().resolve())
+        trusted = self.settings.project_trusted
+        commands = load_commands(root)
+        agents = {n: a for n, a in load_agents(root, trusted).items() if a.origin != "built-in"}
+        skills = load_skills(root)
+        ignored = [] if trusted else untrusted_project_agents(root)
+        if not (commands or agents or skills or ignored):
+            return
+        self.section("Commands, agents and skills")
+        for c in commands.values():
+            tools = (
+                f" · allows {', '.join(c.allowed_tools)} for its turn" if c.allowed_tools else ""
+            )
+            if c.origin == "project" and c.allowed_tools and not trusted:
+                tools = " · its allowed-tools apply once the project is trusted"
+            self.report(INFO, f"/{c.name}: {c.description or '(no description)'}", c.origin + tools)
+        for a in agents.values():
+            self.report(
+                INFO,
+                f"agent {a.name}: {a.description}",
+                f"{a.origin} · tools: {', '.join(a.tools) if a.tools else 'all'}"
+                f" · model: {a.model or 'inherit'}",
+            )
+        if ignored:
+            self.report(
+                WARN,
+                f"Project agents not used: {', '.join(ignored)}",
+                "the project isn't trusted (`cmcoder trust`)",
+            )
+        for sk in skills.values():
+            self.report(INFO, f"skill {sk.name}: {sk.description}", sk.origin)
+
     async def check_mcp(self, probe: bool) -> None:
         """MCP servers: configured, approved, and (with probes) whether they start."""
         s = self.settings
@@ -516,6 +554,7 @@ class Doctor:
                 await self.check_api(provider_name, models, probe)
         await self.check_mcp(probe)
         self.check_hooks()
+        self.check_extensions()
         self.console.print()
         if self.failed:
             self.console.print(

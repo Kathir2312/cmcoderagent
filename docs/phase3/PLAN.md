@@ -163,6 +163,19 @@ over stdio and HTTP.
 - `cmcoder doctor` and `cmcoder trust` list MCP servers, hooks, commands,
   agents and skills, and what trust would enable.
 
+**Status: done.** Most of it came with items 1–5 (protocol pairs, rendering);
+this item added the rest, with tests in `tests/test_front_ends.py` and
+`vscode/test/webview.test.ts`:
+- VS Code: `/mcp` shows the servers' state in the panel (not sent to the
+  model) and is offered in completion with `/compact`; a subagent's steps are
+  listed inside its Task card, open while it works and folded when it's done.
+  MCP-server and hook approvals use the normal permission card.
+- `cmcoder doctor`: a "Commands, agents and skills" section (origin, a
+  command's `allowed-tools` and whether they apply, an agent's tools and
+  model, project agents left out because the project isn't trusted).
+- `cmcoder trust`: also lists the project's agents and the commands whose
+  `allowed-tools` trust would let apply.
+
 ### 7. Tests, evals and security review
 
 - Real MCP servers in the tests (stdio and HTTP, written with the same SDK),
@@ -189,7 +202,7 @@ binary). Output styles and the status line (later). Plugins and marketplaces.
 - [x] 3. Custom slash commands
 - [x] 4. Subagents (`Task`)
 - [x] 5. Skills
-- [ ] 6. Front ends (VS Code, doctor, trust)
+- [x] 6. Front ends (VS Code, doctor, trust)
 - [ ] 7. Tests, evals and security review
 - [ ] 8. Guides and docs
 - [ ] Hands-on use on Windows (CLI and VS Code), and `STATUS.md`

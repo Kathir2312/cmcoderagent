@@ -27,6 +27,7 @@ from ..core.commands import BUILT_IN, split_line
 from ..core.ide import IDE_TOOLS, format_ide_context
 from ..core.permissions import MODES, Decision, ModeNotAllowed
 from ..core.sessions import list_sessions
+from ..mcp_client import status_lines
 from ..protocol import events as ev
 from ..protocol import messages as msg
 from ..providers.openai_compat import OpenAICompatProvider, ProviderError
@@ -233,6 +234,11 @@ class StdioServer:
                 yield event
             yield self._result("success", "", False, started)
             return
+        if name == "mcp":  # the servers' state, shown as a reply (not sent to the model)
+            lines = "\n".join(status_lines(agent.mcp))
+            yield ev.AssistantMessage(text=f"**MCP servers**\n\n```text\n{lines}\n```")
+            yield self._result("success", "", False, started)
+            return
         try:
             expansion, warnings = await agent.expand_command(text)
         except ValueError as e:
@@ -277,7 +283,13 @@ class StdioServer:
                 description="Summarise the conversation so far to free context",
                 argument_hint="[focus]",
                 origin="built-in",
-            )
+            ),
+            ev.CommandInfo(
+                name="mcp",
+                description="MCP servers: status and tools",
+                argument_hint="",
+                origin="built-in",
+            ),
         ]
         for c in sorted(agent.command_list().values(), key=lambda c: c.name):
             out.append(

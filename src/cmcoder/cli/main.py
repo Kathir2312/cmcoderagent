@@ -367,7 +367,17 @@ def trust(
         set_project_trust(root, False)
         console.print(f"No longer trusting {root}.")
         return
+    from ..core.commands import load_commands
+    from ..core.subagents import untrusted_project_agents
+
     preview = project_settings_preview(root)
+    if agents := untrusted_project_agents(root):
+        preview.append(f".cmcoder/agents: subagents ({', '.join(agents)}) for the Task tool")
+    for c in load_commands(root).values():
+        if c.origin == "project" and c.allowed_tools:
+            preview.append(
+                f".cmcoder/commands: /{c.name} allows {', '.join(c.allowed_tools)} for its turn"
+            )
     if is_project_trusted(root):
         console.print(f"{root} is already trusted.")
         return
