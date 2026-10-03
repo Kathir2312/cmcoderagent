@@ -28,8 +28,9 @@ shell commands) runs locally; the model is always reached over the network.
 | D10 | Reference models | **Qwen3 ~7B** as the small/fast model and **Qwen3 ~27B** as the main model (exact IDs to be read from the server's `/v1/models`). See §5.1. |
 | D11 | Product and command name | Product **cmcoder**; command `cmcoder`; config folder `.cmcoder/`; memory file `CMCODER.md`. |
 | D12 | Model gateway | **LiteLLM proxy** exposing an OpenAI-compatible endpoint, with Qwen3 models behind it. See §4.7. |
-| D13 | Authentication | **API key now** (LiteLLM virtual key, sent as `Authorization: Bearer`). Built behind an auth-provider interface so SSO (e.g. Okta/OIDC) can be added later without touching the rest of the engine. |
+| D13 | Authentication | **API key now** (LiteLLM virtual key, sent as `Authorization: Bearer`). Built behind an auth-provider interface. SSO (e.g. Okta/OIDC) is **not planned** (removed from Phase 4, 3 Oct 2026); the interface would let it be added without touching the rest of the engine. |
 | D14 | TLS | Server uses **internal (company CA) certificates**. Trusted through the OS certificate store by default, with a CA-file override. |
+| D15 | Second gateway | **Open WebUI** (its OpenAI-compatible `/api` endpoints, API key from the user's account), in addition to LiteLLM. Phase 4 item 1. |
 
 ## 2. Goals and non-goals
 
@@ -163,7 +164,7 @@ It must cope with these known differences between servers:
 | HTTP 429 / 5xx / dropped stream | Retry with backoff and jitter, honouring `Retry-After`; resume the turn |
 | Slow first token on a busy or cold remote server (model loading) | Separate connect, first-token and idle-stream timeouts; show "waiting for model" in the UI |
 
-Later, optional adapters: OpenAI **Responses API**, native **Anthropic** (for prompt caching and extended thinking).
+Other API formats (OpenAI **Responses API**, native **Anthropic**) are **not planned**: both supported gateways (LiteLLM, Open WebUI) speak the chat-completions format (decided 3 Oct 2026).
 
 ### 4.3 Remote Ollama notes
 - Reached at `https://<host>/v1` (or `http://<host>:11434/v1` on a trusted network).
@@ -242,7 +243,7 @@ new provider, not a rewrite:
 |---|---|---|
 | `apiKey` | Phase 0 | Static key from keychain/env, `Authorization: Bearer` |
 | `apiKeyHelper` | Phase 1 | Runs a command that prints a key (works with any company script) |
-| `oidc` (e.g. Okta) | Later, when needed | Device-code sign-in in the browser, token cached in keychain, refreshed automatically; LiteLLM validates the JWT |
+| `oidc` (e.g. Okta) | Not planned (removed 3 Oct 2026) | Device-code sign-in in the browser, token cached in keychain, refreshed automatically; LiteLLM validates the JWT |
 
 ### 4.7 LiteLLM gateway specifics
 
@@ -460,13 +461,13 @@ Started early, because quality depends heavily on the model:
 | **1 — Daily driver** | **Auto-compaction first** (the 32K default window is the binding constraint, §16.2), **the user-trial fixes in §16.3**, Textual TUI, sessions/resume, small/fast model jobs (titles, summaries), prompted-tool fallback and repair, edit-format variants, TodoWrite, checkpoints, **managed settings** (moved from Phase 4, see [phase1/PLAN.md](phase1/PLAN.md) item 5) | Comfortable for daily use on a real repo |
 | **2 — VS Code** | `--protocol stdio`, generated TS protocol types, extension, webview chat, native diffs, IDE context and tools | Same task behaves the same in CLI and VS Code |
 | **3 — Extensibility** | MCP client, hooks, custom slash commands, subagents (`Task`) with per-role models, skills | Teams can customise it without forking |
-| **4 — Hardening** | SSO auth provider (e.g. Okta/OIDC) if needed, Responses API / Anthropic adapters, OpenTelemetry, standalone binary + platform-specific VSIX, **Bash sandbox on Linux, macOS and Windows** (moved from Phase 3) | Release candidate |
+| **4 — Hardening** | **Open WebUI gateway**, Bash sandbox (Linux, macOS, and Windows through WSL2; moved from Phase 3), OpenTelemetry (off by default), standalone binary + platform-specific VSIX. SSO and the Responses/Anthropic adapters were dropped (see [phase4/PLAN.md](phase4/PLAN.md)) | Release candidate |
 
 Per-phase plans, guides and status reports live in [docs/README.md](README.md) (`docs/phase0/`, `docs/phase1/`, …). Finished phases are frozen as git snapshots (Phase 0: commit `ba6669f`, tag `phase0`; Phase 1: tag `phase1`; Phase 2: tag `phase2`; Phase 3: tag `phase3`).
 
 ### 16.1 Phase 0 status
 
-**Phase 0 is complete**; see [phase0/STATUS.md](phase0/STATUS.md). **Phase 1 is complete**; see [phase1/STATUS.md](phase1/STATUS.md). **Phase 2 is complete**; see [phase2/STATUS.md](phase2/STATUS.md). **Phase 3 is complete**; see [phase3/STATUS.md](phase3/STATUS.md). Phase 4 (Hardening) is next.
+**Phase 0 is complete**; see [phase0/STATUS.md](phase0/STATUS.md). **Phase 1 is complete**; see [phase1/STATUS.md](phase1/STATUS.md). **Phase 2 is complete**; see [phase2/STATUS.md](phase2/STATUS.md). **Phase 3 is complete**; see [phase3/STATUS.md](phase3/STATUS.md). Phase 4 (Hardening) is in progress: [phase4/PLAN.md](phase4/PLAN.md).
 
 
 Delivered:
