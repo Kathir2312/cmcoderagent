@@ -189,7 +189,9 @@ downloaded from this development environment).
 - Real VS Code (`npm run test:integration`, Linux CI under xvfb): opens the
   chat, sends a prompt, reviews the Edit in the diff editor, accepts it there,
   checks the file; then the model calls `getDiagnostics` and gets a problem
-  the test added.
+  the test added. **Passing in CI** (commit `29cef63`: all 9 jobs green).
+  Its first run found a real issue: a diff was offered for an Edit the tool
+  would refuse (file not read first); such edits now get no diff.
 - Found by CI on the way: Windows path tests still expected `\`, and Glob
   printed `\` on Windows (fixed: `/` everywhere); the extension tests needed
   Node 22.
