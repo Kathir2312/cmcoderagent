@@ -1,0 +1,70 @@
+name: Release build
+
+# The standalone cmcoder (PyInstaller, no Python needed) and a VS Code
+# extension per platform with it inside. Each build is tested as users run it
+# (tests/test_standalone.py); on Linux the extension is also run in a real VS
+# Code with the bundled cmcoder. Artifacts: cmcoder-<target> (the program
+# folder) and cmcoder-<target>.vsix.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "src/**"
+      - "packaging/**"
+      - "vscode/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/release.yml"
+
+jobs:
+  build:
+    name: build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, target: linux-x64 }
+          - { os: windows-latest, target: win32-x64 }
+          - { os: macos-latest, target: darwin-arm64 }
+    steps:
+      - uses: actions/checkout@v4
+      - name: bubblewrap (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update && sudo apt-get install -y bubblewrap
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: uv sync
+      - name: Build the standalone cmcoder
+        run: uv run --with pyinstaller python packaging/build.py
+      - name: Test it as users run it
+        shell: bash
+        run: |
+          exe=dist/cmcoder/cmcoder; [ "$RUNNER_OS" = Windows ] && exe=dist/cmcoder/cmcoder.exe
+          CMCODER_TEST_BINARY=$exe uv run pytest -q tests/test_standalone.py
+      - name: Package the extension with it
+        working-directory: vscode
+        run: npm ci
+      - run: uv run python packaging/vsix.py
+      - name: The extension in a real VS Code, using the bundled cmcoder (Linux)
+        if: runner.os == 'Linux'
+        working-directory: vscode
+        env:
+          CMCODER_TEST_BUNDLED: "1"
+        run: |
+          export CMCODER_TEST_PYTHON="$(uv run python -c 'import sys; print(sys.executable)')"
+          xvfb-run -a npm run test:integration
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cmcoder-${{ matrix.target }}
+          path: dist/cmcoder
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cmcoder-${{ matrix.target }}.vsix
+          path: vscode/cmcoder-${{ matrix.target }}.vsix

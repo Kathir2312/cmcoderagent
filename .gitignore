@@ -10,3 +10,5 @@ build/
 .cmcoder/credentials.json
 evals/.runs/
 .coverage
+vscode/bin/
+*.vsix

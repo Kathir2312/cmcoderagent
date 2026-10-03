@@ -243,10 +243,10 @@ class Sandbox:
         for p in hidden:
             argv += ["--tmpfs", str(p)] if p.is_dir() else ["--ro-bind", "/dev/null", str(p)]
         argv += ["--chdir", str(cwd)]
-        bridge = Path(__file__).with_name("bridge.py")
         sock = self.tmp / "proxy.sock"
+        bridge = " ".join(f'"{a}"' for a in bridge_command(BRIDGE_PORT, sock))
         start = (
-            f'"{sys.executable}" -I "{bridge}" {BRIDGE_PORT} "{sock}" >/dev/null 2>&1 &\n'
+            f"{bridge} >/dev/null 2>&1 &\n"
             f"for _ in $(seq 100); do (: </dev/tcp/127.0.0.1/{BRIDGE_PORT}) 2>/dev/null "
             "&& break; sleep 0.02; done\n"
             f'exec "{shell}" --noprofile --norc\n'
@@ -260,6 +260,14 @@ class Sandbox:
         always_protected = [root / p for p in PROTECTED_IN_PROJECT]  # existing or not
         profile = seatbelt_profile(writable, [*protected, *always_protected], hidden)
         return ["/usr/bin/sandbox-exec", "-p", profile, shell, "--noprofile", "--norc"]
+
+
+def bridge_command(port: int, sock: Path) -> list[str]:
+    """How to start sandbox/bridge.py inside the sandbox: with this Python, or,
+    in the standalone build (no separate Python), cmcoder's own executable."""
+    if getattr(sys, "frozen", False):
+        return [sys.executable, "--sandbox-bridge", str(port), str(sock)]
+    return [sys.executable, "-I", str(Path(__file__).with_name("bridge.py")), str(port), str(sock)]
 
 
 def _sb(path: Path) -> str:

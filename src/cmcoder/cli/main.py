@@ -430,6 +430,12 @@ sub_app.add_typer(mcp_app, name="mcp")
 
 
 def run() -> None:
+    if sys.argv[1:2] == ["--sandbox-bridge"]:
+        # Inside the Linux sandbox (standalone build: no separate Python there).
+        from ..sandbox.bridge import main as bridge
+
+        bridge(sys.argv[2:])
+        return
     use_utf8_stdio()
     if len(sys.argv) > 1 and sys.argv[1] in SUBCOMMANDS:
         sub_app()

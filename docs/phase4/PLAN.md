@@ -144,6 +144,24 @@ collector; the prompt and file names never appear in what is sent).
   carries its `cmcoder` (PATH as fallback), so users need no Python or uv.
 - Built in CI as downloads; code signing only with a company certificate.
 
+**Status: done.** `packaging/build.py` (PyInstaller, a program folder, ~55 MB:
+starts fast and isn't unpacked to a temp folder on every run, which antivirus
+software also dislikes), `packaging/vsix.py` (the extension with it in
+`bin/cmcoder/`, `vsce package --target`), workflow
+`.github/workflows/release.yml` (Windows x64, Linux x64, macOS arm64; on code
+changes and on demand). The extension (`vscode/src/executable.ts`) uses the
+bundled program unless `cmcoder.executable` is set, for the chat and for Open in
+Terminal.
+- In the standalone build there's no separate Python, so the Linux sandbox's
+  bridge runs as `cmcoder --sandbox-bridge` (`sandbox.bridge_command`).
+- Tested as users run it: `tests/test_standalone.py` (version, doctor, a
+  `-p` turn with Read and Bash, the VS Code protocol, the sandbox bridge) on
+  each platform's build; on Linux the extension runs in a real VS Code with
+  the bundled program (`CMCODER_TEST_BUNDLED`). Executable bits survive in the
+  `.vsix` (checked).
+- Not done: code signing (needs a company certificate; unsigned programs may
+  get a SmartScreen / Gatekeeper warning the first time).
+
 ### 6. Tests, evals and security review
 
 - Evals through the Open WebUI mock; sandbox tests that try to escape.
@@ -166,7 +184,7 @@ client certificates: later, if needed.
 - [x] 2. Carry-overs (VS Code commands, TUI default, Node 22)
 - [x] 3. Bash sandbox
 - [x] 4. OpenTelemetry
-- [ ] 5. Standalone binary and per-platform VSIX
+- [x] 5. Standalone binary and per-platform VSIX
 - [ ] 6. Tests, evals and security review
 - [ ] 7. Guides and docs
 - [ ] Hands-on use on Windows (LiteLLM and Open WebUI), and `STATUS.md`

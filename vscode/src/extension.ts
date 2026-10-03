@@ -6,6 +6,7 @@ import * as vscode from "vscode";
 import { resolveExecutable } from "./agentProcess";
 import { ChatViewProvider } from "./chatView";
 import { DiffReview, SCHEME } from "./diffReview";
+import { cmcoderCommand } from "./executable";
 
 let chat: ChatViewProvider | undefined;
 
@@ -62,7 +63,7 @@ export function activate(context: vscode.ExtensionContext): CmcoderApi {
       if (feedback === undefined) return; // Esc: keep reviewing
       view.answer(id, false, false, feedback);
     }),
-    vscode.commands.registerCommand("cmcoder.openTerminal", openTerminal),
+    vscode.commands.registerCommand("cmcoder.openTerminal", () => openTerminal(context.extensionPath)),
     vscode.commands.registerCommand("cmcoder.showLog", () => log.show()),
     vscode.commands.registerCommand("cmcoder.openSettings", openSettings),
   );
@@ -74,10 +75,8 @@ export async function deactivate(): Promise<void> {
 }
 
 /** Runs the cmcoder CLI in VS Code's integrated terminal. */
-function openTerminal(): void {
-  const config = vscode.workspace.getConfiguration("cmcoder");
-  const command = config.get<string>("executable") || "cmcoder";
-  const args = config.get<string[]>("executableArgs") ?? [];
+function openTerminal(extensionPath: string): void {
+  const { command, args } = cmcoderCommand(extensionPath);
   const folder = vscode.workspace.workspaceFolders?.[0]?.uri;
   // A full path: never a cmcoder.exe planted in the workspace (Windows).
   const program = resolveExecutable(command, folder?.fsPath ?? process.cwd());

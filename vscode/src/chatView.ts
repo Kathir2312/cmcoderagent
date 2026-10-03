@@ -5,6 +5,7 @@ import { randomBytes } from "node:crypto";
 import * as vscode from "vscode";
 import { AgentProcess } from "./agentProcess";
 import { DiffReview } from "./diffReview";
+import { cmcoderCommand } from "./executable";
 import { contextLabel, currentEditor, editorContext, IDE_TOOLS, runIdeTool } from "./editorContext";
 import type { AgentEvent, FileChange, RewindPoint } from "./protocol";
 import type { AgentState, FromWebview, ToWebview } from "./webviewMessages";
@@ -106,8 +107,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       return;
     }
     const config = vscode.workspace.getConfiguration("cmcoder");
-    const command = config.get<string>("executable") || "cmcoder";
-    const args = config.get<string[]>("executableArgs") ?? [];
+    const { command, args } = cmcoderCommand(this.extensionUri.fsPath);
     const mode = config.get<string>("permissionMode");
     const allArgs = [
       ...(mode ? ["--permission-mode", mode] : []),

@@ -31,6 +31,12 @@ uv tool install git+https://github.com/Kathir2312/cmcoderagent   # or: pipx inst
 
 For development: `uv sync`, then run it with `uv run cmcoder`.
 
+**Without Python:** the "Release build" workflow (GitHub → Actions) builds a standalone `cmcoder` for Windows x64,
+Linux x64 and macOS arm64 (`cmcoder-<platform>`: a folder with the program; put it on PATH) and a VS Code extension
+per platform with that `cmcoder` inside (`cmcoder-<platform>.vsix`): install it and the extension needs nothing
+else. It uses the bundled `cmcoder` unless you set `cmcoder.executable`. Build them yourself with
+`uv run --with pyinstaller python packaging/build.py`, then `uv run python packaging/vsix.py` (Node.js 22).
+
 ## Configure
 
 Create `~/.cmcoder/settings.json` (on Windows: `%USERPROFILE%\.cmcoder\settings.json`) (see [docs/settings.example.json](docs/settings.example.json)):

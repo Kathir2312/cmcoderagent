@@ -3,7 +3,7 @@
 //   uv run --project .. npm run test:integration   (or set CMCODER_TEST_PYTHON)
 
 import { spawn, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { runTests } from "@vscode/test-electron";
@@ -45,9 +45,17 @@ async function main(): Promise<void> {
   mkdirSync(join(workspace, ".git"), { recursive: true });
   mkdirSync(join(workspace, ".vscode"));
   writeFileSync(join(workspace, "app.py"), "x = 1\n");
+  // CMCODER_TEST_BUNDLED: no executable setting, so the extension starts the
+  // cmcoder bundled in bin/ (packaging/vsix.py puts it there); else this Python.
+  const bundled = Boolean(process.env.CMCODER_TEST_BUNDLED);
+  if (bundled && !existsSync(resolve(__dirname, "..", "bin", "cmcoder"))) {
+    throw new Error("CMCODER_TEST_BUNDLED is set but vscode/bin/cmcoder is missing");
+  }
   writeFileSync(
     join(workspace, ".vscode", "settings.json"),
-    JSON.stringify({ "cmcoder.executable": pythonPath, "cmcoder.executableArgs": ["-m", "cmcoder"] }),
+    JSON.stringify(
+      bundled ? {} : { "cmcoder.executable": pythonPath, "cmcoder.executableArgs": ["-m", "cmcoder"] },
+    ),
   );
 
   try {
