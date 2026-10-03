@@ -389,3 +389,8 @@ async def test_proposed_change_matches_what_the_tool_writes(
     # Overwriting shows the old content.
     over = write.proposed_change(WriteInput(file_path="m.py", content="z\n"), ctx)
     assert over is not None and over.before == f.read_bytes().decode()
+    # No preview for a file that wasn't read: the tool would refuse.
+    (project / "unread.py").write_text("a = 1\n")
+    unread = EditInput(file_path="unread.py", old_string="a = 1", new_string="a = 2")
+    assert edit.proposed_change(unread, ctx) is None
+    assert write.proposed_change(WriteInput(file_path="unread.py", content="b\n"), ctx) is None

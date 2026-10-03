@@ -53,6 +53,10 @@ export async function run(): Promise<void> {
   assert.deepEqual([ask.change?.before, ask.change?.after], ["x = 1\n", "x = 2\n"]);
   await until("the diff editor", () => diffTabs().length === 1);
   await vscode.commands.executeCommand("cmcoder.acceptChange");
+  const edited = await until("the Edit result", () =>
+    events.slice(mark).find((e) => e.type === "tool_result" && e.name === "Edit"),
+  );
+  assert.equal((edited as Extract<AgentEvent, { type: "tool_result" }>).is_error, false, JSON.stringify(edited));
   const done = await event("result", mark);
   assert.equal(done.result, "Changed x to 2.");
   assert.equal(readFileSync(app.fsPath, "utf8"), "x = 2\n");

@@ -22,6 +22,7 @@ async function main(): Promise<void> {
   writeFileSync(
     script,
     JSON.stringify([
+      { tool_calls: [{ name: "Read", arguments: { file_path: "app.py" } }] },
       { tool_calls: [{ name: "Edit", arguments: { file_path: "app.py", old_string: "x = 1", new_string: "x = 2" } }] },
       { content: "Changed x to 2." },
       { tool_calls: [{ name: "getDiagnostics", arguments: { file_path: "app.py" } }] },

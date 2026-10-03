@@ -129,8 +129,8 @@ class WriteTool(Tool):
 
     def proposed_change(self, args: WriteInput, ctx: ToolContext) -> FileChange | None:
         path = ctx.resolve(args.file_path)
-        if path.is_dir() or len(args.content) > MAX_CHANGE_PREVIEW_CHARS:
-            return None
+        if path.is_dir() or len(args.content) > MAX_CHANGE_PREVIEW_CHARS or ctx.check_fresh(path):
+            return None  # nothing to review: too big, or the write would be refused
         before = None
         if path.exists():
             before, err = _read_text(path)
@@ -212,6 +212,8 @@ class EditTool(Tool):
             if args.old_string == "" and len(args.new_string) <= MAX_CHANGE_PREVIEW_CHARS:
                 return FileChange(path, None, args.new_string)
             return None
+        if ctx.check_fresh(path):
+            return None  # the edit would be refused (file not read, or changed since)
         text, err = _read_text(path)
         if err or text is None or len(text) > MAX_CHANGE_PREVIEW_CHARS:
             return None
