@@ -292,7 +292,7 @@ class GlobTool(Tool):
         if not paths:
             return ToolResult("No files found.", summary="0 files")
         shown = paths[:MAX_GLOB_RESULTS]
-        body = "\n".join(str(p) for p in shown)
+        body = "\n".join(p.as_posix() for p in shown)  # "/" on every OS, like Grep
         if len(paths) > len(shown):
             body += f"\n\n({len(paths) - len(shown)} more files not shown; narrow the pattern)"
         return ToolResult(body, summary=f"{len(paths)} files")

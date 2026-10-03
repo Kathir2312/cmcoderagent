@@ -54,7 +54,6 @@ async def test_write_detects_external_change(ctx: ToolContext, project: Path) ->
     f = project / "a.txt"
     f.write_text("v1")
     await read(ctx, "a.txt")
-    import os
 
     os.utime(f, ns=(f.stat().st_atime_ns, f.stat().st_mtime_ns + 10_000_000))
     res = await WriteTool().run(WriteInput(file_path="a.txt", content="v2"), ctx)
@@ -119,10 +118,10 @@ async def test_glob_respects_gitignore(ctx: ToolContext, project: Path, search_e
     (project / ".hidden").mkdir()
     (project / ".hidden/c.py").write_text("")
     res = await GlobTool().run(GlobInput(pattern="**/*.py"), ctx)
-    assert os.path.join("src", "a.py") in res.content
+    assert "src/a.py" in res.content
     assert "build" not in res.content and ".hidden" not in res.content
     res = await GlobTool().run(GlobInput(pattern="*.py"), ctx)  # any depth, like ripgrep
-    assert os.path.join("src", "a.py") in res.content
+    assert "src/a.py" in res.content
 
 
 async def test_grep_modes(ctx: ToolContext, project: Path, search_engine: str) -> None:
@@ -134,7 +133,7 @@ async def test_grep_modes(ctx: ToolContext, project: Path, search_engine: str) -
     (project / ".gitignore").write_text("ignored.py\n")
     (project / "ignored.py").write_text("hello\n")
     grep = GrepTool()
-    sub_c = os.path.join("sub", "c.py")
+    sub_c = "sub/c.py"
 
     files = await grep.run(GrepInput(pattern="hello", type="py"), ctx)
     assert sorted(files.content.splitlines()) == ["a.py", sub_c]
@@ -232,7 +231,6 @@ def test_commands_do_not_inherit_cmcoders_venv(
 ) -> None:
     """Hands-on test on Windows: under `uv run cmcoder`, `python` in the Bash
     tool was cmcoder's venv python, not the user's project's."""
-    import os
     import sys
 
     from cmcoder.tools.shell import child_env
@@ -304,12 +302,10 @@ async def test_grep_never_prints_secret_files(
     (project / "src/app.py").write_text("print('hunter2 is not a secret here')\n")
     grep = GrepTool()
     res = await grep.run(GrepInput(pattern="hunter2", output_mode="content"), ctx)
-    assert res.content.splitlines() == [
-        f"{os.path.join('src', 'app.py')}:1:print('hunter2 is not a secret here')"
-    ]
+    assert res.content.splitlines() == ["src/app.py:1:print('hunter2 is not a secret here')"]
     # Also when searching a subfolder, and with an explicit glob.
     sub = await grep.run(GrepInput(pattern="hunter2", path="src", glob="*"), ctx)
-    assert sub.content.strip() == os.path.join("src", "app.py")
+    assert sub.content.strip() == "src/app.py"
 
 
 async def test_read_pages_long_files_at_line_boundaries(project: Path) -> None:

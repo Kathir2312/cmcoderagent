@@ -166,7 +166,7 @@ endpoint. LiteLLM admins may be able to see that traffic in gateway logs.
 ## VS Code extension (Phase 2, in progress)
 
 The extension in [`vscode/`](vscode/) runs the same `cmcoder` (`cmcoder --protocol stdio`) behind a chat panel in
-the side bar. Build and install it (needs Node.js 20+ to build; using it needs only VS Code and `cmcoder`):
+the side bar. Build and install it (needs Node.js 22+ to build; using it needs only VS Code and `cmcoder`):
 
 ```bash
 cd vscode
