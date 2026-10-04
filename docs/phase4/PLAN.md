@@ -201,6 +201,8 @@ Terminal.
 
 ### 8. Guides and docs
 
+- Hands-on checklist: [TESTING.md](TESTING.md) (written 4 Oct).
+
 - Guide sections per item, the Open WebUI setup page; hands-on checklist on
   Windows with LiteLLM and Open WebUI; `STATUS.md`.
 
