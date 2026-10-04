@@ -64,8 +64,12 @@ def check_png(path: Path) -> list[str]:
 def check_mono_svg(path: Path) -> list[str]:
     if not path.is_file():
         return [f"{path.name} is missing"]
+    text = path.read_text(encoding="utf-8", errors="replace")
+    if "<!DOCTYPE" in text.upper() or "<!ENTITY" in text.upper():
+        # No DTDs: nothing for an SVG icon to need, and no entity expansion.
+        return [f"{path.name}: <!DOCTYPE>/<!ENTITY> isn't allowed"]
     try:
-        root = ET.parse(path).getroot()  # nosec B314: our own branding file
+        root = ET.fromstring(text)  # nosec B314: checked above; our own branding file
     except ET.ParseError as e:
         return [f"{path.name}: not valid SVG ({e})"]
     out = []

@@ -7,6 +7,7 @@ import asyncio
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -93,6 +94,7 @@ def test_host_patterns() -> None:
 @needs_sandbox
 async def test_files(project: Path, home: Path) -> None:
     (project / ".git" / "hooks").mkdir(parents=True)
+    (project / ".cmcoder").mkdir()
     (project / ".git" / "config").write_text("[core]\n")
     outside = project.parent / "outside.txt"
     r = await run_in_sandbox(
@@ -324,12 +326,14 @@ async def test_missing_protected_folders_cant_be_created(tmp_path: Path) -> None
 
 @needs_sandbox
 async def test_local_services_are_out_of_reach(
-    project: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    project: Path, monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
 ) -> None:
     if sys.platform == "win32":
         pytest.skip("Unix sockets")
-    runtime = tmp_path / "runtime"
-    runtime.mkdir()
+    # Not under /tmp (private in the sandbox anyway), and short: macOS limits
+    # socket paths to about 100 characters.
+    runtime = Path(tempfile.mkdtemp(prefix="cmc-", dir=Path.home()))
+    request.addfinalizer(lambda: shutil.rmtree(runtime, ignore_errors=True))
     monkeypatch.setenv("XDG_RUNTIME_DIR", str(runtime))
     monkeypatch.setenv("CMCODER_API_KEY", "sk-not-for-the-sandbox")
 

@@ -117,6 +117,9 @@ def test_the_side_bar_icon_is_one_colour(folder: Path) -> None:
     )
     with pytest.raises(build_brand.BrandError, match="fill='#ff0000'"):
         build_brand.load(folder)
+    svg.write_text('<!DOCTYPE svg [<!ENTITY a "x">]><svg>&a;</svg>')
+    with pytest.raises(build_brand.BrandError, match="DOCTYPE"):
+        build_brand.load(folder)
     svg.write_text("<svg><script>alert(1)</script></svg>")
     with pytest.raises(build_brand.BrandError, match="<script> isn't allowed"):
         build_brand.load(folder)
