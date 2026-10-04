@@ -1,0 +1,7 @@
+{
+  "prompt": "Invoices charge the wrong value added tax: it must be 20% of the amount. Find where it is computed and fix it.",
+  "check": "$PYTHON -c \"from money.charges import apply_levy; assert apply_levy(100) == 20, apply_levy(100)\"",
+  "permission_mode": "acceptEdits",
+  "max_turns": 15,
+  "index": true
+}

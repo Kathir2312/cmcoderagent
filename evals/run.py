@@ -15,10 +15,17 @@
   # model, or a model on an OpenAI-compatible backend):
   uv run python evals/run.py --mock --gateway openwebui-ollama
 
+  # Code search (Phase 5): tasks with "index": true get the project indexed
+  # first (your rag.embeddingModel; the mock's with --mock). Compare a run
+  # with code search and one without:
+  uv run python evals/run.py --rag on      # the default
+  uv run python evals/run.py --rag off
+
 Each task folder holds:
   task.json         {"prompt": ..., "check": "<shell command>", "permission_mode": ...,
                      "max_turns": ..., "args": [extra cmcoder arguments, e.g. --mcp-config]}
   repo/             the starting files (copied to a fresh git repo per run)
+  ("index": true in task.json: the copy is indexed for code search before the run)
   mock_script.json  scripted model replies used with --mock
 
 The check runs with bash (Git Bash on Windows) in the task's working copy and
@@ -187,6 +194,7 @@ def run_task(
         )
         if webui is not None:
             env["CMCODER_PROVIDER_TYPE"] = "openwebui"
+        env["CMCODER_EMBEDDING_MODEL"] = "nomic-embed-text" if webui else "text-embedding-3-small"
         for var in ("HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"):
             env.pop(var, None)
 
@@ -202,11 +210,40 @@ def run_task(
     cmd += [str(a) for a in spec.get("args", [])]  # e.g. --mcp-config
     if args.model:
         cmd += ["--model", args.model]
+    indexed = False
+    if args.rag == "off":
+        env["CMCODER_RAG"] = "off"
+    elif spec.get("index"):
+        # Code search: index the working copy first (a failure leaves the
+        # task to run without it, as a project without an index would).
+        built = subprocess.run(
+            [sys.executable, "-m", "cmcoder", "index"],
+            cwd=work,
+            env=env,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=600,
+            stdin=subprocess.DEVNULL,
+        )
+        indexed = built.returncode == 0
+        if not indexed:
+            print(f"      (no code index: {(built.stderr or built.stdout).strip()[-200:]})")
     started = time.monotonic()
     run = run_stdio if via == "stdio" else run_cli
     try:
         stdout, stderr, timed_out = run(cmd, spec["prompt"], work, env, float(args.timeout))
     finally:
+        if indexed:  # its index lives in the config folder: don't leave it behind
+            subprocess.run(
+                [sys.executable, "-m", "cmcoder", "index", "--clear"],
+                cwd=work,
+                env=env,
+                capture_output=True,
+                timeout=120,
+                stdin=subprocess.DEVNULL,
+            )
         if server is not None:
             server.__exit__(None, None, None)
     duration = time.monotonic() - started
@@ -276,6 +313,12 @@ def main() -> int:
         choices=sorted(GATEWAYS),
         default="litellm",
         help="with --mock: serve the replies like LiteLLM (default) or Open WebUI",
+    )
+    ap.add_argument(
+        "--rag",
+        choices=["on", "off"],
+        default="on",
+        help='code search for tasks marked "index": true (off: compare without it)',
     )
     ap.add_argument("--model", help="model to evaluate (default: settings)")
     ap.add_argument("--task", action="append", help="run only these tasks")

@@ -49,6 +49,8 @@ jobs:
         run: uv run python evals/run.py --mock --via both
       - name: Evals (scripted model) served the way Open WebUI serves an Ollama model
         run: uv run python evals/run.py --mock --gateway openwebui-ollama
+      - name: Code search quality harness (mock embeddings; real scores need a real model)
+        run: uv run python evals/retrieval.py --mock
 
   litellm-gateway:
     name: integration (real LiteLLM proxy)
