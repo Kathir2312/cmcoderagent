@@ -16,9 +16,14 @@ git fetch origin
 git checkout claude/agent-cli-vscode-parity-t3dm9z
 git pull
 uv sync
-uv tool install --force --reinstall .
-cmcoder --version
+uv tool install --force --reinstall .     # --reinstall is needed: the version number
+                                          # doesn't change, so without it uv keeps the old build
+cmcoder terminal-profile --help           # works only on the Phase 4 version
 ```
+
+If it says "No such command" or prints the general usage, an older
+`cmcoder` is running: check `Get-Command cmcoder` (expect
+`~\.local\bin\cmcoder.exe`; `uv tool update-shell` and a new terminal if not).
 
 VS Code extension: GitHub → Actions → the latest green **CI** run on this
 branch → Artifacts → `cmcoder-vsix` → unzip → `code --install-extension

@@ -201,7 +201,10 @@ Terminal.
 
 ### 8. Guides and docs
 
-- Hands-on checklist: [TESTING.md](TESTING.md) (written 4 Oct).
+- Hands-on checklist: [TESTING.md](TESTING.md) (written 4 Oct). Done by the
+  user on Windows on 4 Oct: parts A–D and the optional ones passed; **part E
+  (sandbox, WSL2) pending** (WSL not working on that machine yet). Guides and
+  `STATUS.md` after part E.
 
 - Guide sections per item, the Open WebUI setup page; hands-on checklist on
   Windows with LiteLLM and Open WebUI; `STATUS.md`.
