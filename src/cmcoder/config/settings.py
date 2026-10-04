@@ -812,3 +812,14 @@ def update_user_settings(change: Callable[[dict[str, Any]], None]) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
     return path
+
+
+def update_project_settings(project_root: Path, change: Callable[[dict[str, Any]], None]) -> Path:
+    """Read <project>/.cmcoder/settings.json (shared with the team through
+    git), apply `change` to it, write it back."""
+    path = project_root / ".cmcoder" / "settings.json"
+    data = _read_json(path)
+    change(data)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    return path

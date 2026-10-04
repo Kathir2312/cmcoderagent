@@ -242,8 +242,10 @@ class ChromaServerStore:
             self._id = str(data["id"])
         return self._id
 
-    async def heartbeat(self) -> None:
+    async def check(self) -> None:
+        """Reachable, and the key is accepted (listing needs it; the heartbeat doesn't)."""
         await self._call("GET", f"{self.url}/api/v2/heartbeat")
+        await self._call("GET", f"{self.base}?limit=1")
 
     async def add(self, chunks: list[Chunk], vectors: np.ndarray) -> None:
         cid = await self._collection()

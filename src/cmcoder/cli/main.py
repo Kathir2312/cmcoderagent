@@ -29,11 +29,13 @@ from ..providers.openai_compat import ProviderError
 
 SUBCOMMANDS = {
     "doctor",
+    "index",
     "login",
     "logout",
     "mcp",
     "models",
     "protocol-schema",
+    "rag",
     "terminal-profile",
     "trust",
     "version",
@@ -469,8 +471,13 @@ def version() -> None:
 
 
 from .mcp_cmd import mcp_app  # noqa: E402
+from .rag_cmd import index_command, rag_app  # noqa: E402
 
 sub_app.add_typer(mcp_app, name="mcp")
+sub_app.add_typer(rag_app, name="rag")
+sub_app.command("index", help="Build or update this project's code index (changed files only).")(
+    index_command
+)
 
 
 def run() -> None:

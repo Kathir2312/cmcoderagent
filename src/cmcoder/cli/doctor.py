@@ -21,6 +21,7 @@ from rich.text import Text
 from ..compat import SHELL_HELP, find_program, find_shell
 from ..config.settings import (
     Settings,
+    SettingsError,
     config_fingerprint,
     find_project_root,
     ignored_settings_message,
@@ -643,6 +644,42 @@ class Doctor:
                 self.report(INFO, f"Embedding model {provider_name}:{model} (not checked)")
         finally:
             await provider.aclose()
+        await self._check_index()
+
+    async def _check_index(self) -> None:
+        from ..rag.index import open_index
+        from ..rag.setup import age
+        from ..rag.stores import ChromaServerStore, StoreError
+
+        root = find_project_root(Path.cwd().resolve())
+        try:
+            index = open_index(self.settings, root, build_provider)
+        except (SettingsError, StoreError) as e:
+            self.report(FAIL, "Index store", str(e))
+            return
+        if index is None:
+            return
+        try:
+            if isinstance(index.store, ChromaServerStore):
+                try:
+                    await index.store.check()
+                except StoreError as e:
+                    self.report(FAIL, index.store.describe(), str(e))
+                    return
+            st = await index.status()
+            if st.files or (st.read_only and st.chunks):
+                self.report(
+                    OK,
+                    f"This project's index: {st.files:,} files, {st.chunks:,} pieces, "
+                    f"updated {age(st.updated)}",
+                    st.store + (" (read-only)" if st.read_only else ""),
+                )
+            else:
+                self.report(
+                    INFO, "No index for this project yet", "`cmcoder index` builds it."
+                )
+        finally:
+            await index.close()
 
     async def run(self, model_refs: list[str], probe: bool) -> int:
         self.check_local()
