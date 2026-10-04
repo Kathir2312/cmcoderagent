@@ -461,13 +461,14 @@ Started early, because quality depends heavily on the model:
 | **1 — Daily driver** | **Auto-compaction first** (the 32K default window is the binding constraint, §16.2), **the user-trial fixes in §16.3**, Textual TUI, sessions/resume, small/fast model jobs (titles, summaries), prompted-tool fallback and repair, edit-format variants, TodoWrite, checkpoints, **managed settings** (moved from Phase 4, see [phase1/PLAN.md](phase1/PLAN.md) item 5) | Comfortable for daily use on a real repo |
 | **2 — VS Code** | `--protocol stdio`, generated TS protocol types, extension, webview chat, native diffs, IDE context and tools | Same task behaves the same in CLI and VS Code |
 | **3 — Extensibility** | MCP client, hooks, custom slash commands, subagents (`Task`) with per-role models, skills | Teams can customise it without forking |
-| **4 — Hardening** | **Open WebUI gateway**, Bash sandbox (Linux, macOS, and Windows through WSL2; moved from Phase 3), OpenTelemetry (off by default), standalone binary + platform-specific VSIX. SSO and the Responses/Anthropic adapters were dropped (see [phase4/PLAN.md](phase4/PLAN.md)) | Release candidate |
+| **4 — Hardening** | **Open WebUI gateway**, Bash sandbox (Linux, macOS, and Windows through WSL2; moved from Phase 3), OpenTelemetry (off by default), standalone binary + platform-specific VSIX, branding (icon and name). SSO and the Responses/Anthropic adapters were dropped (see [phase4/PLAN.md](phase4/PLAN.md)) | Release candidate |
+| **5 — Code search (RAG)** | Embeddings through the gateway, an incremental index of the project in a vector store (built-in local store, Chroma on the machine or a shared server), a `CodeSearch` tool and optional automatic context; an existing company RAG through MCP (see [phase5/PLAN.md](phase5/PLAN.md)) | The model finds code by meaning in large repositories; fewer turns and tokens in the evals |
 
 Per-phase plans, guides and status reports live in [docs/README.md](README.md) (`docs/phase0/`, `docs/phase1/`, …). Finished phases are frozen as git snapshots (Phase 0: commit `ba6669f`, tag `phase0`; Phase 1: tag `phase1`; Phase 2: tag `phase2`; Phase 3: tag `phase3`).
 
 ### 16.1 Phase 0 status
 
-**Phase 0 is complete**; see [phase0/STATUS.md](phase0/STATUS.md). **Phase 1 is complete**; see [phase1/STATUS.md](phase1/STATUS.md). **Phase 2 is complete**; see [phase2/STATUS.md](phase2/STATUS.md). **Phase 3 is complete**; see [phase3/STATUS.md](phase3/STATUS.md). Phase 4 (Hardening) is in progress: [phase4/PLAN.md](phase4/PLAN.md).
+**Phase 0 is complete**; see [phase0/STATUS.md](phase0/STATUS.md). **Phase 1 is complete**; see [phase1/STATUS.md](phase1/STATUS.md). **Phase 2 is complete**; see [phase2/STATUS.md](phase2/STATUS.md). **Phase 3 is complete**; see [phase3/STATUS.md](phase3/STATUS.md). Phase 4 (Hardening) is in progress: [phase4/PLAN.md](phase4/PLAN.md). Phase 5 (Code search) is planned: [phase5/PLAN.md](phase5/PLAN.md).
 
 
 Delivered:
