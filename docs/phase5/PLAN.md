@@ -1,6 +1,6 @@
 # Phase 5 — Code search (RAG): plan
 
-**Status:** planned (4 October 2026); starts when Phase 4 is complete.
+**Status:** planned, decisions made (4 October 2026); starts when Phase 4 is complete.
 
 **Goal:** the model can find code **by meaning** ("where do we refresh the
 auth token?") in large repositories, not only by exact words (Grep), using an
@@ -19,31 +19,24 @@ turns and context. An index of the code, turned into embeddings (vectors that
 capture meaning) by an embedding model on the gateway, lets the model ask for
 "code that does X" and get the right functions back directly.
 
-## Two ways to connect a RAG
+## Decisions (4 October 2026)
 
-| | What it is | In this phase |
-|---|---|---|
-| **Built-in index** | cmcoder indexes the project itself and keeps it current | Items 1–6 |
-| **A RAG service the company already runs** | Connected as an **MCP server** (supported since Phase 3) | A guide only; nothing to build |
-
-## Decisions
-
-Recommended answers, **to be confirmed** before the phase starts:
-
-| Question | Recommendation | Status |
-|---|---|---|
-| Embedding model | The gateway's: LiteLLM's OpenAI-compatible `/v1/embeddings` (e.g. `text-embedding-3-small`, `bge-m3`), or Open WebUI's Ollama models (e.g. `nomic-embed-text`). Local embeddings (no gateway) only if neither is available: about +100 MB to the install. | To confirm: which embedding models the gateway has |
-| Vector store | **Per-developer local index** by default (built in, no heavy dependencies); **Chroma** as an option, on the machine or a **shared Chroma server** for a team. Qdrant/pgvector later behind the same interface, if asked. | To confirm |
-| How the model uses it | A **`CodeSearch` tool** the model calls when it helps (like Grep); **automatic context** (top results added to each message within a token budget) as an option, off by default. | To confirm |
-| An existing company RAG | Connect it through MCP (guide). | To confirm whether one exists |
+| Question | Decision |
+|---|---|
+| Embedding model | **Both gateways**: LiteLLM's OpenAI-compatible `/v1/embeddings` and Open WebUI (its OpenAI-compatible models, and Ollama embedding models such as `nomic-embed-text`). The same settings work with either; `doctor` says which is in use. No local (gateway-less) embeddings. |
+| Vector store | **Both**: a per-developer local index (built in, no heavy dependencies) and **Chroma**, on the machine or a **shared Chroma server** for a team. Qdrant/pgvector later behind the same interface, if asked. |
+| How the model uses it | **Both**: a **`CodeSearch` tool** the model calls (like Grep) **and automatic context** (the best matches added to each message within a token budget). Automatic context is on when an index exists; it can be turned off or its budget changed. |
+| An existing company RAG | **None.** Only the built-in index; connecting another RAG through MCP stays possible (Phase 3) but isn't part of this phase. |
 
 ## Items, in order
 
 ### 1. Embeddings through the gateway
 
-- `providers`: an `embed(texts)` call on the provider interface: OpenAI-compatible
-  `/v1/embeddings` (LiteLLM, and OpenAI-compatible backends behind Open WebUI),
-  Ollama's embed endpoint through Open WebUI for Ollama models.
+- `providers`: an `embed(texts)` call on the provider interface, working with
+  **both gateways**: OpenAI-compatible `/v1/embeddings` (LiteLLM, and
+  OpenAI-compatible backends behind Open WebUI), and Ollama's embed endpoint
+  through Open WebUI for Ollama models. Tested against both (mock server and
+  the real LiteLLM and Open WebUI CI jobs).
 - Setting `rag.embeddingModel` (a model ID, provider-prefixed like the chat
   models); batching, retries and the same TLS, proxy and key handling as chat.
 - `cmcoder doctor`: the embedding model answers, its vector size.
@@ -82,9 +75,11 @@ Recommended answers, **to be confirmed** before the phase starts:
   pieces (path, lines, symbol, text) within a size limit. Read-only, no
   permission prompt, like Grep. Available only when an index exists; the
   model's prompt says when to prefer it over Grep (meaning vs exact text).
-- **Automatic context** (`rag.autoContext`, off by default): before each
-  user message, the top results within `maxTokens` are added as context,
-  marked as retrieved code; counted in compaction.
+- **Automatic context** (`rag.autoContext`, on when an index exists): before
+  each user message, the best matches within `maxTokens` are added as
+  context, marked as retrieved code (path and lines), skipping pieces already
+  in the conversation; counted in compaction. Its budget is capped by the
+  model's context window (a small share of a 32k window).
 - Subagents (the `explore` agent) get `CodeSearch` too.
 
 ### 5. Commands, front ends and settings
@@ -102,7 +97,7 @@ Recommended answers, **to be confirmed** before the phase starts:
     "store": { "type": "local" },
     "include": ["src/**"],
     "exclude": ["**/vendor/**"],
-    "autoContext": { "enabled": false, "topK": 5, "maxTokens": 2000 }
+    "autoContext": { "enabled": true, "topK": 5, "maxTokens": 2000 }
   }
   ```
 
@@ -121,8 +116,9 @@ Recommended answers, **to be confirmed** before the phase starts:
 - Security review as in earlier phases (what leaves the machine, secrets,
   shared server), plus the standalone build and the VSIX with the new code.
 - Guides: Python and LangGraph sections (LangChain's retrievers and vector
-  stores mapped to cmcoder's), a setup page (embedding model, Chroma server,
-  MCP for an existing RAG), hands-on checklist on Windows, `STATUS.md`.
+  stores mapped to cmcoder's), a setup page (embedding model on LiteLLM and
+  on Open WebUI, local index, Chroma server), hands-on checklist on Windows,
+  `STATUS.md`.
 
 ## Not in Phase 5
 
@@ -132,7 +128,7 @@ or call-tree indexes. Later, if asked.
 
 ## Checklist
 
-- [ ] Decisions confirmed (embedding model, store, retrieval mode, existing RAG)
+- [x] Decisions confirmed (4 Oct: both gateways, both stores, tool and automatic context, no existing RAG)
 - [ ] 1. Embeddings through the gateway
 - [ ] 2. The indexer
 - [ ] 3. Vector stores (local, Chroma)
