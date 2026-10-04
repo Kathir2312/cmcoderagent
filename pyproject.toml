@@ -18,6 +18,10 @@ dependencies = [
     "numpy>=1.26",
 ]
 
+[project.optional-dependencies]
+# Code search with Chroma on this machine (a Chroma server needs nothing extra).
+chroma = ["chromadb>=1.0"]
+
 [project.scripts]
 cmcoder = "cmcoder.cli.main:run"
 

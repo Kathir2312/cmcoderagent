@@ -60,6 +60,13 @@ capture meaning) by an embedding model on the gateway, lets the model ask for
   Updated at session start (files changed since last time) and after the
   agent's own edits (Write/Edit); deleted files removed.
 - Progress and cancellation; works the same on Windows.
+- Status (4 Oct): done (`rag/chunker.py`, `rag/files.py`, `rag/index.py`).
+  Python split with its parser (a large class: method by method), other
+  languages at definitions, Markdown at headings; small neighbours joined.
+  Generated, minified, lock and binary files skipped as well as secrets and
+  links out of the project. Saved batch by batch; edits by the agent and
+  files changed under a search result are refreshed before results are
+  returned.
 
 ### 3. Vector stores
 
@@ -74,6 +81,12 @@ capture meaning) by an embedding model on the gateway, lets the model ask for
 - Index location: `~/.cmcoder/index/<project>/` for local stores, never inside
   the project. One collection per project and embedding model (changing the
   model rebuilds).
+- Status (4 Oct): done (`rag/stores.py`). A Chroma server is used through
+  its REST API (v2) with cmcoder's own HTTP client, so it needs no extra
+  package and works in the standalone build; Chroma on this machine is the
+  `chroma` extra. A shared index is named from the git remote, so every clone
+  finds the same collection; `readOnly` for an index CI keeps current.
+  Tested on all three (a real Chroma 1.5 server in CI).
 
 ### 4. Using it: `CodeSearch` and automatic context
 
@@ -136,8 +149,8 @@ or call-tree indexes. Later, if asked.
 
 - [x] Decisions confirmed (4 Oct: both gateways, both stores, tool and automatic context, no existing RAG)
 - [x] 1. Embeddings through the gateway
-- [ ] 2. The indexer
-- [ ] 3. Vector stores (local, Chroma)
+- [x] 2. The indexer
+- [x] 3. Vector stores (local, Chroma)
 - [ ] 4. `CodeSearch` and automatic context
 - [ ] 5. Commands, front ends and settings
 - [ ] 6. Tests, evals, security review and docs

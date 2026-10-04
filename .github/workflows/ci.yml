@@ -66,6 +66,26 @@ jobs:
       - name: Gateway tests
         run: LITELLM_BIN=/tmp/litellm/bin/litellm uv run pytest -q tests/test_litellm_integration.py
 
+  chroma:
+    name: code search stores (real Chroma)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: uv sync --extra chroma
+      - name: Start a Chroma server
+        run: |
+          (uv run --no-sync chroma run --path /tmp/chroma-data --port 8765 > /tmp/chroma.log 2>&1 &)
+          for i in $(seq 60); do curl -sf http://127.0.0.1:8765/api/v2/heartbeat && break; sleep 1; done
+      - name: Index tests on the built-in store, a Chroma server and Chroma on this machine
+        env:
+          CMCODER_TEST_CHROMA_URL: http://127.0.0.1:8765
+        run: uv run --no-sync pytest -q tests/test_rag_index.py
+      - if: failure()
+        run: tail -50 /tmp/chroma.log
+
   vscode:
     name: VS Code extension (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
