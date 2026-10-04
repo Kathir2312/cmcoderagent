@@ -39,7 +39,10 @@ def main() -> None:
         sys.exit("dist/cmcoder is missing: run packaging/build.py first")
     bundled = EXT / "bin" / "cmcoder"
     shutil.rmtree(bundled, ignore_errors=True)
-    shutil.copytree(built, bundled, symlinks=True)  # keeps the executable bits
+    # Links copied as what they point to: a .vsix (zip) can't hold links, and
+    # vsce's secret scan fails on a link to a folder (macOS: Python.framework).
+    # copy2 keeps the executable bits.
+    shutil.copytree(built, bundled, symlinks=False)
     npx = shutil.which("npx") or shutil.which("npx.cmd")
     if npx is None:
         sys.exit("npx (Node.js) is needed to package the extension")

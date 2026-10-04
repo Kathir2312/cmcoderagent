@@ -11,6 +11,7 @@ on:
     paths:
       - "src/**"
       - "packaging/**"
+      - "branding/**"
       - "vscode/**"
       - "pyproject.toml"
       - "uv.lock"
@@ -52,6 +53,11 @@ jobs:
         working-directory: vscode
         run: npm ci
       - run: uv run python packaging/vsix.py
+      - name: The copy inside the extension runs too (links copied as files)
+        shell: bash
+        run: |
+          exe=vscode/bin/cmcoder/cmcoder; [ "$RUNNER_OS" = Windows ] && exe=vscode/bin/cmcoder/cmcoder.exe
+          CMCODER_TEST_BINARY=$exe uv run pytest -q tests/test_standalone.py
       - name: The extension in a real VS Code, using the bundled cmcoder (Linux)
         if: runner.os == 'Linux'
         working-directory: vscode
