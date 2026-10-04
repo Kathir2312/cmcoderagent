@@ -287,9 +287,11 @@ usual, and the model can send the same command again if it really needs the shel
 ### Bash sandbox
 
 On Linux, WSL2 and macOS the agent's Bash commands run in a **sandbox** (bubblewrap on Linux/WSL2, `sandbox-exec` on
-macOS): they can write only inside the project and a temp folder, `.git/hooks`, `.git/config`, `.cmcoder`, `.vscode`
-and `.mcp.json` stay read-only, credential folders (`~/.ssh`, `~/.aws`, ...) are hidden, and the network is reachable
-only through cmcoder's proxy, which allows the hosts you list. Sandboxed commands don't ask for permission; deny rules,
+macOS): they can write only inside the project and a temp folder, `.git` (all of it), `.cmcoder`, `.vscode`, `.idea`
+and `.mcp.json` stay read-only, credential folders (`~/.ssh`, `~/.aws`, ...) and local services (Docker, the desktop
+session) are out of reach, and the network is reachable only through cmcoder's proxy, which allows the hosts you
+list. Git commands that read (`status`, `diff`, `log`) work in the sandbox; ones that write (`commit`, `checkout`,
+`stash`) are run outside it, with your approval. Sandboxed commands don't ask for permission; deny rules,
 high-risk commands and plan mode work as before. If a command really needs more, the model can ask to run it outside
 the sandbox: that always asks you.
 
@@ -306,6 +308,8 @@ the sandbox: that always asks you.
 the project is trusted; managed settings can force it. On Linux/WSL2 it needs `bubblewrap`
 (`sudo apt install bubblewrap`). Native Windows has no sandbox: run cmcoder inside WSL2 to get one there.
 `cmcoder doctor` shows whether it is active.
+On macOS, commands can connect to local ports only through cmcoder's proxy; `"network": {"allowLocalhost": true}`
+lets them reach any local port (e.g. a test server they start), including services outside the sandbox.
 
 ### Usage metrics (OpenTelemetry)
 

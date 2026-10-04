@@ -103,6 +103,10 @@ class SandboxNetwork(_Model):
     # Hosts sandboxed commands may reach (through cmcoder's proxy): exact names,
     # or "*.example.com" for its subdomains. Everything else is blocked.
     allowed_hosts: list[str] = Field(default_factory=list, alias="allowedHosts")
+    # macOS: let commands connect to any local port (their own test servers,
+    # but also services outside the sandbox). Linux needs no setting: there
+    # the sandbox has its own localhost.
+    allow_localhost: bool = Field(False, alias="allowLocalhost")
 
 
 class SandboxConfig(_Model):
@@ -361,8 +365,8 @@ def deep_merge(base: dict[str, Any], over: dict[str, Any]) -> dict[str, Any]:
 def _read_json(path: Path) -> dict[str, Any]:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except FileNotFoundError:
-        return {}
+    except (FileNotFoundError, IsADirectoryError):
+        return {}  # (a directory: the sandbox's placeholder for a missing .mcp.json)
     except ValueError as e:
         raise SettingsError(f"Invalid JSON in {path}: {e}") from e
     if not isinstance(data, dict):

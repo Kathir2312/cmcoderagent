@@ -3,7 +3,10 @@ macOS. Skipped where neither can run (e.g. native Windows)."""
 
 from __future__ import annotations
 
+import asyncio
 import shutil
+import subprocess
+import sys
 import threading
 from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -19,7 +22,7 @@ from cmcoder.core.permissions import Decision, PermissionPolicy
 from cmcoder.core.prompt import build_system_prompt
 from cmcoder.providers.profiles import resolve_profile
 from cmcoder.sandbox import Sandbox, detect, make_sandbox
-from cmcoder.sandbox.proxy import host_allowed
+from cmcoder.sandbox.proxy import FilteringProxy, host_allowed
 from cmcoder.tools.base import ToolContext
 from cmcoder.tools.bash import BashInput, BashTool
 from cmcoder.tools.registry import default_tools
@@ -264,3 +267,156 @@ def test_subagents_share_it(mock_server: Any, project: Path) -> None:
 
     child = agent.spawn_subagent(ModelChoice(agent.provider, agent.model, agent.profile), {}, "x")
     assert child.ctx.sandbox is sbx
+
+
+def git(project: Path, *args: str) -> None:
+    subprocess.run(
+        ["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid", *args],
+        cwd=project,
+        check=True,
+        capture_output=True,
+        stdin=subprocess.DEVNULL,
+    )
+
+
+@needs_sandbox
+async def test_git_reads_work_and_writes_dont(project: Path) -> None:
+    shutil.rmtree(project / ".git")
+    git(project, "init", "-q")
+    (project / "a.txt").write_text("a\n")
+    git(project, "add", "a.txt")
+    git(project, "commit", "-qm", "start")
+    head = (project / ".git" / "HEAD").read_text()
+    (project / "a.txt").write_text("b\n")
+    r = await run_in_sandbox(
+        project,
+        config(),
+        "git status --short && git diff --stat && git log --oneline | wc -l",
+        "git -c user.name=t -c user.email=t@x commit -qam change; echo rc=$?",
+        "mv .git .git-moved; echo rc=$?",
+        "rm -rf .git/refs; echo rc=$?",
+    )
+    assert "M a.txt" in r[0].output and r[0].exit_code == 0
+    for out in r[1:]:
+        assert "rc=0" not in out.output
+    assert (project / ".git" / "HEAD").read_text() == head
+    assert (project / ".git" / "refs").is_dir() and not (project / ".git-moved").exists()
+
+
+@needs_sandbox
+async def test_missing_protected_folders_cant_be_created(tmp_path: Path) -> None:
+    project = tmp_path / "bare"
+    project.mkdir()
+    r = await run_in_sandbox(
+        project,
+        config(),
+        "mkdir -p .vscode/x; echo rc=$?",
+        "echo '{}' > .mcp.json; echo rc=$?",
+        "git init -q; echo rc=$?",
+        "echo ok > notes.txt && cat notes.txt",
+    )
+    for out in r[:3]:
+        assert "rc=0" not in out.output
+    assert r[3].output.strip() == "ok"
+    # The placeholders are gone again; the project's own file stays.
+    assert sorted(p.name for p in project.iterdir()) == ["notes.txt"]
+
+
+@needs_sandbox
+async def test_local_services_are_out_of_reach(
+    project: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    if sys.platform == "win32":
+        pytest.skip("Unix sockets")
+    runtime = tmp_path / "runtime"
+    runtime.mkdir()
+    monkeypatch.setenv("XDG_RUNTIME_DIR", str(runtime))
+    monkeypatch.setenv("CMCODER_API_KEY", "sk-not-for-the-sandbox")
+
+    async def answer(r: asyncio.StreamReader, w: asyncio.StreamWriter) -> None:
+        w.write(b"reached\n")
+        await w.drain()
+        w.close()
+
+    path = str(runtime / "service.sock")
+    server = await asyncio.start_unix_server(answer, path=path)
+    try:
+        r = await run_in_sandbox(
+            project,
+            config(),
+            f'{sys.executable} -I -c "import socket; s = socket.socket(socket.AF_UNIX); '
+            f"s.connect('{path}'); print(s.recv(10))\" 2>&1 | tail -1",
+            'echo "key=${CMCODER_API_KEY:-none}"',
+        )
+    finally:
+        server.close()
+        await server.wait_closed()
+    assert "reached" not in r[0].output
+    assert r[1].output.strip() == "key=none"
+
+
+@needs_sandbox
+async def test_direct_local_connections_are_blocked(project: Path, web: str) -> None:
+    if shutil.which("curl") is None:
+        pytest.skip("needs curl")
+    r = await run_in_sandbox(
+        project,
+        config(network={"allowedHosts": ["127.0.0.1"]}),
+        f'curl -sS -m 5 --noproxy "*" http://{web}/; echo rc=$?',
+    )
+    assert "hello from outside" not in r[0].output and "rc=0" not in r[0].output
+
+
+class Recorder:
+    """A plain HTTP server that records each request's first line and Host."""
+
+    def __init__(self) -> None:
+        self.seen: list[tuple[str, str]] = []
+        rec = self
+
+        class H(BaseHTTPRequestHandler):
+            def log_message(self, *a: Any) -> None:
+                pass
+
+            def do_GET(self) -> None:
+                rec.seen.append((self.requestline, self.headers.get("Host", "")))
+                self.send_response(200)
+                self.send_header("Content-Length", "2")
+                self.end_headers()
+                self.wfile.write(b"ok")
+
+        self.httpd = ThreadingHTTPServer(("127.0.0.1", 0), H)
+        threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
+        self.port = self.httpd.server_address[1]
+
+
+async def test_the_proxy_forwards_one_checked_request(monkeypatch: pytest.MonkeyPatch) -> None:
+    for var in ("HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy"):
+        monkeypatch.delenv(var, raising=False)
+    rec = Recorder()
+    proxy = FilteringProxy(["127.0.0.1"])
+    port = await proxy.start_tcp()
+    try:
+        reader, writer = await asyncio.open_connection("127.0.0.1", port)
+        writer.write(
+            f"GET http://127.0.0.1:{rec.port}/first HTTP/1.1\r\nHost: other.example\r\n\r\n"
+            f"GET http://127.0.0.1:{rec.port}/second HTTP/1.1\r\nHost: x\r\n\r\n".encode()
+        )
+        await writer.drain()
+        reply = await asyncio.wait_for(reader.read(), 10)
+        writer.close()
+        assert b"200" in reply.split(b"\r\n", 1)[0]
+        assert rec.seen == [("GET /first HTTP/1.1", f"127.0.0.1:{rec.port}")]
+
+        reader, writer = await asyncio.open_connection("127.0.0.1", port)
+        writer.write(
+            f"POST http://127.0.0.1:{rec.port}/up HTTP/1.1\r\n"
+            "Transfer-Encoding: chunked\r\n\r\n0\r\n\r\n".encode()
+        )
+        await writer.drain()
+        assert b" 400 " in await asyncio.wait_for(reader.read(), 10)
+        writer.close()
+    finally:
+        await proxy.close()
+        rec.httpd.shutdown()
+        rec.httpd.server_close()

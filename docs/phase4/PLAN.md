@@ -18,6 +18,7 @@ usage if it wants to.
 | TUI default (3 Oct, item 2) | **Classic stays the default**; the full-screen UI remains opt-in (`--tui`). |
 | Sandbox: prompts (3 Oct, item 3) | **Auto-allow**: a command that runs in the sandbox doesn't ask (deny rules and high-risk commands unchanged). |
 | Sandbox: network (3 Oct, item 3) | **Blocked except an allowlist** of hosts in settings. |
+| Sandbox: `.git` (4 Oct, security review) | **All of `.git` read-only** in the sandbox. Git commands that write run outside it, with the user's approval. |
 | Branding (4 Oct, added as item 6) | **Icon and name** from a `branding/` folder, replaced before building; **Windows Terminal profile** included. The company logo is dropped in by the team before they build the VS Code extension. |
 
 ## Items, in order
@@ -99,9 +100,12 @@ Linux, `sandbox-exec` on macOS; the evals run sandboxed there too).
   carry over. bubblewrap: read-only `/`, private `/tmp`, the project and a temp
   folder writable, own PID and network namespaces (`--die-with-parent`,
   `--new-session`); a timeout kills everything inside.
-- Read-only inside the project: `.git/hooks`, `.git/config` (hooks and
-  `core.fsmonitor` would run outside the sandbox later), `.cmcoder` (cmcoder's
-  permissions), `.vscode`, `.mcp.json`. Hidden: `~/.ssh`, `~/.aws`, `~/.azure`,
+- Read-only inside the project: `.git` (all of it, decided 4 Oct after the
+  security review: git's settings and hooks would run outside the sandbox
+  later; git commands that write run outside it, with approval), `.cmcoder`
+  (cmcoder's permissions), `.vscode`, `.idea`, `.mcp.json`; on Linux, empty
+  placeholders while the session runs, so missing ones can't be created.
+  Local services' sockets (`/run`, the runtime folder, Docker) are hidden. Hidden: `~/.ssh`, `~/.aws`, `~/.azure`,
   gcloud, `~/.kube`, Docker's config, `~/.netrc`, git credentials, `~/.gnupg`,
   `~/.pypirc`, cmcoder's credentials file, plus `sandbox.denyReadPaths`.
 - Package caches (pip, npm, yarn, Go, XDG) go to the sandbox's temp folder, so

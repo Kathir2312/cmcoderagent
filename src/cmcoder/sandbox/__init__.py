@@ -7,16 +7,20 @@ network only through cmcoder's filtering proxy (sandbox/proxy.py).
 - macOS: `sandbox-exec` with a generated profile; the proxy on localhost.
 - Native Windows: not available (permission prompts remain the protection).
 
-Inside the project, `.git/hooks`, `.git/config`, `.cmcoder`, `.vscode` and
-`.mcp.json` stay read-only: changing them could run code outside the sandbox
-later (git hooks, git's fsmonitor, editor tasks) or change cmcoder's own
-permissions. Package caches go to the temp folder, so nothing poisons the real
+Inside the project, `.git` (all of it), `.cmcoder`, `.vscode`, `.idea` and
+`.mcp.json` stay read-only, and can't be created when missing: what's in them
+can run code outside the sandbox later (git's settings and hooks, editor
+tasks) or change cmcoder's own permissions. Git commands that only read
+(status, diff, log) work; ones that write (commit, checkout, stash) need the
+user's approval to run outside the sandbox. Local services' sockets (/run,
+the user's runtime folder, Docker's) aren't reachable from inside. Package caches go to the temp folder, so nothing poisons the real
 caches that run unsandboxed later.
 """
 
 from __future__ import annotations
 
 import asyncio
+import os
 import shutil
 import subprocess
 import sys
@@ -25,7 +29,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ..compat import IS_WINDOWS, find_program, find_shell
-from ..config.settings import SandboxConfig, config_dir
+from ..config.settings import SandboxConfig, config_dir, env_api_key_source
 from .proxy import FilteringProxy
 
 BRIDGE_PORT = 3128  # inside the Linux sandbox's own network namespace
@@ -36,14 +40,21 @@ DEFAULT_DENY_READ = (
     "~/.azure",
     "~/.config/gcloud",
     "~/.kube",
-    "~/.docker/config.json",
+    "~/.docker",
     "~/.netrc",
     "~/.git-credentials",
     "~/.gnupg",
     "~/.pypirc",
 )
 # Inside the project: read-only even in the sandbox.
-PROTECTED_IN_PROJECT = (".git/hooks", ".git/config", ".cmcoder", ".vscode", ".mcp.json")
+PROTECTED_IN_PROJECT = (".git", ".cmcoder", ".vscode", ".idea", ".mcp.json")
+# Linux: made as empty folders when missing, so they can be mounted read-only
+# (and so can't be created); removed again when the session ends if still empty.
+PLACEHOLDERS = (".git", ".cmcoder", ".vscode", ".mcp.json")
+# Linux: system folders with other programs' sockets, replaced by empty ones.
+SYSTEM_HIDDEN = ("/run", "/var/run", "/mnt/wslg")
+# Variables that can point at a socket of a service outside the sandbox.
+SOCKET_VARIABLES = ("SSH_AUTH_SOCK", "DBUS_SESSION_BUS_ADDRESS", "DOCKER_HOST", "WSL_INTEROP")
 
 
 @dataclass
@@ -133,6 +144,7 @@ class Sandbox:
         self.kind = kind
         self.proxy = FilteringProxy(cfg.network.allowed_hosts)
         self.tmp: Path | None = None
+        self.placeholders: list[Path] = []
         self._port: int | None = None
         self._lock = asyncio.Lock()
 
@@ -148,8 +160,10 @@ class Sandbox:
         hosts = ", ".join(self.cfg.network.allowed_hosts) or "none"
         return (
             "Sandbox: Bash commands run in a sandbox. They can write only inside the project "
-            "and the temp folder ($TMPDIR), can't change .git/hooks, .git/config or .cmcoder, "
-            f"and reach the network only through a proxy that allows these hosts: {hosts}. "
+            "and the temp folder ($TMPDIR); .git, .cmcoder, .vscode and .mcp.json are read-only, "
+            "so git commands that only read (status, diff, log) work but ones that write "
+            "(commit, checkout, stash, init) fail in the sandbox. Commands reach the network "
+            f"only through a proxy that allows these hosts: {hosts}. "
             + (
                 "If a command fails because of this and is really needed, run it again with "
                 "dangerously_disable_sandbox (the user is asked)."
@@ -174,12 +188,23 @@ class Sandbox:
                 self._port = await self.proxy.start_tcp()
 
     def _make_folders(self) -> Path:
-        # A read-only .cmcoder needs to exist to be protected (bwrap binds over it).
-        (self.root / ".cmcoder").mkdir(exist_ok=True)
+        if self.kind == "bwrap":
+            # bwrap can only mount over what exists.
+            for name in PLACEHOLDERS:
+                path = self.root / name
+                if not path.exists() and not path.is_symlink():
+                    path.mkdir()
+                    self.placeholders.append(path)
         return Path(tempfile.mkdtemp(prefix="cmcoder-sbx-")).resolve()
 
     async def close(self) -> None:
         await self.proxy.close()
+        for path in self.placeholders:
+            try:
+                path.rmdir()  # only if still empty
+            except OSError:
+                pass
+        self.placeholders = []
         if self.tmp is not None:
             shutil.rmtree(self.tmp, ignore_errors=True)
             self.tmp = None
@@ -202,6 +227,13 @@ class Sandbox:
             env[name] = env[name.lower()] = proxy
         env["no_proxy"] = env["NO_PROXY"]
         return env
+
+    @staticmethod
+    def hidden_variables(env: dict[str, str]) -> list[str]:
+        """Variables kept out of the sandbox: cmcoder's own API key and the
+        addresses of services the sandbox can't reach anyway."""
+        _, key_variable = env_api_key_source(env)
+        return [*SOCKET_VARIABLES, "CMCODER_API_KEY", *([key_variable] if key_variable else [])]
 
     def _paths(self) -> tuple[list[Path], list[Path], list[Path]]:
         """(writable, read-only inside them, hidden), existing paths only."""
@@ -236,11 +268,13 @@ class Sandbox:
         # A new, private, empty /tmp inside the sandbox (not a temp file of ours).
         private_tmp = ["--tmpfs", "/tmp"]  # nosec B108
         argv += ["--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", *private_tmp]
+        for p in system_hidden():
+            argv += ["--tmpfs", str(p)]
         for p in writable:
             argv += ["--bind", str(p), str(p)]
         for p in protected:
             argv += ["--ro-bind", str(p), str(p)]
-        for p in hidden:
+        for p in [*hidden, *service_sockets()]:
             argv += ["--tmpfs", str(p)] if p.is_dir() else ["--ro-bind", "/dev/null", str(p)]
         argv += ["--chdir", str(cwd)]
         sock = self.tmp / "proxy.sock"
@@ -258,8 +292,54 @@ class Sandbox:
     ) -> list[str]:
         root = self.root
         always_protected = [root / p for p in PROTECTED_IN_PROJECT]  # existing or not
-        profile = seatbelt_profile(writable, [*protected, *always_protected], hidden)
+        assert self._port is not None
+        profile = seatbelt_profile(
+            writable,
+            [*protected, *always_protected],
+            hidden,
+            proxy_port=self._port,
+            allow_localhost=self.cfg.network.allow_localhost,
+        )
         return ["/usr/bin/sandbox-exec", "-p", profile, shell, "--noprofile", "--norc"]
+
+
+def system_hidden() -> list[Path]:
+    """Folders with other programs' sockets (Linux), as real folders that exist."""
+    names = [*SYSTEM_HIDDEN]
+    if runtime := os.environ.get("XDG_RUNTIME_DIR"):
+        names.append(runtime)
+    out: list[Path] = []
+    for name in names:
+        path = Path(name)
+        if path.is_dir() and not path.is_symlink() and path not in out:
+            out.append(path)
+    return out
+
+
+def _socket_path(value: str) -> Path | None:
+    """The file in e.g. `unix:path=/run/x,guid=..`, `unix:///var/run/x` or `/tmp/x`."""
+    for part in value.split(";"):
+        part = part.strip()
+        if part.startswith("unix:path="):
+            part = part[len("unix:path=") :].split(",", 1)[0]
+        elif part.startswith("unix://"):
+            part = part[len("unix://") :]
+        if part.startswith("/"):
+            return Path(part)
+    return None
+
+
+def service_sockets() -> list[Path]:
+    """Sockets named in the environment outside the folders hidden anyway."""
+    covered = [Path("/tmp"), *system_hidden()]  # nosec B108: a prefix check
+    out: list[Path] = []
+    for name in SOCKET_VARIABLES:
+        path = _socket_path(os.environ.get(name, ""))
+        if path is None or not path.exists():
+            continue
+        if not any(path == c or path.is_relative_to(c) for c in covered):
+            out.append(path)
+    return out
 
 
 def bridge_command(port: int, sock: Path) -> list[str]:
@@ -275,7 +355,13 @@ def _sb(path: Path) -> str:
     return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
-def seatbelt_profile(writable: list[Path], protected: list[Path], hidden: list[Path]) -> str:
+def seatbelt_profile(
+    writable: list[Path],
+    protected: list[Path],
+    hidden: list[Path],
+    proxy_port: int,
+    allow_localhost: bool = False,
+) -> str:
     """macOS sandbox profile (SBPL; later rules win)."""
     lines = [
         "(version 1)",
@@ -292,11 +378,15 @@ def seatbelt_profile(writable: list[Path], protected: list[Path], hidden: list[P
         lines += ["(deny file-read* file-write*", *[f"  (subpath {_sb(p)})" for p in hidden], ")"]
     lines += [
         "(deny network*)",
-        # Local servers (the proxy, a test server): bind and accept on localhost,
-        # connect only to localhost. Nothing else leaves the machine.
+        # Servers the command starts itself: bind and accept on localhost.
         '(allow network-bind (local ip "localhost:*"))',
         '(allow network-inbound (local ip "localhost:*"))',
-        '(allow network-outbound (remote ip "localhost:*"))',
+        # Out: only cmcoder's proxy, unless network.allowLocalhost (then any
+        # local port, including services outside the sandbox).
+        f'(allow network-outbound (remote ip "localhost:{"*" if allow_localhost else proxy_port}"))',
+        # No starting programs outside the sandbox through launchd or other apps.
+        "(deny job-creation)",
+        "(deny appleevent-send)",
     ]
     return "\n".join(lines) + "\n"
 

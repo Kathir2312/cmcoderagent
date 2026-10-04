@@ -89,6 +89,8 @@ class PersistentShell:
         argv = [self.shell, "--noprofile", "--norc"]
         if self.sandbox is not None:
             argv, sandbox_env = await self.sandbox.shell_command(self.shell, self.initial_cwd)
+            for name in self.sandbox.hidden_variables(env):
+                env.pop(name, None)
             env.update(sandbox_env)
         self._proc = await asyncio.create_subprocess_exec(
             *argv,

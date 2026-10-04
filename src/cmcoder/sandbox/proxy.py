@@ -130,25 +130,44 @@ class FilteringProxy:
         host, port = url.hostname, url.port or 80
         if not await self._check(host, writer):
             return
-        via_proxy = _upstream_for("http", host)
+        headers: list[str] = []
+        length = 0
+        for line in rest.split("\r\n"):
+            name = line.partition(":")[0].strip().lower()
+            if not line or name.startswith("proxy-") or name in ("connection", "host"):
+                continue
+            if name == "transfer-encoding":
+                await self._reply(writer, 400, "Chunked uploads aren't supported: use https.")
+                return
+            if name == "content-length":
+                value = line.partition(":")[2].strip()
+                if not value.isdigit():
+                    await self._reply(writer, 400, "Invalid Content-Length.")
+                    return
+                length = int(value)
+            headers.append(line)
         opened = await self._open(host, port, "http", connect=False)
         if opened is None:
             await self._reply(writer, 502, f"Could not connect to {host}:{port}.")
             return
         up_reader, up_writer = opened
-        path = target if via_proxy else (url.path or "/") + (f"?{url.query}" if url.query else "")
-        headers = [
-            line
-            for line in rest.split("\r\n")
-            if line and not line.lower().startswith(("proxy-", "connection:"))
-        ]
+        # Rebuilt from what was checked, never the client's own text: one
+        # request, to that host, whatever the client sent after it.
+        authority = f"[{host}]" if _is_ipv6(host) else host
+        if port != 80:
+            authority += f":{port}"
+        path = (url.path or "/") + (f"?{url.query}" if url.query else "")
+        if _upstream_for("http", host):
+            path = f"http://{authority}{path}"
         up_writer.write(
-            f"{method} {path} {version}\r\n".encode("latin-1")
+            f"{method} {path} {version}\r\nHost: {authority}\r\n".encode("latin-1")
             + "".join(f"{h}\r\n" for h in headers).encode("latin-1")
             + b"Connection: close\r\n\r\n"
         )
+        if length:
+            up_writer.write(await reader.readexactly(length))
         await up_writer.drain()
-        await self._pipe(reader, writer, up_reader, up_writer)
+        await self._pipe_back(up_reader, up_writer, writer)
 
     async def _check(self, host: str, writer: asyncio.StreamWriter) -> bool:
         if host_allowed(host, self.allowed):
@@ -190,6 +209,24 @@ class FilteringProxy:
         )
         with suppress(Exception):
             await writer.drain()
+
+    @staticmethod
+    async def _pipe_back(
+        up_reader: asyncio.StreamReader,
+        up_writer: asyncio.StreamWriter,
+        writer: asyncio.StreamWriter,
+    ) -> None:
+        """The upstream's reply to the client; nothing more from the client."""
+        try:
+            while data := await up_reader.read(65536):
+                writer.write(data)
+                await writer.drain()
+        except (OSError, asyncio.IncompleteReadError):
+            pass
+        finally:
+            up_writer.close()
+            with suppress(Exception):
+                await up_writer.wait_closed()
 
     @staticmethod
     async def _pipe(
