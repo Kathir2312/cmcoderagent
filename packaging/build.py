@@ -60,6 +60,8 @@ def main() -> None:
             "--copy-metadata=keyring",
             "--collect-data=textual",
             "--collect-submodules=truststore",
+            # Build-time only (packaging/brand.py), never imported by cmcoder.
+            "--exclude-module=PIL",
             *add_data,
             *windows,
         ]

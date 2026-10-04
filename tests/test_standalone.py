@@ -177,3 +177,25 @@ def test_the_windows_exe_has_the_icon_and_details() -> None:
     product = ctypes.wstring_at(ptr.value or 0, length.value).rstrip("\0")
     brand = json.loads(BRAND_JSON.read_text("utf-8"))
     assert product == brand["productName"]
+
+
+def test_code_search(mock_server: Any, project: Path) -> None:
+    """numpy and the code index work in the standalone build."""
+    (project / "auth.py").write_text("def refresh_auth_token(session):\n    return session\n")
+    server = mock_server([])
+    r = run(
+        project,
+        server,
+        "rag",
+        "setup",
+        "-m",
+        "default:text-embedding-3-small",
+        "--store",
+        "local",
+        "--index",
+        "--yes",
+    )
+    assert r.returncode == 0, r.stderr + r.stdout
+    assert "Indexed 1 files" in r.stdout
+    r = run(project, server, "index", "--status")
+    assert "1 files" in r.stdout, r.stderr
