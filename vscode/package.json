@@ -4,6 +4,7 @@
   "description": "Agentic coding assistant for your company's model gateway, in VS Code.",
   "version": "0.1.0",
   "publisher": "cmcoder",
+  "icon": "media/icon.png",
   "private": true,
   "license": "UNLICENSED",
   "repository": {

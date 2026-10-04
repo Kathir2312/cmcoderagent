@@ -3,6 +3,7 @@
 
 import * as path from "node:path";
 import * as vscode from "vscode";
+import { productName } from "./brand";
 import type { FileChange } from "./protocol";
 
 export const SCHEME = "cmcoder-diff";
@@ -34,7 +35,7 @@ export class DiffReview implements vscode.TextDocumentContentProvider {
       vscode.Uri.from({ scheme: SCHEME, path: `/${side}/${name}`, query: `id=${requestId}&side=${side}` });
     const review = { change, left: uri("before"), right: uri("after") };
     this.reviews.set(requestId, review);
-    const title = change.before === null ? `${name} (new file, proposed by cmcoder)` : `${name} ↔ proposed by cmcoder`;
+    const title = change.before === null ? `${name} (new file, proposed by ${productName()})` : `${name} ↔ proposed by ${productName()}`;
     await vscode.commands.executeCommand("vscode.diff", review.left, review.right, title, {
       preview: false,
       preserveFocus: true,

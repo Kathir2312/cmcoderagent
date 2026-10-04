@@ -22,13 +22,13 @@ after(async () => {
   await browser?.close();
 });
 
-async function panel(): Promise<{ page: Page; send: (m: ToWebview) => Promise<void>; ev: (e: AgentEvent) => Promise<void>; sent: () => Promise<FromWebview[]> }> {
+async function panel(product?: string): Promise<{ page: Page; send: (m: ToWebview) => Promise<void>; ev: (e: AgentEvent) => Promise<void>; sent: () => Promise<FromWebview[]> }> {
   const page = await browser.newPage();
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.setContent(`<!DOCTYPE html><html><head><style>${readFileSync(join(root, "media", "chat.css"), "utf8")}</style>
     <script>window.sent=[];function acquireVsCodeApi(){return{postMessage:(m)=>window.sent.push(m)}}</script>
-    </head><body><div id="app"></div></body></html>`);
+    </head><body${product ? ` data-product="${product}"` : ""}><div id="app"></div></body></html>`);
   await page.addScriptTag({ content: readFileSync(join(root, "dist", "webview.js"), "utf8") });
   // postMessage is delivered later: resolve only once the page has handled it
   // (a marker posted right after it arrives after it), so assertions never
@@ -249,5 +249,28 @@ test("rewind: the conversation is redrawn and the message is back in the input",
   assert.deepEqual(await page.locator(".msg.user").allTextContents(), ["first"]);
   assert.equal(await page.inputValue("textarea"), "second");
   assert.match((await page.textContent(".log")) ?? "", /Rewound the conversation\. Files: 0 restored, 1 deleted/);
+  await page.close();
+});
+
+test("branding: the product's name and logo before the first message", async () => {
+  const { page, ev } = await panel("Acme Coder");
+  assert.equal(await page.getAttribute("textarea", "placeholder"), "Ask Acme Coder… (Enter to send, Shift+Enter for a new line)");
+  const empty = () =>
+    page.$eval(".log", (log) => ({
+      name: getComputedStyle(log, "::after").content,
+      logo: getComputedStyle(log, "::before").backgroundImage,
+    }));
+  assert.deepEqual(await empty(), { name: '"Acme Coder"', logo: (await empty()).logo });
+  assert.match((await empty()).logo, /icon\.png/);
+  await ev({ type: "assistant_message", text: "Hello.", reasoning: "", tool_calls: [], model: "m" });
+  assert.equal((await empty()).name, "none"); // gone once the conversation starts
+  const avatar = await page.$eval(".msg.assistant", (m) => getComputedStyle(m, "::before").backgroundImage);
+  assert.match(avatar, /icon\.png/);
+  await page.close();
+});
+
+test("branding: defaults to cmcoder", async () => {
+  const { page } = await panel();
+  assert.match((await page.getAttribute("textarea", "placeholder")) ?? "", /^Ask cmcoder…/);
   await page.close();
 });

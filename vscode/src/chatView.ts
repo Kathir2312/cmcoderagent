@@ -4,6 +4,7 @@
 import { randomBytes } from "node:crypto";
 import * as vscode from "vscode";
 import { AgentProcess } from "./agentProcess";
+import { productName } from "./brand";
 import { DiffReview } from "./diffReview";
 import { cmcoderCommand } from "./executable";
 import { contextLabel, currentEditor, editorContext, IDE_TOOLS, runIdeTool } from "./editorContext";
@@ -45,7 +46,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     const enabled = vscode.workspace.getConfiguration("cmcoder").get<boolean>("autoContext", true);
     const context = includeContext && enabled ? editorContext(currentEditor()) : null;
     if (this.agent?.send({ type: "user_message", text, context })) return true;
-    this.setState("exited", "cmcoder isn't running. Click Restart.");
+    this.setState("exited", `${productName()} isn't running. Click Restart.`);
     return false;
   }
 
@@ -103,7 +104,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private startAgent(extraArgs: string[] = []): void {
     const folder = vscode.workspace.workspaceFolders?.[0];
     if (!folder) {
-      this.setState("exited", "Open a folder first: cmcoder works on the files of a project.");
+      this.setState("exited", `Open a folder first: ${productName()} works on the files of a project.`);
       return;
     }
     const config = vscode.workspace.getConfiguration("cmcoder");
@@ -131,9 +132,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         if (this.agent !== agent) return; // an old process, already replaced
         this.agent = undefined;
         void this.clearReviews();
-        this.log.appendLine(`cmcoder exited (code ${code})`);
+        this.log.appendLine(`${productName()} exited (code ${code})`);
         if (!expected) {
-          this.setState("exited", error ?? `cmcoder stopped unexpectedly (exit code ${code}). See "cmcoder: Show Log".`);
+          this.setState("exited", error ?? `${productName()} stopped unexpectedly (exit code ${code}). See "${productName()}: Show Log".`);
         }
       },
     });
@@ -303,12 +304,16 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   <meta http-equiv="Content-Security-Policy" content="${csp}">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link href="${style}" rel="stylesheet">
-  <title>cmcoder</title>
+  <title>${escapeHtml(productName())}</title>
 </head>
-<body>
+<body data-product="${escapeHtml(productName())}">
   <div id="app"></div>
   <script nonce="${nonce}" src="${script}"></script>
 </body>
 </html>`;
   }
+}
+
+function escapeHtml(text: string): string {
+  return text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 }

@@ -64,7 +64,40 @@ select { padding: 2px 4px; }
   padding: 8px 10px;
 }
 
+/* Before the first message: the product's icon and name (branding/). */
+.log:empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.log:empty::before {
+  content: "";
+  width: 64px;
+  height: 64px;
+  background: url("icon.png") center / contain no-repeat;
+}
+.log:empty::after {
+  content: attr(data-product);
+  font-size: 1.3em;
+  font-weight: 600;
+  opacity: 0.8;
+}
+
 .msg { margin: 10px 0; line-height: 1.5; overflow-wrap: anywhere; }
+
+/* The product's icon beside each reply. */
+.msg.assistant { position: relative; padding-left: 24px; }
+.msg.assistant::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 2px;
+  width: 16px;
+  height: 16px;
+  background: url("icon.png") center / contain no-repeat;
+}
 .msg > :first-child { margin-top: 0; }
 .msg > :last-child { margin-bottom: 0; }
 

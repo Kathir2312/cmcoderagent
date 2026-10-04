@@ -71,6 +71,9 @@ function setMarkdown(target: HTMLElement, markdown: string): void {
 
 // --- layout ------------------------------------------------------------------
 
+// The product name (from the extension's displayName; see brand.ts).
+const PRODUCT = document.body.dataset.product || "cmcoder";
+
 const app = document.getElementById("app")!;
 app.innerHTML = `
   <header>
@@ -87,7 +90,7 @@ app.innerHTML = `
       <input type="checkbox" checked> <span></span>
     </label>
     <div class="commands" role="listbox" hidden></div>
-    <textarea rows="3" placeholder="Ask cmcoder… (Enter to send, Shift+Enter for a new line)"></textarea>
+    <textarea rows="3"></textarea>
     <div class="actions">
       <button class="attach secondary" title="Attach a file (@)">@</button>
       <span class="usage"></span>
@@ -98,7 +101,9 @@ app.innerHTML = `
 
 const $ = <T extends HTMLElement>(sel: string) => app.querySelector(sel) as T;
 const log = $<HTMLElement>(".log");
+log.dataset.product = PRODUCT; // the empty screen shows the logo and this name
 const input = $<HTMLTextAreaElement>("textarea");
+input.placeholder = `Ask ${PRODUCT}… (Enter to send, Shift+Enter for a new line)`;
 const sendButton = $<HTMLButtonElement>(".send");
 const stopButton = $<HTMLButtonElement>(".stop");
 const modeSelect = $<HTMLSelectElement>(".mode");
@@ -133,8 +138,8 @@ function setBusy(value: boolean): void {
   sendButton.hidden = value;
   stopButton.hidden = !value;
   input.placeholder = value
-    ? "cmcoder is working… (Esc to stop)"
-    : "Ask cmcoder… (Enter to send, Shift+Enter for a new line)";
+    ? `${PRODUCT} is working… (Esc to stop)`
+    : `Ask ${PRODUCT}… (Enter to send, Shift+Enter for a new line)`;
   if (!value) showStatus();
 }
 
@@ -332,7 +337,7 @@ function onEvent(ev: AgentEvent): void {
       reply = undefined;
       for (const card of permissionCards.values()) answered(card, "Cancelled");
       permissionCards.clear();
-      if (ev.subtype === "interrupted") note("Interrupted. What should cmcoder do instead?", "warn");
+      if (ev.subtype === "interrupted") note(`Interrupted. What should ${PRODUCT} do instead?`, "warn");
       else if (ev.subtype === "max_turns") note(`Stopped: ${ev.result}`, "warn");
       setBusy(false);
       input.focus();
@@ -384,7 +389,7 @@ function permissionCard(ev: PermissionRequest): void {
 
   const feedback = document.createElement("input");
   feedback.type = "text";
-  feedback.placeholder = "Optional: tell cmcoder what to do instead (when denying)";
+  feedback.placeholder = `Optional: tell ${PRODUCT} what to do instead (when denying)`;
 
   const buttons = el("div", "buttons");
   const answer = (allow: boolean, remember: boolean) => {
@@ -583,12 +588,12 @@ window.addEventListener("message", (e: MessageEvent<ToWebview>) => {
       break;
     case "state":
       ready = m.state === "ready";
-      if (m.state === "starting") showStatus("Starting cmcoder…");
+      if (m.state === "starting") showStatus(`Starting ${PRODUCT}…`);
       else if (m.state === "ready") showStatus();
       else {
         setBusy(false);
         showStatus();
-        const box = el("div", "note error", m.message ?? "cmcoder stopped.");
+        const box = el("div", "note error", m.message ?? `${PRODUCT} stopped.`);
         const restart = el("button", "", "Restart");
         restart.onclick = () => {
           restart.remove();

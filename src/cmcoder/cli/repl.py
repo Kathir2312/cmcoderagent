@@ -19,12 +19,13 @@ from prompt_toolkit.key_binding import KeyBindings
 from rich.console import Console
 from rich.live import Live
 from rich.markdown import Markdown
+from rich.markup import escape
 from rich.panel import Panel
 from rich.status import Status
 from rich.syntax import Syntax
 from rich.text import Text
 
-from .. import __version__
+from .. import __version__, brand
 from ..compat import InterruptHandler
 from ..config.settings import Settings, config_dir, ignored_settings_message
 from ..core.agent import Agent, PermissionAnswer, PermissionRequest
@@ -300,7 +301,11 @@ class Repl:
             )
         else:
             c.print("  [dim]2 (not offered: high-risk commands are approved one at a time)[/dim]")
-        c.print("  [bold]3[/bold] No, and tell cmcoder what to do differently")
+        c.print(
+            "  [bold]3[/bold] No, and tell "
+            + escape(brand.load().product_name)
+            + " what to do differently"
+        )
 
     async def ask(self, req: PermissionRequest) -> PermissionAnswer:
         self._stop_status()
@@ -629,9 +634,13 @@ class Repl:
         self.agent = await build_agent(self.settings, self.opts)
         agent = self.agent
         cfg = self.settings.providers[agent.provider.name]
+        b = brand.load()
+        self.console.set_window_title(f"{b.product_name} · {agent.ctx.project_root.name}")
+        if b.logo:
+            self.console.print(Text(b.logo, style=b.accent_color))
         self.console.print(
             Panel.fit(
-                f"[bold]cmcoder[/bold] {__version__}\n"
+                f"[bold]{escape(b.product_name)}[/bold] {__version__}\n"
                 f"model    {agent.model}  [dim]({agent.provider.name}: {cfg.base_url})[/dim]\n"
                 f"cwd      {agent.ctx.cwd}\n"
                 + (
@@ -642,7 +651,7 @@ class Repl:
                 + f"mode     {agent.policy.mode}\n"
                 + ("policy   managed settings in effect\n" if self.settings.managed_path else "")
                 + "[dim]/help for commands · Ctrl+C interrupts · /exit quits[/dim]",
-                border_style="cyan",
+                border_style=b.accent_color,
             )
         )
         if warning := ignored_settings_message(self.settings):

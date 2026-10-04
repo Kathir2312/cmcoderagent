@@ -37,6 +37,10 @@ per platform with that `cmcoder` inside (`cmcoder-<platform>.vsix`): install it 
 else. It uses the bundled `cmcoder` unless you set `cmcoder.executable`. Build them yourself with
 `uv run --with pyinstaller python packaging/build.py`, then `uv run python packaging/vsix.py` (Node.js 22).
 
+**Your company's icon and name:** replace the files in `branding/` before building (icon, side-bar icon, name,
+VS Code publisher, colour, text logo); `cmcoder terminal-profile` adds a Windows Terminal profile with them. See
+[docs/phase4/branding.md](docs/phase4/branding.md).
+
 ## Configure
 
 Create `~/.cmcoder/settings.json` (on Windows: `%USERPROFILE%\.cmcoder\settings.json`) (see [docs/settings.example.json](docs/settings.example.json)):

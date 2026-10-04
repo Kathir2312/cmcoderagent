@@ -4,6 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import * as vscode from "vscode";
 import { resolveExecutable } from "./agentProcess";
+import { productName, setBrand } from "./brand";
 import { ChatViewProvider } from "./chatView";
 import { DiffReview, SCHEME } from "./diffReview";
 import { cmcoderCommand } from "./executable";
@@ -17,7 +18,8 @@ export interface CmcoderApi {
 }
 
 export function activate(context: vscode.ExtensionContext): CmcoderApi {
-  const log = vscode.window.createOutputChannel("cmcoder");
+  setBrand(context.extension);
+  const log = vscode.window.createOutputChannel(productName());
   const diffs = new DiffReview();
   chat = new ChatViewProvider(context.extensionUri, log, diffs);
   const view = chat;
@@ -63,7 +65,7 @@ export function activate(context: vscode.ExtensionContext): CmcoderApi {
       if (feedback === undefined) return; // Esc: keep reviewing
       view.answer(id, false, false, feedback);
     }),
-    vscode.commands.registerCommand("cmcoder.openTerminal", () => openTerminal(context.extensionPath)),
+    vscode.commands.registerCommand("cmcoder.openTerminal", () => openTerminal(context.extensionUri)),
     vscode.commands.registerCommand("cmcoder.showLog", () => log.show()),
     vscode.commands.registerCommand("cmcoder.openSettings", openSettings),
   );
@@ -75,22 +77,22 @@ export async function deactivate(): Promise<void> {
 }
 
 /** Runs the cmcoder CLI in VS Code's integrated terminal. */
-function openTerminal(extensionPath: string): void {
-  const { command, args } = cmcoderCommand(extensionPath);
+function openTerminal(extensionUri: vscode.Uri): void {
+  const { command, args } = cmcoderCommand(extensionUri.fsPath);
   const folder = vscode.workspace.workspaceFolders?.[0]?.uri;
   // A full path: never a cmcoder.exe planted in the workspace (Windows).
   const program = resolveExecutable(command, folder?.fsPath ?? process.cwd());
   if (!program) {
-    void vscode.window.showErrorMessage(`cmcoder: "${command}" was not found on PATH. Set cmcoder.executable to its full path.`);
+    void vscode.window.showErrorMessage(`${productName()}: "${command}" was not found on PATH. Set cmcoder.executable to its full path.`);
     return;
   }
   const terminal = vscode.window.createTerminal({
-    name: "cmcoder",
+    name: productName(),
     cwd: folder,
     // The program itself, not a shell command line: no quoting problems.
     shellPath: program,
     shellArgs: vscode.workspace.isTrusted ? [...args, "--trust-project"] : args,
-    iconPath: new vscode.ThemeIcon("code"),
+    iconPath: vscode.Uri.joinPath(extensionUri, "media", "icon.png"),
   });
   terminal.show();
 }

@@ -11,6 +11,7 @@ from typing import Annotated
 
 import typer
 from rich.console import Console
+from rich.markup import escape
 
 from .. import __version__
 from ..compat import stdin_has_data, use_utf8_stdio
@@ -26,7 +27,17 @@ from ..protocol.events import protocol_json_schema
 from ..providers.auth import ApiKeyAuth, delete_api_key, mask_key, store_api_key
 from ..providers.openai_compat import ProviderError
 
-SUBCOMMANDS = {"doctor", "login", "logout", "mcp", "models", "protocol-schema", "trust", "version"}
+SUBCOMMANDS = {
+    "doctor",
+    "login",
+    "logout",
+    "mcp",
+    "models",
+    "protocol-schema",
+    "terminal-profile",
+    "trust",
+    "version",
+}
 
 console = Console(highlight=False)
 err_console = Console(stderr=True, highlight=False)
@@ -417,6 +428,39 @@ def trust(
             raise typer.Exit(1)
     set_project_trust(root, True)
     console.print(f"Trusted {root}. `cmcoder trust --revoke` undoes it.")
+
+
+@sub_app.command(
+    "terminal-profile",
+    help="Add a Windows Terminal profile that starts cmcoder (with its name and icon).",
+)
+def terminal_profile(
+    remove: Annotated[bool, typer.Option("--remove", help="Remove the profile.")] = False,
+    print_only: Annotated[
+        bool, typer.Option("--print", help="Only print the profile (JSON); change nothing.")
+    ] = False,
+) -> None:
+    from .. import brand
+    from . import terminal_profile as wt
+
+    b = brand.load()
+    if print_only:
+        print(json.dumps(wt.profile(b), indent=2))
+        return
+    if remove:
+        removed = wt.remove(b)
+        console.print(f"Removed {removed}." if removed else "No profile to remove.")
+        return
+    try:
+        path = wt.install(b)
+    except (RuntimeError, OSError) as e:
+        err_console.print(f"[red]error:[/red] {e}")
+        raise typer.Exit(1) from None
+    console.print(
+        f"Added the Windows Terminal profile [bold]{escape(b.product_name)}[/bold] ({path}). "
+        "Open a new Windows Terminal window to see it in the drop-down; "
+        "`cmcoder terminal-profile --remove` removes it."
+    )
 
 
 @sub_app.command(help="Print the version.")

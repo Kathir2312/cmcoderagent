@@ -1,15 +1,18 @@
 """Package the VS Code extension for this platform, with the standalone
 `cmcoder` (from packaging/build.py) inside, so users need nothing else.
 
-    uv run python packaging/vsix.py          # after packaging/build.py
+    uv run python packaging/vsix.py      # after packaging/build.py
 
 Output: vscode/cmcoder-<target>.vsix (e.g. win32-x64, linux-x64, darwin-arm64).
 The extension uses the bundled cmcoder unless cmcoder.executable is set.
+Branding (branding/): the icons and the name and publisher in package.json
+are applied for the packaging only; the files are put back afterwards.
 Needs Node.js 22 (the packaging tool).
 """
 
 from __future__ import annotations
 
+import json
 import platform
 import shutil
 import subprocess
@@ -18,6 +21,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 EXT = ROOT / "vscode"
+sys.path.insert(0, str(ROOT / "packaging"))
+
+import brand  # noqa: E402
 
 
 def target() -> str:
@@ -37,19 +43,43 @@ def main() -> None:
     npx = shutil.which("npx") or shutil.which("npx.cmd")
     if npx is None:
         sys.exit("npx (Node.js) is needed to package the extension")
+    try:
+        b = brand.generate()
+    except brand.BrandError as e:
+        sys.exit(str(e))
     t = target()
     out = f"cmcoder-{t}.vsix"
     node = shutil.which("node") or "node"
-    subprocess.run(
-        [node, "esbuild.mjs", "--production"], cwd=EXT, check=True, stdin=subprocess.DEVNULL
-    )
-    subprocess.run(
-        [npx, "vsce", "package", "--target", t, "--skip-license", "--out", out],
-        cwd=EXT,
-        check=True,
-        stdin=subprocess.DEVNULL,
-    )
-    print(f"built {EXT / out}")
+    package_json = EXT / "package.json"
+    branded = {
+        EXT / "media" / "icon.png": (brand.OUT / "icon-256.png").read_bytes(),
+        EXT / "media" / "icon.svg": (brand.BRANDING / "icon-mono.svg").read_bytes(),
+        package_json: (
+            json.dumps(
+                brand.brand_package_json(json.loads(package_json.read_text("utf-8")), b),
+                indent=2,
+                ensure_ascii=False,
+            )
+            + "\n"
+        ).encode("utf-8"),
+    }
+    originals = {path: path.read_bytes() for path in branded}
+    try:
+        for path, content in branded.items():
+            path.write_bytes(content)
+        subprocess.run(
+            [node, "esbuild.mjs", "--production"], cwd=EXT, check=True, stdin=subprocess.DEVNULL
+        )
+        subprocess.run(
+            [npx, "vsce", "package", "--target", t, "--skip-license", "--out", out],
+            cwd=EXT,
+            check=True,
+            stdin=subprocess.DEVNULL,
+        )
+    finally:
+        for path, content in originals.items():
+            path.write_bytes(content)
+    print(f"built {EXT / out} ({b['productName']}, publisher {b['publisher']})")
 
 
 if __name__ == "__main__":

@@ -26,6 +26,7 @@ dev = [
     "pytest-asyncio>=0.23",
     "ruff>=0.5",
     "pyright>=1.1.370",
+    "pillow>=10",
 ]
 
 [build-system]
@@ -34,6 +35,10 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/cmcoder"]
+
+[tool.hatch.build.targets.wheel.force-include]
+# The product's name, colour, logo and icon (see branding/README.md).
+"branding" = "cmcoder/_brand"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

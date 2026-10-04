@@ -26,7 +26,7 @@ from textual.suggester import Suggester
 from textual.widgets import Button, Input, Label, Markdown, Static
 from textual.worker import Worker
 
-from .. import __version__
+from .. import __version__, brand
 from ..config.settings import Settings, ignored_settings_message
 from ..core.agent import Agent, PermissionAnswer, PermissionRequest
 from ..core.commands import BUILT_IN, help_lines
@@ -136,7 +136,7 @@ class PermissionScreen(ModalScreen[PermissionAnswer]):
 
 
 class CmcoderApp(App[int]):
-    TITLE = "cmcoder"
+    TITLE = "cmcoder"  # replaced by the brand's name in __init__
     CSS = """
     #log { height: 1fr; padding: 0 1; }
     #log > Static { margin-bottom: 0; }
@@ -156,6 +156,8 @@ class CmcoderApp(App[int]):
 
     def __init__(self, settings: Settings, initial_prompt: str | None = None) -> None:
         super().__init__()
+        self.brand = brand.load()
+        self.title = self.brand.product_name
         self.settings = settings
         self.initial_prompt = initial_prompt
         self.agent: Agent | None = None
@@ -171,7 +173,7 @@ class CmcoderApp(App[int]):
     def compose(self) -> ComposeResult:
         yield VerticalScroll(id="log")
         yield Input(
-            placeholder="Ask cmcoder…  (/help for commands)",
+            placeholder=f"Ask {self.brand.product_name}…  (/help for commands)",
             id="prompt",
             suggester=SlashSuggester(self),
         )
@@ -181,9 +183,11 @@ class CmcoderApp(App[int]):
         assert self.agent is not None
         a = self.agent
         cfg = self.settings.providers[a.provider.name]
+        if self.brand.logo:
+            self.write(Text(self.brand.logo, style=self.brand.accent_color))
         self.write(
             Text.assemble(
-                ("cmcoder ", "bold"),
+                (f"{self.brand.product_name} ", f"bold {self.brand.accent_color}"),
                 f"{__version__}  ·  {a.model} ({a.provider.name}: {cfg.base_url})\n",
                 (f"cwd {a.ctx.cwd}", "dim"),
                 (

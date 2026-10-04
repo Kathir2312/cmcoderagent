@@ -18,6 +18,7 @@ usage if it wants to.
 | TUI default (3 Oct, item 2) | **Classic stays the default**; the full-screen UI remains opt-in (`--tui`). |
 | Sandbox: prompts (3 Oct, item 3) | **Auto-allow**: a command that runs in the sandbox doesn't ask (deny rules and high-risk commands unchanged). |
 | Sandbox: network (3 Oct, item 3) | **Blocked except an allowlist** of hosts in settings. |
+| Branding (4 Oct, added as item 6) | **Icon and name** from a `branding/` folder, replaced before building; **Windows Terminal profile** included. The company logo is dropped in by the team before they build the VS Code extension. |
 
 ## Items, in order
 
@@ -162,12 +163,34 @@ Terminal.
 - Not done: code signing (needs a company certificate; unsigned programs may
   get a SmartScreen / Gatekeeper warning the first time).
 
-### 6. Tests, evals and security review
+### 6. Branding: icon and name (added 4 October)
+
+- One folder, `branding/`: `icon.png` (full colour), `icon-mono.svg` (VS
+  Code's side bar), `brand.json` (product name, VS Code publisher, company,
+  copyright, accent colour), `logo.txt` (text logo for the terminal).
+  Replace the files, then build; nothing else to edit.
+- Checked at build time (`packaging/brand.py`: sizes, square, transparency,
+  one-colour SVG, text limits), which also makes `cmcoder.ico`, the 256 px
+  PNG and the Windows file details.
+- VS Code: Extensions list icon, side bar icon, name and publisher (in the
+  packaged copy only), the chat panel's empty screen and reply avatar, the
+  terminal tab, and messages that name the product.
+- CLI: name, text logo and accent colour at startup (classic and TUI), the
+  terminal window title; `cmcoder.exe` gets the icon and file details.
+- `cmcoder terminal-profile`: a Windows Terminal profile with the name and
+  icon (a fragment; `--remove`, `--print`).
+- The `cmcoder` command, settings and command IDs keep their names.
+- Status (4 Oct): done. Tests for the checks and outputs, the package.json
+  changes, the Windows Terminal profile, the webview; the standalone build
+  carries the branding, and on Windows the exe's icon and ProductName are
+  read back. Guide: [branding.md](branding.md).
+
+### 7. Tests, evals and security review
 
 - Evals through the Open WebUI mock; sandbox tests that try to escape.
 - SAST/SCA as in Phases 2–3, plus a sandbox escape review.
 
-### 7. Guides and docs
+### 8. Guides and docs
 
 - Guide sections per item, the Open WebUI setup page; hands-on checklist on
   Windows with LiteLLM and Open WebUI; `STATUS.md`.
@@ -185,6 +208,7 @@ client certificates: later, if needed.
 - [x] 3. Bash sandbox
 - [x] 4. OpenTelemetry
 - [x] 5. Standalone binary and per-platform VSIX
-- [ ] 6. Tests, evals and security review
-- [ ] 7. Guides and docs
+- [x] 6. Branding: icon and name
+- [ ] 7. Tests, evals and security review
+- [ ] 8. Guides and docs
 - [ ] Hands-on use on Windows (LiteLLM and Open WebUI), and `STATUS.md`

@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +20,7 @@ from cmcoder.sandbox import detect
 from .conftest import API_KEY
 
 BINARY = os.environ.get("CMCODER_TEST_BINARY")
+BRAND_JSON = Path(__file__).resolve().parent.parent / "branding" / "brand.json"
 pytestmark = pytest.mark.skipif(not BINARY, reason="set CMCODER_TEST_BINARY to run")
 
 
@@ -142,3 +144,36 @@ def test_the_sandbox_bridge(mock_server: Any, project: Path) -> None:
     out = next(e["content"] for e in events if e["type"] == "tool_result")
     # The request reached cmcoder's proxy through the bridge, which refused it.
     assert "CONNECT tunnel failed, response 403" in out, out
+
+
+def test_branding_is_inside(project: Path) -> None:
+    """The brand's files are packaged; Windows Terminal gets the .ico."""
+    r = run(project, None, "terminal-profile", "--print")
+    assert r.returncode == 0, r.stderr
+    p = json.loads(r.stdout)["profiles"][0]
+    assert p["name"] == json.loads(BRAND_JSON.read_text("utf-8"))["productName"]
+    assert p["icon"].endswith("cmcoder.ico") and Path(p["icon"]).is_file()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows file details")
+def test_the_windows_exe_has_the_icon_and_details() -> None:
+    assert sys.platform == "win32"  # (for the type checker)
+    import ctypes
+    from ctypes import wintypes
+
+    exe = str(Path(BINARY or "").resolve())
+    shell32 = ctypes.WinDLL("shell32")
+    shell32.ExtractIconExW.restype = wintypes.UINT
+    assert shell32.ExtractIconExW(exe, -1, None, None, 0) >= 1  # icons in the exe
+
+    version = ctypes.WinDLL("version")
+    size = version.GetFileVersionInfoSizeW(exe, None)
+    assert size
+    buf = ctypes.create_string_buffer(size)
+    assert version.GetFileVersionInfoW(exe, 0, size, buf)
+    ptr, length = ctypes.c_void_p(), wintypes.UINT()
+    key = "\\StringFileInfo\\040904B0\\ProductName"
+    assert version.VerQueryValueW(buf, key, ctypes.byref(ptr), ctypes.byref(length))
+    product = ctypes.wstring_at(ptr.value or 0, length.value).rstrip("\0")
+    brand = json.loads(BRAND_JSON.read_text("utf-8"))
+    assert product == brand["productName"]
