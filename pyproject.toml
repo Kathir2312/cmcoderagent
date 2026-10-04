@@ -15,6 +15,7 @@ dependencies = [
     "pathspec>=0.12",
     "textual>=0.80",
     "mcp>=2.3,<3",
+    "numpy>=1.26",
 ]
 
 [project.scripts]

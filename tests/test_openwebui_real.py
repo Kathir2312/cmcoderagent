@@ -67,7 +67,10 @@ def _post(url: str, data: dict[str, Any], token: str | None = None) -> dict[str,
 def openwebui(tmp_path_factory: pytest.TempPathFactory) -> Iterator[dict[str, Any]]:
     """A running Open WebUI with an admin's API key; its backends' recorders."""
     assert OPENWEBUI
-    backend = start_mock([dict(TWO_READS), {"content": DONE["content"]}])
+    backend = start_mock(
+        [dict(TWO_READS), {"content": DONE["content"]}],
+        models=["qwen3-27b", "qwen3-7b", "text-embedding-3-small"],
+    )
     ollama = FakeOllama("qwen3:8b", [dict(TWO_READS), dict(DONE)]).__enter__()
     port = _free_port()
     env = {k: v for k, v in os.environ.items() if not k.lower().endswith("_proxy")}
@@ -168,3 +171,31 @@ async def test_an_openai_compatible_backend(openwebui: dict[str, Any], project: 
     received = openwebui["backend"].requests
     assert "options" not in received[0]
     assert {t["function"]["name"] for t in received[0]["tools"]} >= {"Read", "Edit", "Bash"}
+
+
+@pytest.mark.parametrize(
+    ("model", "backend"), [("nomic-embed-text", "ollama"), ("text-embedding-3-small", "backend")]
+)
+async def test_embeddings_for_code_search(
+    openwebui: dict[str, Any], model: str, backend: str
+) -> None:
+    """Phase 5: /api/embeddings, for an Ollama model and an OpenAI-compatible one."""
+    from cmcoder.rag.embed import Embedder
+    from cmcoder.testing.mock_server import fake_embedding
+
+    provider = OpenWebUIProvider(
+        "webui",
+        openwebui["url"],
+        ApiKeyAuth("webui", explicit_key=openwebui["key"]),
+        build_client(TransportOptions(read_timeout=60)),
+    )
+    try:
+        vectors = await Embedder(provider, model).embed(["def refresh_token(): ...", "class X"])
+    finally:
+        await provider.aclose()
+    assert vectors.shape == (2, 64)
+    assert abs(float(vectors[0][0]) - fake_embedding("def refresh_token(): ...")[0]) < 1e-4
+    if backend == "ollama":
+        assert openwebui["ollama"].embed_requests[-1]["model"] == model
+    else:
+        assert openwebui["backend"].state.embedding_requests[-1]["model"] == model

@@ -11,6 +11,7 @@ on:
   push:
     paths:
       - "src/cmcoder/providers/**"
+      - "src/cmcoder/rag/embed.py"
       - "tests/test_openwebui*.py"
       - "tests/fake_ollama.py"
       - ".github/workflows/openwebui.yml"

@@ -29,7 +29,7 @@ from typing import Any
 import httpx
 
 from .auth import AuthProvider
-from .openai_compat import OpenAICompatProvider
+from .openai_compat import BadRequest, OpenAICompatProvider, ProviderError, ServerError
 from .profiles import ModelProfile
 
 # Model kinds in /api/models that aren't one model to talk to.
@@ -115,6 +115,22 @@ class OpenWebUIProvider(OpenAICompatProvider):
             return await asyncio.wait_for(go(), timeout)
         except TimeoutError:
             return None
+
+    async def embed(self, model: str, texts: list[str]) -> list[list[float]]:
+        # Open WebUI answers a bare 500 for a model it doesn't know: say so.
+        try:
+            return await super().embed(model, texts)
+        except ServerError as err:
+            try:
+                known = model in await self.list_models()
+            except ProviderError:
+                raise err from None
+            if known:
+                raise
+            raise BadRequest(
+                f"Open WebUI has no model {model!r} (it answered: {err})",
+                hint=f"Embedding models it offers are among `cmcoder models --provider {self.name}`.",
+            ) from None
 
     async def probe_context_window(
         self, model: str, profile: ModelProfile, timeout: float = 8.0

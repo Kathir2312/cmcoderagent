@@ -1,7 +1,8 @@
 """A stand-in Ollama server for testing cmcoder through a real Open WebUI.
 
 Speaks just enough of Ollama's API for Open WebUI (`/api/tags`, `/api/version`,
-`/api/ps`, `/api/show`, `/api/chat` as NDJSON) and records every chat request,
+`/api/ps`, `/api/show`, `/api/chat` as NDJSON, `/api/embed` for an embedding
+model) and records every chat and embed request,
 so a test can check what reached "Ollama" (e.g. `options.num_ctx`). Tool calls
 are sent like older Ollama versions do: all in one message, without an index.
 """
@@ -13,10 +14,20 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
+from cmcoder.testing.mock_server import fake_embedding
+
 
 class FakeOllama:
-    def __init__(self, model: str, script: list[dict[str, Any]], context_length: int = 40960):
+    def __init__(
+        self,
+        model: str,
+        script: list[dict[str, Any]],
+        context_length: int = 40960,
+        embed_model: str = "nomic-embed-text",
+    ):
         self.model = model
+        self.embed_model = embed_model
+        self.embed_requests: list[dict[str, Any]] = []
         self.script = list(script)
         self.context_length = context_length
         self.requests: list[dict[str, Any]] = []
@@ -89,15 +100,18 @@ class FakeOllama:
             def do_GET(self) -> None:
                 if self.path.startswith("/api/tags"):
                     details = {"family": "qwen3", "parameter_size": "8B"}
-                    model = {
-                        "name": fake.model,
-                        "model": fake.model,
-                        "modified_at": "2026-01-01T00:00:00Z",
-                        "size": 1,
-                        "digest": "d",
-                        "details": details,
-                    }
-                    self._json({"models": [model]})
+                    models = [
+                        {
+                            "name": name,
+                            "model": name,
+                            "modified_at": "2026-01-01T00:00:00Z",
+                            "size": 1,
+                            "digest": "d",
+                            "details": details,
+                        }
+                        for name in (fake.model, fake.embed_model)
+                    ]
+                    self._json({"models": models})
                 elif self.path.startswith("/api/version"):
                     self._json({"version": "0.12.0"})
                 elif self.path.startswith("/api/ps"):
@@ -120,6 +134,16 @@ class FakeOllama:
                             "template": "",
                             "details": {"family": "qwen3"},
                             "capabilities": ["completion", "tools", "thinking"],
+                        }
+                    )
+                elif self.path.startswith("/api/embed"):
+                    fake.embed_requests.append(body)
+                    texts = body.get("input")
+                    texts = [texts] if isinstance(texts, str) else texts or []
+                    self._json(
+                        {
+                            "model": body.get("model"),
+                            "embeddings": [fake_embedding(t) for t in texts],
                         }
                     )
                 elif self.path.startswith("/api/chat"):

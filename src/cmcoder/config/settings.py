@@ -140,6 +140,53 @@ class TelemetryConfig(_Model):
     ca_cert_path: str | None = Field(None, alias="caCertPath")
 
 
+class RagStoreConfig(_Model):
+    """Where the code index lives (cmcoder/rag/stores.py)."""
+
+    # "local": built in, under ~/.cmcoder/index/. "chroma": Chroma, on this
+    # machine (no `url`; needs `pip install cmcoder[chroma]`) or a Chroma server.
+    type: Literal["local", "chroma"] = "local"
+    url: str | None = None  # a Chroma server, e.g. https://chroma.example.com:8000
+    # Values may use ${VAR}; the API key saved by `cmcoder rag setup` is sent
+    # as `Authorization: Bearer` unless headers set one.
+    headers: dict[str, str] = Field(default_factory=dict)
+    ca_cert_path: str | None = Field(None, alias="caCertPath")
+    # Collection name (a shared server: the same for everyone on the project);
+    # default: from the project's folder and the embedding model.
+    collection: str | None = None
+    # Only search, never write (e.g. a shared index that CI keeps up to date).
+    read_only: bool = Field(False, alias="readOnly")
+
+
+class RagAutoContextConfig(_Model):
+    # The best matches for each message, added to it within maxTokens.
+    enabled: bool = True
+    top_k: int = Field(5, alias="topK", ge=1, le=20)
+    max_tokens: int = Field(2000, alias="maxTokens", ge=200, le=20000)
+    # Matches scoring below this (cosine similarity, 0-1) are left out.
+    min_score: float = Field(0.3, alias="minScore", ge=0.0, le=1.0)
+
+
+class RagConfig(_Model):
+    """Code search (Phase 5): an index of the project's code for the model."""
+
+    # "auto": on when an embedding model is set and the project has an index.
+    enabled: bool | Literal["auto"] = "auto"
+    # A model on your gateway: "provider:model" or a model of the default provider.
+    embedding_model: str | None = Field(None, alias="embeddingModel")
+    store: RagStoreConfig = Field(default_factory=lambda: RagStoreConfig.model_validate({}))
+    # gitignore-style patterns, relative to the project: only these (if set),
+    # and never these. Secret files (.env, keys, ...) are never indexed.
+    include: list[str] = Field(default_factory=list)
+    exclude: list[str] = Field(default_factory=list)
+    max_file_bytes: int = Field(512_000, alias="maxFileBytes", ge=1_000)
+    # Bring the index up to date (changed files only) when a session starts.
+    auto_update: bool = Field(True, alias="autoUpdate")
+    auto_context: RagAutoContextConfig = Field(
+        default_factory=lambda: RagAutoContextConfig.model_validate({}), alias="autoContext"
+    )
+
+
 class HookCommand(_Model):
     type: Literal["command"] = "command"
     command: str
@@ -208,6 +255,7 @@ class Settings(_Model):
     mcp_servers: dict[str, McpServerConfig] = Field(default_factory=dict, alias="mcpServers")
     sandbox: SandboxConfig = Field(default_factory=lambda: SandboxConfig.model_validate({}))
     telemetry: TelemetryConfig = Field(default_factory=lambda: TelemetryConfig.model_validate({}))
+    rag: RagConfig = Field(default_factory=lambda: RagConfig.model_validate({}))
     # Managed settings only: server names allowed (if set) and denied.
     allowed_mcp_servers: list[str] | None = Field(None, alias="allowedMcpServers")
     denied_mcp_servers: list[str] = Field(default_factory=list, alias="deniedMcpServers")
@@ -423,6 +471,16 @@ def env_layer(environ: dict[str, str] | None = None) -> dict[str, Any]:
         layer["sandbox"] = {"enabled": "auto"}
     if env.get("CMCODER_SUBAGENT_MODEL"):
         layer["subagentModel"] = env["CMCODER_SUBAGENT_MODEL"]
+    rag: dict[str, Any] = {}
+    if env.get("CMCODER_EMBEDDING_MODEL"):
+        rag["embeddingModel"] = env["CMCODER_EMBEDDING_MODEL"]
+    switch = env.get("CMCODER_RAG", "").strip().lower()
+    if switch in ("0", "false", "off", "no"):
+        rag["enabled"] = False
+    elif switch in ("1", "true", "on", "yes"):
+        rag["enabled"] = True
+    if rag:
+        layer["rag"] = rag
     return layer
 
 
@@ -565,6 +623,11 @@ def _filter_project_layer(layer: dict[str, Any], trusted: bool) -> tuple[dict[st
         dropped.append("sandbox settings")
     if out.pop("telemetry", None) is not None:
         dropped.append("telemetry settings")
+    rag = out.get("rag")
+    if isinstance(rag, dict) and "store" in rag:
+        # Where the code goes (a server) is the user's choice, not the repository's.
+        out["rag"] = {k: v for k, v in rag.items() if k != "store"}
+        dropped.append("rag.store (where the code index is kept)")
     if servers := out.pop("mcpServers", None):
         names = ", ".join(servers) if isinstance(servers, dict) else "?"
         dropped.append(f"mcpServers ({names})")

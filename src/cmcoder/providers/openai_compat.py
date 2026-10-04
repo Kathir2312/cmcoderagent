@@ -346,6 +346,39 @@ class OpenAICompatProvider:
             return out
         return {}
 
+    # -- embeddings --
+
+    async def embed(self, model: str, texts: list[str]) -> list[list[float]]:
+        """One vector per text, from `<base>/embeddings` (OpenAI format).
+
+        LiteLLM serves it at /v1/embeddings; Open WebUI at /api/embeddings,
+        passing Ollama models on to Ollama's /api/embed (openwebui.py)."""
+        if not texts:
+            return []
+        url = f"{self.base_url}/embeddings"
+        body = {"model": model, "input": texts}
+        attempt = 0
+        while True:
+            try:
+                try:
+                    headers = await self.auth.get_headers()
+                except AuthError as e:
+                    raise AuthFailed(str(e), hint="Run `cmcoder login`.") from e
+                try:
+                    resp = await self.client.post(url, json=body, headers=headers)
+                except httpx.HTTPError as e:
+                    raise classify_transport_error(e, self.base_url) from e
+                if resp.status_code != 200:
+                    raise self._with_key_hint(
+                        classify_http_error(resp.status_code, resp.content, resp.headers)
+                    )
+                return _parse_embeddings(resp, model, len(texts))
+            except ProviderError as err:
+                if not err.retryable or attempt >= self.max_retries:
+                    raise
+                await asyncio.sleep(_backoff(attempt, err.retry_after))
+                attempt += 1
+
     # -- context window --
 
     async def probe_context_window(
@@ -639,6 +672,24 @@ def _parse_cost(headers: httpx.Headers) -> float | None:
         return float(raw)
     except ValueError:
         return None
+
+
+def _parse_embeddings(resp: httpx.Response, model: str, count: int) -> list[list[float]]:
+    try:
+        data = resp.json()
+        items = sorted(data["data"], key=lambda d: int(d.get("index", 0)))
+        vectors = [[float(x) for x in item["embedding"]] for item in items]
+    except (ValueError, KeyError, TypeError) as e:
+        raise BadRequest(
+            f"Unexpected embeddings response for {model!r}: {e}",
+            hint="Is it an embedding model? `cmcoder doctor` checks it.",
+        ) from e
+    if len(vectors) != count or not all(vectors):
+        raise BadRequest(
+            f"The gateway returned {len(vectors)} embeddings for {count} texts ({model!r}).",
+            hint="Is it an embedding model? `cmcoder doctor` checks it.",
+        )
+    return vectors
 
 
 def _backoff(attempt: int, retry_after: float | None) -> float:

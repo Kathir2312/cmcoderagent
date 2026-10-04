@@ -609,6 +609,41 @@ class Doctor:
                 self.report(FAIL, f"{server.name}: could not start", server.error)
         await manager.close()
 
+    async def check_code_search(self, probe: bool) -> None:
+        """Phase 5: the embedding model answers, and the project's index."""
+        cfg = self.settings.rag
+        if cfg.enabled is False:
+            return
+        self.section("Code search (RAG)")
+        if not cfg.embedding_model:
+            self.report(INFO, "Not set up", "`cmcoder rag setup` chooses an embedding model.")
+            return
+        try:
+            provider_name, model = self.settings.resolve_model(cfg.embedding_model)
+            provider = build_provider(self.settings, provider_name)
+        except Exception as e:  # a settings problem, reported as such
+            self.report(FAIL, f"Embedding model {cfg.embedding_model}: {e}")
+            return
+        try:
+            if probe:
+                from ..rag.embed import Embedder
+
+                embedder = Embedder(provider, model)
+                try:
+                    await embedder.embed(["def hello(): return 'world'"])
+                except ProviderError as e:
+                    self.report(FAIL, f"Embedding model {provider_name}:{model}", str(e))
+                    return
+                self.report(
+                    OK,
+                    f"Embedding model {provider_name}:{model} answers "
+                    f"({embedder.dim} dimensions, {embedder.gateway})",
+                )
+            else:
+                self.report(INFO, f"Embedding model {provider_name}:{model} (not checked)")
+        finally:
+            await provider.aclose()
+
     async def run(self, model_refs: list[str], probe: bool) -> int:
         self.check_local()
         by_provider: dict[str, list[str]] = {}
@@ -627,6 +662,7 @@ class Doctor:
         await self.check_mcp(probe)
         self.check_hooks()
         self.check_sandbox()
+        await self.check_code_search(probe)
         await self.check_telemetry()
         self.check_extensions()
         self.console.print()

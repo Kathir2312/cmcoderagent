@@ -1,6 +1,6 @@
 # Phase 5 — Code search (RAG): plan
 
-**Status:** planned, decisions made (4 October 2026); starts when Phase 4 is complete.
+**Status:** in progress (started 4 October 2026, with Phase 4's WSL2 check still to do).
 
 **Goal:** the model can find code **by meaning** ("where do we refresh the
 auth token?") in large repositories, not only by exact words (Grep), using an
@@ -41,6 +41,12 @@ capture meaning) by an embedding model on the gateway, lets the model ask for
   models); batching, retries and the same TLS, proxy and key handling as chat.
 - `cmcoder doctor`: the embedding model answers, its vector size.
 - Mock server: `/v1/embeddings` (deterministic vectors) and Open WebUI's form.
+- Status (4 Oct): done. Open WebUI 0.11 has an OpenAI-compatible
+  `/api/embeddings` that sends Ollama models to Ollama's `/api/embed` itself,
+  so one call serves both gateways (`<base>/embeddings`). Checked against a
+  real LiteLLM proxy and a real Open WebUI (an Ollama model and an
+  OpenAI-compatible one); Open WebUI's bare 500 for an unknown model is
+  explained. `CMCODER_EMBEDDING_MODEL`, `CMCODER_RAG`; numpy added (vectors).
 
 ### 2. The indexer
 
@@ -129,7 +135,7 @@ or call-tree indexes. Later, if asked.
 ## Checklist
 
 - [x] Decisions confirmed (4 Oct: both gateways, both stores, tool and automatic context, no existing RAG)
-- [ ] 1. Embeddings through the gateway
+- [x] 1. Embeddings through the gateway
 - [ ] 2. The indexer
 - [ ] 3. Vector stores (local, Chroma)
 - [ ] 4. `CodeSearch` and automatic context

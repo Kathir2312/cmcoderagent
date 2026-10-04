@@ -54,6 +54,9 @@ model_list:
   - model_name: qwen3-27b
     litellm_params: {{model: hosted_vllm/Qwen/Qwen3-27B, api_base: "{backend.base_url}", api_key: sk-backend}}
     model_info: {{max_input_tokens: 32768, max_output_tokens: 8192, supports_function_calling: true}}
+  - model_name: text-embedding-3-small
+    litellm_params: {{model: openai/text-embedding-3-small, api_base: "{backend.base_url}", api_key: sk-backend}}
+    model_info: {{mode: embedding}}
 general_settings: {{master_key: {MASTER_KEY}}}
 """
     )
@@ -208,3 +211,22 @@ async def test_context_window_probe_through_gateway(gateway: tuple[str, MockServ
         assert await p.probe_context_window("qwen3-27b", resolve_profile("qwen3-27b")) == 40960
     finally:
         await p.aclose()
+
+
+async def test_embeddings_through_litellm(gateway: tuple[str, MockServer]) -> None:
+    """Phase 5: code-search embeddings go through the gateway's /v1/embeddings."""
+    from cmcoder.rag.embed import Embedder
+    from cmcoder.testing.mock_server import fake_embedding
+
+    base, backend = gateway
+    p = provider(base)
+    try:
+        embedder = Embedder(p, "text-embedding-3-small")
+        vectors = await embedder.embed(["def refresh_token(): ...", "class Parser: ..."])
+    finally:
+        await p.aclose()
+    assert vectors.shape == (2, 64)
+    expected = fake_embedding("def refresh_token(): ...")
+    assert abs(float(vectors[0] @ vectors[0]) - 1.0) < 1e-5
+    assert abs(float(vectors[0][0]) - expected[0]) < 1e-4
+    assert backend.state.embedding_requests[-1]["model"] == "text-embedding-3-small"

@@ -22,7 +22,10 @@ Run standalone:  python -m cmcoder.testing.mock_server --script s.json --port 87
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import math
+import re
 import ssl
 import threading
 import time
@@ -46,6 +49,8 @@ class MockState:
         title: str = "Fix the login bug",
         openwebui: dict[str, str] | None = None,
         ollama_context: dict[str, int] | None = None,
+        embedding_models: list[str] | None = None,
+        embedding_dim: int = 64,
     ) -> None:
         self.script = list(script)
         self.models = models or ["qwen3-27b", "qwen3-7b"]
@@ -59,6 +64,14 @@ class MockState:
         # Open WebUI mode: model -> owned_by ("ollama" or "openai"); see _openwebui.
         self.openwebui = openwebui
         self.ollama_context = ollama_context or {}
+        # Models /embeddings answers for (Open WebUI mode: also those in `openwebui`).
+        self.embedding_models = (
+            embedding_models
+            if embedding_models is not None
+            else ["text-embedding-3-small", "nomic-embed-text"]
+        )
+        self.embedding_dim = embedding_dim
+        self.embedding_requests: list[dict[str, Any]] = []
         # Ollama models: requests whose prompt didn't fit num_ctx (Ollama drops
         # the start silently; the default num_ctx is small).
         self.truncated: list[str] = []
@@ -271,10 +284,46 @@ def make_handler(state: MockState) -> type[BaseHTTPRequestHandler]:
             else:
                 self._json(404, {"error": {"message": f"not found: {self.path}"}})
 
+        def _embeddings(self, raw: bytes) -> None:
+            body = json.loads(raw or b"{}")
+            model = body.get("model")
+            texts = body.get("input")
+            texts = [texts] if isinstance(texts, str) else texts
+            with state.lock:
+                state.embedding_requests.append(body)
+            if state.openwebui is not None:
+                # Open WebUI raises a plain exception for an unknown model: a bare 500.
+                if model not in state.openwebui or model not in state.embedding_models:
+                    body_text = b"Internal Server Error"
+                    self.send_response(500)
+                    self.send_header("Content-Type", "text/plain")
+                    self.send_header("Content-Length", str(len(body_text)))
+                    self.end_headers()
+                    self.wfile.write(body_text)
+                    return
+            elif model not in state.embedding_models:
+                self._json(
+                    400,
+                    {"error": {"message": f"{model} is not an embedding model", "code": "400"}},
+                )
+                return
+            data = [
+                {
+                    "object": "embedding",
+                    "index": i,
+                    "embedding": fake_embedding(t, state.embedding_dim),
+                }
+                for i, t in enumerate(texts or [])
+            ]
+            self._json(200, {"object": "list", "data": data, "model": model})
+
         def do_POST(self) -> None:
             length = int(self.headers.get("Content-Length") or 0)
             raw = self.rfile.read(length)
             if not self._authorized():
+                return
+            if self.path.rstrip("/").endswith("/embeddings"):
+                self._embeddings(raw)
                 return
             ollama = False
             if state.openwebui is not None:
@@ -383,6 +432,24 @@ def make_handler(state: MockState) -> type[BaseHTTPRequestHandler]:
                 pass  # the client hung up (e.g. Ctrl+C, or a context-window probe)
 
     return Handler
+
+
+_WORD = re.compile(r"[A-Za-z][a-z]*|[A-Z]+(?![a-z])|\d+")
+
+
+def fake_embedding(text: str, dim: int = 64) -> list[float]:
+    """A deterministic stand-in for an embedding model: words (split at
+    snake_case and camelCase) hashed into `dim` signed buckets, normalised.
+    Texts sharing words come out similar, which is all tests need."""
+    vec = [0.0] * dim
+    for word in _WORD.findall(text):
+        w = word.lower()
+        if len(w) < 2:
+            continue
+        h = hashlib.sha256(w.encode()).digest()
+        vec[int.from_bytes(h[:4], "big") % dim] += 1.0 if h[4] & 1 else -1.0
+    norm = math.sqrt(sum(x * x for x in vec)) or 1.0
+    return [x / norm for x in vec]
 
 
 class MockServer:
