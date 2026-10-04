@@ -6,6 +6,7 @@ import * as vscode from "vscode";
 import { resolveExecutable } from "./agentProcess";
 import { productName, setBrand } from "./brand";
 import { ChatViewProvider } from "./chatView";
+import { CodeSearch } from "./codeSearch";
 import { DiffReview, SCHEME } from "./diffReview";
 import { cmcoderCommand } from "./executable";
 
@@ -23,6 +24,7 @@ export function activate(context: vscode.ExtensionContext): CmcoderApi {
   const diffs = new DiffReview();
   chat = new ChatViewProvider(context.extensionUri, log, diffs);
   const view = chat;
+  const codeSearch = new CodeSearch((m) => view.sendMessage(m), view.onEvent);
 
   // Keep the panel's "context" chip in step with the editor (debounced).
   let timer: NodeJS.Timeout | undefined;
@@ -68,6 +70,10 @@ export function activate(context: vscode.ExtensionContext): CmcoderApi {
     vscode.commands.registerCommand("cmcoder.openTerminal", () => openTerminal(context.extensionUri)),
     vscode.commands.registerCommand("cmcoder.showLog", () => log.show()),
     vscode.commands.registerCommand("cmcoder.openSettings", openSettings),
+    codeSearch,
+    vscode.commands.registerCommand("cmcoder.codeSearch", () => codeSearch.menu()),
+    vscode.commands.registerCommand("cmcoder.setupCodeSearch", () => codeSearch.setup()),
+    vscode.commands.registerCommand("cmcoder.updateIndex", () => codeSearch.index("update")),
   );
   return { onEvent: view.onEvent, send: (text) => view.sendText(text, true) };
 }

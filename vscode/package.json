@@ -110,6 +110,21 @@
         "command": "cmcoder.openSettings",
         "title": "Open Settings File",
         "category": "cmcoder"
+      },
+      {
+        "command": "cmcoder.setupCodeSearch",
+        "title": "Set Up Code Search",
+        "category": "cmcoder"
+      },
+      {
+        "command": "cmcoder.updateIndex",
+        "title": "Update Code Index",
+        "category": "cmcoder"
+      },
+      {
+        "command": "cmcoder.codeSearch",
+        "title": "Code Search…",
+        "category": "cmcoder"
       }
     ],
     "menus": {

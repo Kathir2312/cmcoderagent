@@ -26,6 +26,7 @@ from ..config.settings import (
 from ..providers.auth import store_api_key
 from ..providers.openai_compat import OpenAICompatProvider, ProviderError
 from .embed import Embedder
+from .index import CodeIndex
 from .stores import ChromaServerStore, StoreError, chroma_key_name
 
 StoreKind = Literal["local", "chroma", "chroma-server"]
@@ -169,3 +170,20 @@ def age(ts: float | None) -> str:
     if seconds < 2 * 86400:
         return f"{seconds // 3600} hours ago"
     return f"{seconds // 86400} days ago"
+
+
+async def status_lines(index: CodeIndex) -> list[str]:
+    """The index's state, for /index status, `cmcoder index --status` and VS Code."""
+    st = await index.status()
+    cfg = index.cfg.auto_context
+    auto = f"on (top {cfg.top_k}, up to {cfg.max_tokens:,} tokens)" if cfg.enabled else "off"
+    lines = [
+        f"Embedding model    {st.model}",
+        f"Index              {st.store}{' (read-only)' if st.read_only else ''}",
+        f"Files, pieces      {st.files:,} files, {st.chunks:,} pieces",
+        f"Updated            {age(st.updated)}" + (" (updating now)" if index.updating else ""),
+        f"Automatic context  {auto}",
+    ]
+    if index.last_error:
+        lines.append(f"Last update failed: {index.last_error}")
+    return lines

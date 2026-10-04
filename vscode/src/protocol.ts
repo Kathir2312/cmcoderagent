@@ -224,6 +224,43 @@ export interface CodeContext {
   tokens: number;
 }
 
+/** Code search's state for this project (VS Code's status bar). */
+export interface IndexStatus {
+  type: "index_status";
+  set_up: boolean;
+  active: boolean;
+  model: string | null;
+  store: string | null;
+  files: number;
+  chunks: number;
+  updated: number | null;
+  read_only: boolean;
+  updating: boolean;
+  error: string | null;
+  lines: string[];
+}
+
+export interface IndexProgress {
+  type: "index_progress";
+  done: number;
+  total: number;
+  chunks: number;
+}
+
+export interface RagCandidatesList {
+  type: "rag_candidates";
+  likely: string[];
+  other: string[];
+  errors: Record<string, unknown>;
+}
+
+export interface RagSetupResult {
+  type: "rag_setup_result";
+  ok: boolean;
+  message: string;
+  settings_file: string | null;
+}
+
 export interface Result {
   type: "result";
   subtype: "success" | "error" | "max_turns" | "interrupted";
@@ -258,6 +295,10 @@ export type AgentEvent =
   | Rewound
   | History
   | CodeContext
+  | IndexStatus
+  | IndexProgress
+  | RagCandidatesList
+  | RagSetupResult
   | Result;
 
 // ---- Client -> agent (stdin) ----
@@ -360,6 +401,32 @@ export interface Rewind {
   outside?: boolean;
 }
 
+/**
+ * Code search: the index's state, or update / rebuild / clear it. Answered
+ * with `index_status` (and `index_progress` while it works).
+ */
+export interface Index {
+  type: "index";
+  action?: "status" | "update" | "rebuild" | "clear";
+}
+
+/** The gateways' models, for picking an embedding model (`rag_candidates`). */
+export interface RagCandidates {
+  type: "rag_candidates";
+}
+
+/** Set up code search, as `cmcoder rag setup` does (`rag_setup_result`). */
+export interface RagSetup {
+  type: "rag_setup";
+  embedding_model: string;
+  store?: "local" | "chroma" | "chroma-server";
+  url?: string | null;
+  api_key?: string | null;
+  scope?: "user" | "project";
+  read_only?: boolean;
+  index_now?: boolean;
+}
+
 /** Stop the running turn, save the session and exit (EOF does the same). */
 export interface Shutdown {
   type: "shutdown";
@@ -376,4 +443,7 @@ export type ClientMessage =
   | ListSessions
   | ListCommands
   | Rewind
+  | Index
+  | RagCandidates
+  | RagSetup
   | Shutdown;

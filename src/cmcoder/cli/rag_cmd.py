@@ -24,13 +24,13 @@ from ..providers.openai_compat import ProviderError
 from ..rag.index import CodeIndex, open_index
 from ..rag.setup import (
     SetupChoice,
-    age,
     apply_setup,
     check_embedding_model,
     check_store,
     embedding_candidates,
     rag_block,
     set_enabled,
+    status_lines,
 )
 from ..rag.stores import StoreError
 from .factory import build_provider
@@ -69,16 +69,8 @@ def _open(settings: Settings, root: Path) -> CodeIndex:
 
 
 async def print_status(index: CodeIndex) -> None:
-    st = await index.status()
-    console.print(f"Embedding model  {st.model}")
-    console.print(f"Index            {escape(st.store)}{' (read-only)' if st.read_only else ''}")
-    console.print(f"Files, pieces    {st.files:,} files, {st.chunks:,} pieces")
-    console.print(f"Updated          {age(st.updated)}")
-    cfg = index.cfg.auto_context
-    auto = f"on (top {cfg.top_k}, up to {cfg.max_tokens:,} tokens)" if cfg.enabled else "off"
-    console.print(f"Automatic context {auto}")
-    if index.last_error:
-        console.print(f"[yellow]Last update failed:[/yellow] {escape(index.last_error)}")
+    for line in await status_lines(index):
+        console.print(escape(line))
 
 
 async def run_update(index: CodeIndex, *, rebuild: bool = False) -> int:

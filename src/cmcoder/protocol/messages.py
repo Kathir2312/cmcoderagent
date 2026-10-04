@@ -119,6 +119,33 @@ class Rewind(_Message):
     outside: bool = False
 
 
+class Index(_Message):
+    """Code search: the index's state, or update / rebuild / clear it. Answered
+    with `index_status` (and `index_progress` while it works)."""
+
+    type: Literal["index"] = "index"
+    action: Literal["status", "update", "rebuild", "clear"] = "status"
+
+
+class RagCandidates(_Message):
+    """The gateways' models, for picking an embedding model (`rag_candidates`)."""
+
+    type: Literal["rag_candidates"] = "rag_candidates"
+
+
+class RagSetup(_Message):
+    """Set up code search, as `cmcoder rag setup` does (`rag_setup_result`)."""
+
+    type: Literal["rag_setup"] = "rag_setup"
+    embedding_model: str
+    store: Literal["local", "chroma", "chroma-server"] = "local"
+    url: str | None = None
+    api_key: str | None = None  # a Chroma server's; goes to the keychain
+    scope: Literal["user", "project"] = "user"
+    read_only: bool = False
+    index_now: bool = True
+
+
 class Shutdown(_Message):
     """Stop the running turn, save the session and exit (EOF does the same)."""
 
@@ -136,6 +163,9 @@ ClientMessage = Annotated[
     | ListSessions
     | ListCommands
     | Rewind
+    | Index
+    | RagCandidates
+    | RagSetup
     | Shutdown,
     Field(discriminator="type"),
 ]

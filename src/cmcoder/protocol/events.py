@@ -253,6 +253,44 @@ class CodeContext(_Event):
         return f"Added code from the index: {where}{more} (≈{self.tokens:,} tokens)"
 
 
+class IndexStatus(_Event):
+    """Code search's state for this project (VS Code's status bar)."""
+
+    type: Literal["index_status"] = "index_status"
+    set_up: bool  # an embedding model is configured and code search isn't off
+    active: bool  # this session searches the index
+    model: str | None = None
+    store: str | None = None
+    files: int = 0
+    chunks: int = 0
+    updated: float | None = None  # seconds since the epoch
+    read_only: bool = False
+    updating: bool = False
+    error: str | None = None
+    lines: list[str] = Field(default_factory=list)  # the same text as /index status
+
+
+class IndexProgress(_Event):
+    type: Literal["index_progress"] = "index_progress"
+    done: int
+    total: int
+    chunks: int
+
+
+class RagCandidatesList(_Event):
+    type: Literal["rag_candidates"] = "rag_candidates"
+    likely: list[str]  # "provider:model" that look like embedding models
+    other: list[str]
+    errors: dict[str, str]  # provider -> why its models couldn't be listed
+
+
+class RagSetupResult(_Event):
+    type: Literal["rag_setup_result"] = "rag_setup_result"
+    ok: bool
+    message: str
+    settings_file: str | None = None
+
+
 class Result(_Event):
     type: Literal["result"] = "result"
     subtype: Literal["success", "error", "max_turns", "interrupted"]
@@ -287,6 +325,10 @@ Event = Annotated[
     | Rewound
     | History
     | CodeContext
+    | IndexStatus
+    | IndexProgress
+    | RagCandidatesList
+    | RagSetupResult
     | Result,
     Field(discriminator="type"),
 ]

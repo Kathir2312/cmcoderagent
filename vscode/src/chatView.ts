@@ -8,7 +8,7 @@ import { productName } from "./brand";
 import { DiffReview } from "./diffReview";
 import { cmcoderCommand } from "./executable";
 import { contextLabel, currentEditor, editorContext, IDE_TOOLS, runIdeTool } from "./editorContext";
-import type { AgentEvent, FileChange, RewindPoint } from "./protocol";
+import type { AgentEvent, ClientMessage, FileChange, RewindPoint } from "./protocol";
 import type { AgentState, FromWebview, ToWebview } from "./webviewMessages";
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
@@ -54,6 +54,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     await this.stopAgent();
     this.post({ kind: "reset" });
     this.startAgent(extraArgs);
+  }
+
+  /** Any protocol message (code search uses this); false when cmcoder isn't running. */
+  sendMessage(message: ClientMessage): boolean {
+    return this.agent?.send(message) ?? false;
   }
 
   interrupt(): void {

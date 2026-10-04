@@ -6,6 +6,7 @@ import asyncio
 import json
 import os
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -24,7 +25,12 @@ from ..core.commands import CommandSource
 from ..core.compaction import Summarizer
 from ..core.hooks import HookRunner
 from ..core.permissions import ModeNotAllowed, PermissionPolicy
-from ..core.prompt import build_subagent_prompt, build_system_prompt, load_memory_files
+from ..core.prompt import (
+    CODE_SEARCH_NOTE,
+    build_subagent_prompt,
+    build_system_prompt,
+    load_memory_files,
+)
 from ..core.sessions import SessionLog, cleanup, find_session, list_sessions, load
 from ..core.skills import SkillTool, load_skills, skills_prompt
 from ..core.subagents import ModelChoice, SubagentRuntime
@@ -34,7 +40,8 @@ from ..providers.openai_compat import OpenAICompatProvider, ProviderError
 from ..providers.openwebui import OpenWebUIProvider
 from ..providers.profiles import ModelProfile, resolve_profile
 from ..providers.transport import TransportOptions, build_client
-from ..rag.index import CodeIndex, open_index
+from ..rag.index import CodeIndex, Progress, open_index
+from ..rag.setup import status_lines
 from ..rag.stores import StoreError
 from ..sandbox import make_sandbox
 from ..telemetry import from_settings as telemetry_from_settings
@@ -331,6 +338,77 @@ async def open_code_index(
     if settings.rag.enabled is True:
         return None, "Code search is on, but this project has no index yet: run `cmcoder index`."
     return None, None
+
+
+NOT_SET_UP = (
+    "Code search isn't set up: run `cmcoder rag setup` in a terminal "
+    '(or "Set up code search" in VS Code).'
+)
+
+
+def session_index(agent: Agent, settings: Settings) -> tuple[CodeIndex | None, str | None]:
+    """The session's code index, or one opened now (to build it with /index)."""
+    if agent.ctx.code_index is not None:
+        return agent.ctx.code_index, None
+    try:
+        shared = agent.provider if isinstance(agent.provider, OpenAICompatProvider) else None
+        index = open_index(settings, agent.ctx.project_root, build_provider, shared=shared)
+    except (SettingsError, StoreError) as e:
+        return None, f"Code search can't start: {e}"
+    return (index, None) if index is not None else (None, NOT_SET_UP)
+
+
+def attach_code_index(agent: Agent, index: CodeIndex, settings: Settings) -> None:
+    """Code search for the rest of a session that started without an index."""
+    agent.ctx.code_index = index
+    agent.tools.setdefault("CodeSearch", CodeSearchTool())
+    agent.auto_context = settings.rag.auto_context
+    if CODE_SEARCH_NOTE not in agent.system_prompt:
+        agent.system_prompt = f"{agent.system_prompt}\n{CODE_SEARCH_NOTE}"
+        if agent.messages and agent.messages[0].role == "system":
+            agent.messages[0].content = agent.system_prompt
+
+
+async def index_command(
+    agent: Agent,
+    settings: Settings,
+    arg: str,
+    progress: Callable[[Progress], None] | None = None,
+) -> list[str]:
+    """`/index [status]` in a session (terminal, TUI, VS Code): lines to show."""
+    index, problem = session_index(agent, settings)
+    if index is None:
+        return [problem or NOT_SET_UP]
+    attached = index is agent.ctx.code_index
+    try:
+        if arg == "status":
+            if not attached and not await index.available():
+                return ["No index for this project yet: /index builds it."]
+            return await status_lines(index)
+        if arg not in ("", "update", "rebuild", "clear"):
+            return ["Usage: /index (build or update the code index) or /index status"]
+        if index.read_only:
+            return ["This index is read-only: it's kept up to date elsewhere."]
+        if arg in ("rebuild", "clear"):
+            await index.clear()
+            if arg == "clear":
+                return ["Deleted this project's index."]
+        result = await index.update(progress)
+        lines = [
+            f"Indexed {result.indexed} files ({result.chunks} pieces) in {result.seconds:.1f}s; "
+            f"{result.unchanged} unchanged, {result.removed} removed."
+        ]
+        if not attached and await index.available():
+            attach_code_index(agent, index, settings)
+            attached = True
+            lines.append("Code search is on for the rest of this session.")
+        return lines
+    except (StoreError, ProviderError) as e:
+        hint = getattr(e, "hint", None)
+        return [f"Indexing failed: {e}" + (f"\n{hint}" if hint else "")]
+    finally:
+        if not attached:
+            await index.close()
 
 
 def resume_session(agent: Agent, settings: Settings, root: Path, ref: str | None) -> None:

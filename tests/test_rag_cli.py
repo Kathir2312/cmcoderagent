@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -56,7 +57,7 @@ def test_setup_index_status_off_on(mock_server: Any, code: Path) -> None:
     r = cli(["index"], code, server)
     assert "Indexed 0 files" in r.stdout and "1 unchanged" in r.stdout
     r = cli(["index", "--status"], code, server)
-    assert "1 files" in r.stdout and "Automatic context on" in r.stdout
+    assert "1 files" in r.stdout and re.search(r"Automatic context\s+on", r.stdout)
     r = cli(["doctor", "--no-probe"], code, server)
     assert "This project's index: 1 files" in r.stdout
     assert cli(["rag", "off"], code, server).returncode == 0

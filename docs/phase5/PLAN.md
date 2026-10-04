@@ -132,6 +132,20 @@ capture meaning) by an embedding model on the gateway, lets the model ask for
 - A repository's `rag` settings can't point indexing at an outside server
   without project trust (as with telemetry); managed settings can require a
   company server or forbid one.
+- Guided setup (added 4 Oct, so it can all be done without editing a file):
+  `cmcoder rag setup` (or the same steps from VS Code): pick the embedding
+  model from the gateway's list (checked with a test request), where the
+  index lives (this machine, Chroma here, a Chroma server: checked; its key
+  to the keychain), whose settings (yours or the project's), and index now.
+- Status (4 Oct): done. `cmcoder index [--status|--clear|--rebuild]`,
+  `cmcoder rag setup|status|on|off`, `/index [status]` in the terminal, TUI
+  and VS Code panel (building an index turns code search on for the running
+  session), doctor's index and store checks. VS Code: a status bar item
+  (files indexed, a spinner while indexing; click: update, rebuild, show,
+  set up, delete) and "Set Up Code Search" / "Update Code Index" commands,
+  over new protocol messages (`index`, `rag_candidates`, `rag_setup`) and
+  events (`index_status`, `index_progress`, `rag_candidates`,
+  `rag_setup_result`).
 
 ### 6. Tests, evals, security review and docs
 
@@ -161,6 +175,6 @@ or call-tree indexes. Later, if asked.
 - [x] 2. The indexer
 - [x] 3. Vector stores (local, Chroma)
 - [x] 4. `CodeSearch` and automatic context
-- [ ] 5. Commands, front ends and settings
+- [x] 5. Commands, guided setup, front ends and settings
 - [ ] 6. Tests, evals, security review and docs
 - [ ] Hands-on use on Windows, and `STATUS.md`

@@ -38,7 +38,7 @@ async def test_panel_commands(mock_server: Any, project: Path) -> None:
         await agent.next()  # system_init
         await agent.send(type="list_commands")
         names = [c["name"] for c in (await agent.until("command_list"))["commands"]]
-        assert names[:7] == ["compact", "rewind", "model", "cost", "todos", "mcp", "help"]
+        assert names[:8] == ["compact", "rewind", "model", "cost", "todos", "mcp", "index", "help"]
 
         help_text = (await command(agent, "/help"))[0]["text"]
         assert "/rewind" in help_text and "/model [name]" in help_text

@@ -188,3 +188,24 @@ async def test_subagents_search_too(env: Any, project: Path) -> None:
         assert agent.ctx.code_index is not None
     finally:
         await agent.close()
+
+
+async def test_index_command_turns_code_search_on_mid_session(env: Any, project: Path) -> None:
+    from cmcoder.cli.factory import index_command
+
+    agent = await session(project)
+    try:
+        settings = load_settings(project)
+        assert "CodeSearch" not in agent.tools
+        assert await index_command(agent, settings, "status") == [
+            "No index for this project yet: /index builds it."
+        ]
+        lines = await index_command(agent, settings, "")
+        assert lines[0].startswith("Indexed 2 files") and "on for the rest" in lines[1]
+        assert "CodeSearch" in agent.tools and agent.ctx.code_index is not None
+        assert "Code search: this project is indexed" in agent.messages[0].content
+        status = await index_command(agent, settings, "status")
+        assert any(line.startswith("Files, pieces      2 files") for line in status)
+        assert (await index_command(agent, settings, "nonsense"))[0].startswith("Usage")
+    finally:
+        await agent.close()

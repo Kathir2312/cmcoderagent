@@ -36,8 +36,9 @@ from ..mcp_client import status_lines
 from ..protocol import events as ev
 from ..providers.messages import Usage
 from ..providers.openai_compat import OpenAICompatProvider
+from ..rag.index import Progress
 from ..tools.todo import MARKS
-from .factory import AgentOptions, build_agent, resolve_model_profile
+from .factory import AgentOptions, build_agent, index_command, resolve_model_profile
 
 # Lines the permission prompt needs besides the preview: panel border and
 # title, reason, three options, the input line and the bottom toolbar.
@@ -111,6 +112,7 @@ HELP = """\
   /mode [mode]       show or set the permission mode: default, acceptEdits, plan, bypassPermissions
   /cost              token usage for this session
   /mcp               MCP servers: status and tools
+  /index [status]    build or update the code index (code search), or show it
   /exit              quit
 
 [bold]Keys[/bold]
@@ -430,6 +432,15 @@ class Repl:
         elif name == "mcp":
             for line in status_lines(self.agent.mcp):
                 c.print(Text(line))
+        elif name == "index":
+            with c.status("Code index…") as spinner:
+
+                def show(p: Progress) -> None:
+                    spinner.update(f"Indexing: {p.done}/{p.total} files, {p.chunks} pieces…")
+
+                lines = await index_command(self.agent, self.settings, arg, show)
+            for out in lines:
+                c.print(Text(out))
         elif name == "cost":
             u: Usage = self.agent.usage
             est = " (estimated)" if u.estimated else ""

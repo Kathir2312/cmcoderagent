@@ -33,8 +33,9 @@ from ..core.commands import BUILT_IN, help_lines
 from ..core.permissions import MODES, ModeNotAllowed
 from ..mcp_client import status_lines
 from ..protocol import events as ev
+from ..rag.index import Progress
 from ..tools.todo import MARKS
-from .factory import AgentOptions, build_agent
+from .factory import AgentOptions, build_agent, index_command
 from .repl import Repl, output_preview, short_rule, subagent_line
 
 
@@ -61,6 +62,7 @@ HELP = """\
 /model             show the model
 /cost              token usage for this session
 /mcp               MCP servers: status and tools
+/index [status]    build or update the code index (code search), or show it
 /todos             show the todo list
 /exit              quit
 Keys: Enter send · Ctrl+C interrupt (twice when idle: quit) · Shift+Tab cycle mode
@@ -390,6 +392,15 @@ class CmcoderApp(App[int]):
             )
         elif name == "mcp":
             self.write("\n".join(status_lines(a.mcp)))
+        elif name == "index":
+            status = self.query_one("#status", Static)
+
+            def show(p: Progress) -> None:
+                status.update(f"Indexing: {p.done}/{p.total} files, {p.chunks} pieces…")
+
+            lines = await index_command(a, self.settings, arg, show)
+            self.update_status()
+            self.write("\n".join(lines))
         elif name == "cost":
             u = a.usage
             cost = f", cost {u.cost:.4f}" if u.cost is not None else ""

@@ -33,13 +33,24 @@ export async function run(): Promise<void> {
   const api = (await ext.activate()) as CmcoderApi;
   api.onEvent((e) => events.push(e));
   const commands = await vscode.commands.getCommands(true);
-  for (const c of ["cmcoder.newConversation", "cmcoder.acceptChange", "cmcoder.openTerminal", "cmcoder.askAboutSelection"]) {
+  for (const c of [
+    "cmcoder.newConversation",
+    "cmcoder.acceptChange",
+    "cmcoder.openTerminal",
+    "cmcoder.askAboutSelection",
+    "cmcoder.setupCodeSearch",
+    "cmcoder.updateIndex",
+    "cmcoder.codeSearch",
+  ]) {
     assert.ok(commands.includes(c), `command ${c} missing`);
   }
 
   // Opening the chat view starts cmcoder for the workspace.
   await vscode.commands.executeCommand("cmcoder.focus");
   const init = await event("system_init");
+  // Code search isn't set up in the test workspace: the status bar says so.
+  const codeSearch = await event("index_status");
+  assert.equal(codeSearch.set_up, false);
   const folder = vscode.workspace.workspaceFolders![0].uri;
   assert.equal(vscode.Uri.file(init.cwd).fsPath.toLowerCase(), folder.fsPath.toLowerCase());
 

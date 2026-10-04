@@ -22,7 +22,7 @@ from typing import Any, BinaryIO
 
 from pydantic import ValidationError
 
-from ..config.settings import Settings, SettingsError, ignored_settings_message
+from ..config.settings import RagConfig, Settings, SettingsError, ignored_settings_message
 from ..core.agent import Agent, PermissionAnswer, PermissionRequest, parse_tool_arguments
 from ..core.commands import BUILT_IN, split_line
 from ..core.ide import IDE_TOOLS, format_ide_context
@@ -32,9 +32,28 @@ from ..mcp_client import status_lines
 from ..protocol import events as ev
 from ..protocol import messages as msg
 from ..providers.openai_compat import OpenAICompatProvider, ProviderError
+from ..rag.index import Progress
+from ..rag.setup import (
+    SetupChoice,
+    apply_setup,
+    check_embedding_model,
+    check_store,
+    embedding_candidates,
+    rag_block,
+)
+from ..rag.setup import status_lines as rag_status_lines
+from ..rag.stores import StoreError
 from ..tools.base import ToolResult
 from ..tools.files import ReadInput, ReadTool
-from .factory import AgentOptions, build_agent, resolve_model_profile
+from .factory import (
+    AgentOptions,
+    attach_code_index,
+    build_agent,
+    build_provider,
+    index_command,
+    resolve_model_profile,
+    session_index,
+)
 
 IDE_TOOL_TIMEOUT = 30.0  # seconds
 
@@ -47,6 +66,7 @@ BUILT_IN_HERE = {
     "cost": ("", "Token usage for this session"),
     "todos": ("", "Show the todo list"),
     "mcp": ("", "MCP servers: status and tools"),
+    "index": ("[status]", "Build or update the code index (code search), or show it"),
     "help": ("", "List the commands"),
 }
 PANEL_COMMANDS = set(BUILT_IN_HERE) - {"compact"}
@@ -63,6 +83,8 @@ class StdioServer:
         self.pending: dict[str, asyncio.Future[PermissionAnswer]] = {}
         self.ide_pending: dict[str, asyncio.Future[ToolResult]] = {}
         self.inbox: asyncio.Queue[bytes] = asyncio.Queue()
+        # Code search jobs (indexing, setup): run beside the conversation.
+        self.side_tasks: set[asyncio.Task[None]] = set()
 
     def emit(self, event: ev.Event) -> None:
         self.out.write(event.model_dump_json().encode() + b"\n")
@@ -141,6 +163,9 @@ class StdioServer:
                 await self.handle(message)
         finally:
             await self._stop_turn()
+            for task in list(self.side_tasks):
+                task.cancel()
+            await asyncio.gather(*self.side_tasks, return_exceptions=True)
             await self.agent.close()
         return 0
 
@@ -205,6 +230,12 @@ class StdioServer:
             self.emit(ev.SessionList(sessions=sessions))
         elif isinstance(message, msg.Rewind):
             self._rewind(message)
+        elif isinstance(message, msg.Index):
+            self._side(self._index(message.action))
+        elif isinstance(message, msg.RagCandidates):
+            self._side(self._rag_candidates())
+        elif isinstance(message, msg.RagSetup):
+            self._side(self._rag_setup(message))
         elif isinstance(message, msg.ListCommands):
             self.emit(ev.CommandList(commands=self.command_list()))
 
@@ -334,12 +365,109 @@ class StdioServer:
                     text=f"Todo list: {done}/{len(agent.ctx.todos)} done (shown at the top)."
                 ),
             ]
+        if name == "index":
+            lines = await index_command(agent, self.settings, arguments, self._progress)
+            self._side(self._index("status"))
+            return [reply("Code index", "\n".join(lines))]
         if name == "rewind":
             points = self._rewind_points()
             if not points.points:
                 return [ev.AssistantMessage(text="Nothing to rewind to yet.")]
             return [points]
         return []
+
+    # --- code search (Phase 5) -------------------------------------------------
+
+    def _side(self, job: Any) -> None:
+        task = asyncio.get_running_loop().create_task(job)
+        self.side_tasks.add(task)
+        task.add_done_callback(self.side_tasks.discard)
+
+    def _progress(self, p: Progress) -> None:
+        self.emit(ev.IndexProgress(done=p.done, total=p.total, chunks=p.chunks))
+
+    async def _index_status(self) -> ev.IndexStatus:
+        agent = self.agent
+        assert agent is not None
+        cfg = self.settings.rag
+        if cfg.enabled is False or not cfg.embedding_model:
+            return ev.IndexStatus(set_up=False, active=False)
+        index, problem = session_index(agent, self.settings)
+        if index is None:
+            return ev.IndexStatus(set_up=True, active=False, error=problem)
+        attached = index is agent.ctx.code_index
+        try:
+            st = await index.status()
+            lines = await rag_status_lines(index)
+        except (StoreError, ProviderError) as e:
+            return ev.IndexStatus(set_up=True, active=attached, error=str(e))
+        finally:
+            if not attached:
+                await index.close()
+        return ev.IndexStatus(
+            set_up=True,
+            active=attached,
+            model=st.model,
+            store=st.store,
+            files=st.files,
+            chunks=st.chunks,
+            updated=st.updated,
+            read_only=st.read_only,
+            updating=index.updating,
+            error=index.last_error,
+            lines=lines,
+        )
+
+    async def _index(self, action: str) -> None:
+        agent = self.agent
+        assert agent is not None
+        try:
+            if action != "status":
+                lines = await index_command(agent, self.settings, action, self._progress)
+                text = "\n".join(lines)
+                failed = text.startswith(("Indexing failed", "Code search", "This index"))
+                if failed:
+                    self.emit(ev.Warning(message=text))
+            self.emit(await self._index_status())
+        except Exception as e:  # never take the session down
+            self.emit(ev.Warning(message=f"Code index: {type(e).__name__}: {e}"))
+
+    async def _rag_candidates(self) -> None:
+        likely, other, errors = await embedding_candidates(self.settings, build_provider)
+        self.emit(ev.RagCandidatesList(likely=likely, other=other, errors=errors))
+
+    async def _rag_setup(self, m: msg.RagSetup) -> None:
+        agent = self.agent
+        assert agent is not None
+        choice = SetupChoice(m.embedding_model, m.store, m.url, m.api_key, m.scope, m.read_only)
+        try:
+            ref, dim = await check_embedding_model(self.settings, m.embedding_model, build_provider)
+            choice.embedding_model = ref
+            where = await check_store(choice)
+        except (ProviderError, SettingsError, StoreError) as e:
+            self.emit(ev.RagSetupResult(ok=False, message=str(e)))
+            return
+        path = apply_setup(choice, agent.ctx.project_root)
+        # The session uses what was just chosen (a project's store would wait for trust).
+        self.settings.rag = RagConfig.model_validate(
+            {**self.settings.rag.model_dump(by_alias=True), **rag_block(choice)}
+        )
+        old = agent.ctx.code_index
+        if old is not None:  # another model or store: the old index is done with
+            agent.ctx.code_index = None
+            await old.close()
+        message = f"Code search uses {ref} ({dim} dimensions), kept in {where}; saved in {path}."
+        if m.index_now and not m.read_only:
+            lines = await index_command(agent, self.settings, "update", self._progress)
+            message += "\n" + "\n".join(lines)
+        elif m.read_only:
+            index, _ = session_index(agent, self.settings)
+            if index is not None and await index.available():
+                attach_code_index(agent, index, self.settings)
+            elif index is not None:
+                await index.close()
+        self.emit(ev.RagSetupResult(ok=True, message=message, settings_file=str(path)))
+        self.emit(await self._index_status())
 
     def command_list(self) -> list[ev.CommandInfo]:
         agent = self.agent

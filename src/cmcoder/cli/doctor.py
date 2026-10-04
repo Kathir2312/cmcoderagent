@@ -675,9 +675,7 @@ class Doctor:
                     st.store + (" (read-only)" if st.read_only else ""),
                 )
             else:
-                self.report(
-                    INFO, "No index for this project yet", "`cmcoder index` builds it."
-                )
+                self.report(INFO, "No index for this project yet", "`cmcoder index` builds it.")
         finally:
             await index.close()
 
