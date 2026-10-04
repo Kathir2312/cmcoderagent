@@ -64,12 +64,12 @@ def project_name(root: Path) -> str:
 def collection_name(root: Path, model: str) -> str:
     """For Chroma: 3-63 characters, letters, digits, `.`, `_`, `-`."""
     identity = _origin_url(root) or str(root.resolve())
-    digest = hashlib.sha1(f"{identity}\0{model}".encode()).hexdigest()[:10]
+    digest = hashlib.sha1(f"{identity}\0{model}".encode(), usedforsecurity=False).hexdigest()[:10]
     return f"cmcoder-{project_name(root)[:40]}-{digest}"
 
 
 def index_folder(root: Path, model: str) -> Path:
-    key = hashlib.sha1(str(root.resolve()).encode()).hexdigest()[:10]
+    key = hashlib.sha1(str(root.resolve()).encode(), usedforsecurity=False).hexdigest()[:10]
     return config_dir() / "index" / f"{_slug(root.name)}-{key}" / _slug(model, 60)
 
 
@@ -217,7 +217,10 @@ class CodeIndex:
                     unchanged += 1
                     continue
                 try:
-                    if hashlib.sha1(path.read_bytes()).hexdigest() == old.sha1:
+                    if (
+                        hashlib.sha1(path.read_bytes(), usedforsecurity=False).hexdigest()
+                        == old.sha1
+                    ):
                         self._files[rel] = FileState(st.st_mtime_ns, st.st_size, old.sha1)
                         unchanged += 1
                         continue

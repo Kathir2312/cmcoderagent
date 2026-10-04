@@ -78,10 +78,10 @@ jobs:
       - name: Start a Chroma server
         run: |
           (uv run --no-sync chroma run --path /tmp/chroma-data --port 8765 > /tmp/chroma.log 2>&1 &)
-          for i in $(seq 60); do curl -sf http://127.0.0.1:8765/api/v2/heartbeat && break; sleep 1; done
+          for i in $(seq 60); do curl -sf http://localhost:8765/api/v2/heartbeat && break; sleep 1; done; curl -sf http://localhost:8765/api/v2/heartbeat
       - name: Index tests on the built-in store, a Chroma server and Chroma on this machine
         env:
-          CMCODER_TEST_CHROMA_URL: http://127.0.0.1:8765
+          CMCODER_TEST_CHROMA_URL: http://localhost:8765
         run: uv run --no-sync pytest -q tests/test_rag_index.py
       - if: failure()
         run: tail -50 /tmp/chroma.log

@@ -102,7 +102,9 @@ class Chunk:
 
     @property
     def id(self) -> str:
-        h = hashlib.sha1(f"{self.path}\0{self.start_line}\0{self.text}".encode())
+        h = hashlib.sha1(
+            f"{self.path}\0{self.start_line}\0{self.text}".encode(), usedforsecurity=False
+        )
         return h.hexdigest()[:24]
 
     @property

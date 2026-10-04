@@ -105,4 +105,6 @@ class FileSelector:
         lines = text.count("\n") + 1
         if len(text) / lines > LONG_LINE:
             return None
-        return text, FileState(st.st_mtime_ns, st.st_size, hashlib.sha1(data).hexdigest())
+        return text, FileState(
+            st.st_mtime_ns, st.st_size, hashlib.sha1(data, usedforsecurity=False).hexdigest()
+        )
