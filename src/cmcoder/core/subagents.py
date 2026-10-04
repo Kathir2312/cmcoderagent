@@ -95,7 +95,7 @@ BUILT_IN_AGENTS = {
         "questions about how the code works. Say how thorough to be.",
         EXPLORE_PROMPT,
         "built-in",
-        tools=["Read", "Glob", "Grep"],
+        tools=["Read", "Glob", "Grep", "CodeSearch"],  # CodeSearch when the project is indexed
         model="subagent",
     ),
 }

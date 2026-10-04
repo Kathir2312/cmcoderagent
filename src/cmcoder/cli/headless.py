@@ -57,6 +57,8 @@ async def run_headless(
                     f"messages with {event.model}",
                     file=sys.stderr,
                 )
+            elif verbose and isinstance(event, ev.CodeContext):
+                print(f"◦ {event.summary()}", file=sys.stderr)
             elif verbose and isinstance(event, ev.ToolUse):
                 print(f"● {event.label}", file=sys.stderr)
             elif verbose and isinstance(event, ev.ToolResult):

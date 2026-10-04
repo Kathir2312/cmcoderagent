@@ -100,6 +100,15 @@ capture meaning) by an embedding model on the gateway, lets the model ask for
   in the conversation; counted in compaction. Its budget is capped by the
   model's context window (a small share of a 32k window).
 - Subagents (the `explore` agent) get `CodeSearch` too.
+- Status (4 Oct): done. `CodeSearch` (read-only, no prompt; results with
+  file, lines, names and line numbers) and automatic context (at most
+  `maxTokens` and 8% of the window; matches under `minScore` left out; not for
+  messages under 3 words or slash commands; each piece sent once per
+  conversation, again after compaction). Shown as "Added code from the
+  index: …" in the terminal, TUI, `-p --verbose` and VS Code (new protocol
+  event `code_context`). A failing index never stops a turn (one warning).
+  The index is brought up to date in the background when a session starts;
+  `/rewind` gives back the message without the added code.
 
 ### 5. Commands, front ends and settings
 
@@ -151,7 +160,7 @@ or call-tree indexes. Later, if asked.
 - [x] 1. Embeddings through the gateway
 - [x] 2. The indexer
 - [x] 3. Vector stores (local, Chroma)
-- [ ] 4. `CodeSearch` and automatic context
+- [x] 4. `CodeSearch` and automatic context
 - [ ] 5. Commands, front ends and settings
 - [ ] 6. Tests, evals, security review and docs
 - [ ] Hands-on use on Windows, and `STATUS.md`

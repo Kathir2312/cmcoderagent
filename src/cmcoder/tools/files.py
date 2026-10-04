@@ -152,6 +152,8 @@ class WriteTool(Tool):
         except OSError as e:
             return ToolResult(f"Cannot write {path}: {e}", is_error=True)
         ctx.mark_read(path)
+        if ctx.code_index is not None:
+            ctx.code_index.note_changed(path)  # re-indexed before the next search
         n = len(args.content.splitlines())
         verb = "Updated" if existed else "Created"
         return ToolResult(f"{verb} {ctx.display(path)} ({n} lines).", summary=f"{verb} {n} lines")
@@ -249,6 +251,8 @@ class EditTool(Tool):
         except OSError as e:
             return ToolResult(f"Cannot write {path}: {e}", is_error=True)
         ctx.mark_read(path)
+        if ctx.code_index is not None:
+            ctx.code_index.note_changed(path)  # re-indexed before the next search
 
         # Show the edited region so the model can confirm the result.
         start_line = text[:first].count("\n")

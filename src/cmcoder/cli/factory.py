@@ -34,9 +34,12 @@ from ..providers.openai_compat import OpenAICompatProvider, ProviderError
 from ..providers.openwebui import OpenWebUIProvider
 from ..providers.profiles import ModelProfile, resolve_profile
 from ..providers.transport import TransportOptions, build_client
+from ..rag.index import CodeIndex, open_index
+from ..rag.stores import StoreError
 from ..sandbox import make_sandbox
 from ..telemetry import from_settings as telemetry_from_settings
 from ..tools.base import ToolContext, output_budget_chars
+from ..tools.code_search import CodeSearchTool
 from ..tools.registry import default_tools
 
 MODEL_INFO_TTL = 24 * 3600
@@ -228,6 +231,7 @@ async def build_agent(settings: Settings, opts: AgentOptions) -> Agent:
     profile = await resolve_model_profile(settings, provider, model)
     memory = load_memory_files(cwd, root)
     sandbox, sandbox_warning = make_sandbox(settings.sandbox, root)
+    code_index, index_warning = await open_code_index(settings, root, provider)
     telemetry = telemetry_from_settings(settings.telemetry)
     skills = load_skills(root)
     skills_section = skills_prompt(skills)
@@ -240,6 +244,7 @@ async def build_agent(settings: Settings, opts: AgentOptions) -> Agent:
         append=opts.append_system_prompt,
         skills=skills_section,
         sandbox=sandbox.prompt_note() if sandbox else None,
+        code_search=code_index is not None,
     )
 
     def save_rule(rule: str) -> None:
@@ -258,13 +263,18 @@ async def build_agent(settings: Settings, opts: AgentOptions) -> Agent:
         provider,
         model,
         profile,
-        [*default_tools(), *([SkillTool(skills)] if skills else [])],
+        [
+            *default_tools(),
+            *([SkillTool(skills)] if skills else []),
+            *([CodeSearchTool()] if code_index is not None else []),
+        ],
         policy,
         ToolContext(
             cwd=cwd,
             project_root=root,
             max_output_chars=output_budget_chars(profile.context_window),
             sandbox=sandbox,
+            code_index=code_index,
         ),
         system_prompt,
         max_turns=opts.max_turns or settings.max_turns,
@@ -281,6 +291,7 @@ async def build_agent(settings: Settings, opts: AgentOptions) -> Agent:
         hooks=runner if (runner := HookRunner(settings, root)).hooks else None,
         commands=CommandSource(root, settings.project_trusted),
         telemetry=telemetry,
+        auto_context=settings.rag.auto_context if code_index is not None else None,
         subagents=SubagentRuntime(
             root,
             settings.project_trusted,
@@ -292,11 +303,34 @@ async def build_agent(settings: Settings, opts: AgentOptions) -> Agent:
     )
     if sandbox_warning:
         agent.startup_warnings.append(sandbox_warning)
+    if index_warning:
+        agent.startup_warnings.append(index_warning)
+    if code_index is not None and settings.rag.auto_update:
+        code_index.start_background_update()
     if telemetry is not None:
         telemetry.session_started(opts.frontend, agent.session_id)
     if opts.continue_session or opts.resume:
         resume_session(agent, settings, root, opts.resume)
     return agent
+
+
+async def open_code_index(
+    settings: Settings, root: Path, provider: OpenAICompatProvider
+) -> tuple[CodeIndex | None, str | None]:
+    """The project's code index for this session, if code search is on and the
+    project has one; else None and, when worth saying, why."""
+    try:
+        index = open_index(settings, root, build_provider, shared=provider)
+    except (SettingsError, StoreError) as e:
+        return None, f"Code search is off for this session: {e}"
+    if index is None:
+        return None, None
+    if await index.available():
+        return index, None
+    await index.close()
+    if settings.rag.enabled is True:
+        return None, "Code search is on, but this project has no index yet: run `cmcoder index`."
+    return None, None
 
 
 def resume_session(agent: Agent, settings: Settings, root: Path, ref: str | None) -> None:

@@ -6,6 +6,14 @@ export const PROTOCOL_VERSION = 1;
 
 // ---- Agent -> client (stdout) ----
 
+export interface CodeContextItem {
+  path: string;
+  start_line: number;
+  end_line: number;
+  symbol: string | null;
+  score: number;
+}
+
 export interface CommandInfo {
   name: string;
   description: string;
@@ -209,6 +217,13 @@ export interface History {
   messages: HistoryItem[];
 }
 
+/** Code from the project's index added to the user's message (automatic context). */
+export interface CodeContext {
+  type: "code_context";
+  items: CodeContextItem[];
+  tokens: number;
+}
+
 export interface Result {
   type: "result";
   subtype: "success" | "error" | "max_turns" | "interrupted";
@@ -242,6 +257,7 @@ export type AgentEvent =
   | RewindPoints
   | Rewound
   | History
+  | CodeContext
   | Result;
 
 // ---- Client -> agent (stdin) ----

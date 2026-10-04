@@ -274,3 +274,18 @@ test("branding: defaults to cmcoder", async () => {
   assert.match((await page.getAttribute("textarea", "placeholder")) ?? "", /^Ask cmcoder…/);
   await page.close();
 });
+
+test("code search: the code added from the index is noted in the panel", async () => {
+  const { page, ev } = await panel();
+  await ev({
+    type: "code_context",
+    items: [
+      { path: "auth.py", start_line: 4, end_line: 8, symbol: "refresh_auth_token", score: 0.82 },
+      { path: "notes.md", start_line: 1, end_line: 3, symbol: null, score: 0.5 },
+    ],
+    tokens: 310,
+  });
+  const text = await page.textContent(".log");
+  assert.match(text ?? "", /Added code from the index: auth\.py:4-8, notes\.md:1-3 \(≈310 tokens\)/);
+  await page.close();
+});

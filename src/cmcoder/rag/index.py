@@ -11,6 +11,7 @@ since it was indexed is refreshed before it's returned.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import hashlib
 import json
 import re
@@ -126,6 +127,8 @@ class CodeIndex:
         self._chunks = 0
         self._dirty: set[str] = set()
         self._lock = asyncio.Lock()
+        self._background: asyncio.Task[None] | None = None
+        self.last_error: str | None = None  # from the last background update
         self._load_manifest()
 
     # -- manifest ---------------------------------------------------------------
@@ -342,6 +345,26 @@ class CodeIndex:
             hits = await self.store.search(vector, k, path)
         return hits
 
+    def start_background_update(self) -> None:
+        """Bring the index up to date (changed files only) while the session runs."""
+        if self.read_only or self._background is not None:
+            return
+
+        async def run() -> None:
+            try:
+                await self.update()
+                self.last_error = None
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:  # reported by /index and doctor; search still works
+                self.last_error = str(e) or type(e).__name__
+
+        self._background = asyncio.get_running_loop().create_task(run())
+
+    @property
+    def updating(self) -> bool:
+        return self._background is not None and not self._background.done()
+
     async def clear(self) -> None:
         await self.store.clear()
         self._files = {}
@@ -350,6 +373,10 @@ class CodeIndex:
         self.manifest_path.unlink(missing_ok=True)
 
     async def close(self) -> None:
+        if self._background is not None and not self._background.done():
+            self._background.cancel()  # what's done so far is saved
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await self._background
         await self.store.close()
         if self.owns_provider:
             await self.embedder.provider.aclose()

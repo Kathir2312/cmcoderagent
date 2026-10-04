@@ -13,6 +13,7 @@ from ..compat import from_shell_path
 from ..providers.messages import ToolSpec
 
 if TYPE_CHECKING:
+    from ..rag.index import CodeIndex
     from ..sandbox import Sandbox
     from .shell import PersistentShell
 
@@ -53,6 +54,8 @@ class ToolContext:
     max_output_chars: int = MAX_RESULT_CHARS
     # The TodoWrite list: [{"content", "status", "activeForm"?}, ...]
     todos: list[dict[str, Any]] = field(default_factory=list)
+    # The project's code index (Phase 5; None: code search is off).
+    code_index: CodeIndex | None = None
 
     async def close_shells(self) -> None:
         for shell in (self.shell, self.unsandboxed_shell):

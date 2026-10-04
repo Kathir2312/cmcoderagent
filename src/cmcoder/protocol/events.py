@@ -232,6 +232,27 @@ class History(_Event):
     messages: list[HistoryItem]
 
 
+class CodeContextItem(BaseModel):
+    path: str
+    start_line: int
+    end_line: int
+    symbol: str | None = None
+    score: float
+
+
+class CodeContext(_Event):
+    """Code from the project's index added to the user's message (automatic context)."""
+
+    type: Literal["code_context"] = "code_context"
+    items: list[CodeContextItem]
+    tokens: int  # estimate
+
+    def summary(self) -> str:
+        where = ", ".join(f"{i.path}:{i.start_line}-{i.end_line}" for i in self.items[:4])
+        more = f" and {len(self.items) - 4} more" if len(self.items) > 4 else ""
+        return f"Added code from the index: {where}{more} (≈{self.tokens:,} tokens)"
+
+
 class Result(_Event):
     type: Literal["result"] = "result"
     subtype: Literal["success", "error", "max_turns", "interrupted"]
@@ -265,6 +286,7 @@ Event = Annotated[
     | RewindPoints
     | Rewound
     | History
+    | CodeContext
     | Result,
     Field(discriminator="type"),
 ]

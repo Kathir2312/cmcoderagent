@@ -281,6 +281,12 @@ function onEvent(ev: AgentEvent): void {
     case "error":
       note(`✗ ${ev.message}${ev.hint ? `\n${ev.hint}` : ""}`, "error");
       break;
+    case "code_context": {
+      const where = ev.items.slice(0, 4).map((i) => `${i.path}:${i.start_line}-${i.end_line}`).join(", ");
+      const more = ev.items.length > 4 ? ` and ${ev.items.length - 4} more` : "";
+      note(`◦ Added code from the index: ${where}${more} (≈${ev.tokens} tokens)`, "info");
+      break;
+    }
     case "compacted":
       note(
         `✻ ${ev.trigger === "auto" ? "Context nearly full: compacted" : "Compacted"} the conversation ` +

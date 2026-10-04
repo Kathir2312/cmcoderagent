@@ -15,6 +15,7 @@ from typing import Any, Protocol
 
 from pydantic import ValidationError
 
+from ..config.settings import RagAutoContextConfig
 from ..mcp_client import McpManager, McpServer
 from ..protocol import events as ev
 from ..providers.messages import (
@@ -27,7 +28,12 @@ from ..providers.messages import (
     ToolSpec,
     Usage,
 )
-from ..providers.openai_compat import ContextTooLong, ProviderError, no_tool_support
+from ..providers.openai_compat import (
+    ContextTooLong,
+    ProviderError,
+    estimate_tokens,
+    no_tool_support,
+)
 from ..providers.profiles import ModelProfile
 from ..providers.text_tools import Holdback, extract
 from ..telemetry import Telemetry
@@ -59,6 +65,18 @@ from .subagents import ModelChoice, SubagentRuntime, TaskDone, TaskTool
 from .titles import make_title
 
 TITLE_WAIT_ON_CLOSE = 2.0  # seconds a pending title may still take when closing
+# Automatic code context: not for messages shorter than this, and at most this
+# share of the model's context window (rag.autoContext.maxTokens caps it too).
+AUTO_CONTEXT_MIN_WORDS = 3
+AUTO_CONTEXT_SHARE = 0.08
+_REMINDER = re.compile(r"<system-reminder>.*?</system-reminder>\s*", re.DOTALL)
+
+
+def visible_text(content: str) -> str:
+    """A user message as the user wrote it: without the reminders cmcoder adds
+    (editor context, hook notes, code context)."""
+    return _REMINDER.sub("", content).strip()
+
 
 MAX_IDENTICAL_CALLS = 3
 MAX_STOP_HOOK_BLOCKS = 3  # a Stop hook can't keep a turn going forever
@@ -194,6 +212,7 @@ class Agent:
         commands: CommandSource | None = None,
         subagents: SubagentRuntime | None = None,
         telemetry: Telemetry | None = None,
+        auto_context: RagAutoContextConfig | None = None,
     ) -> None:
         self.provider = provider
         self.model = model
@@ -235,6 +254,11 @@ class Agent:
         self.telemetry = telemetry
         # Shown with the first turn (e.g. a sandbox that was asked for but can't run).
         self.startup_warnings: list[str] = []
+        # Code search (Phase 5): the index is ctx.code_index; automatic context
+        # adds the best matches to each message (pieces sent once per conversation).
+        self.auto_context = auto_context
+        self._context_sent: set[str] = set()
+        self._context_failed: bool | None = False  # None: failed and said so
         if subagents is not None:
             self.tools["Task"] = TaskTool(self, subagents)
         # Called with (model, tokens) when the server states a smaller window.
@@ -275,6 +299,7 @@ class Agent:
         self.turn = 0
         self.ctx.todos = []
         self._titled = False
+        self._context_sent = set()
         if self.session is not None:
             self.session = SessionLog(self.ctx.project_root)
             self.session_id = self.session.session_id
@@ -286,7 +311,8 @@ class Agent:
         out = []
         for m in self.messages:
             if m.role == "user" and m.turn:
-                out.append((m.turn, m.content, len(self.checkpoints.changes_since(m.turn))))
+                text = visible_text(m.content)
+                out.append((m.turn, text, len(self.checkpoints.changes_since(m.turn))))
         return out
 
     def rewind(
@@ -307,7 +333,7 @@ class Agent:
                 None,
             )
             if idx is not None:
-                prompt = self.messages[idx].content
+                prompt = visible_text(self.messages[idx].content)
                 self._keep_before_rewind(prompt)
                 self.messages = self.messages[:idx]
                 self.turn = turn - 1
@@ -459,6 +485,8 @@ class Agent:
         await self.ctx.close_shells()
         if self.ctx.sandbox is not None and not self.is_subagent:
             await self.ctx.sandbox.close()
+        if self.ctx.code_index is not None and not self.is_subagent:
+            await self.ctx.code_index.close()
         if self.telemetry is not None and not self.is_subagent:
             await self.telemetry.close()
         providers = [self.provider]
@@ -508,6 +536,7 @@ class Agent:
             return
         self.messages = res.messages
         self.usage.add(res.usage)
+        self._context_sent = set()  # summarised away: may be sent again
         self.save_session()
         yield ev.Compacted(
             trigger=trigger,  # type: ignore[arg-type]
@@ -533,6 +562,7 @@ class Agent:
                 project_root=self.ctx.project_root,
                 max_output_chars=self.ctx.max_output_chars,
                 sandbox=self.ctx.sandbox,
+                code_index=self.ctx.code_index,
             ),
             prompt,
             max_turns=self.max_turns,
@@ -614,6 +644,60 @@ class Agent:
         finally:
             self.policy.set_turn_allow([])
 
+    async def _auto_context(self, prompt: str) -> tuple[str, ev.CodeContext] | None:
+        """The best matches from the code index for this message, within the
+        token budget, as a reminder ahead of it; None when there's nothing."""
+        cfg, index = self.auto_context, self.ctx.code_index
+        if cfg is None or not cfg.enabled or index is None or self.is_subagent:
+            return None
+        if self._context_failed is not False:
+            return None
+        words = prompt.split()
+        if len(words) < AUTO_CONTEXT_MIN_WORDS or prompt.lstrip().startswith("/"):
+            return None
+        try:
+            hits = await index.search(prompt, cfg.top_k)
+        except Exception:  # the gateway or store is down: the turn goes on without it
+            self._context_failed = True
+            return None
+        budget = min(cfg.max_tokens, int(self.profile.context_window * AUTO_CONTEXT_SHARE))
+        picked, used = [], 0
+        for hit in hits:
+            if hit.score < cfg.min_score or hit.chunk.id in self._context_sent:
+                continue
+            cost = estimate_tokens(hit.chunk.text) + 20
+            if used + cost > budget:
+                continue
+            picked.append(hit)
+            used += cost
+        if not picked:
+            return None
+        self._context_sent.update(h.chunk.id for h in picked)
+        blocks = []
+        for h in picked:
+            c = h.chunk
+            name = f" ({c.symbol})" if c.symbol else ""
+            blocks.append(f"### {c.location}{name}\n```{c.language}\n{c.text}\n```")
+        text = (
+            "<system-reminder>\nCode from the project's index that may be relevant to this "
+            "message (found by meaning; it can be a little behind the files, so Read a file "
+            "before editing it):\n\n" + "\n\n".join(blocks) + "\n</system-reminder>"
+        )
+        event = ev.CodeContext(
+            items=[
+                ev.CodeContextItem(
+                    path=h.chunk.path,
+                    start_line=h.chunk.start_line,
+                    end_line=h.chunk.end_line,
+                    symbol=h.chunk.symbol,
+                    score=round(h.score, 3),
+                )
+                for h in picked
+            ],
+            tokens=used,
+        )
+        return text, event
+
     async def _run(self, prompt: str, context: str | None) -> AsyncIterator[ev.Event]:
         started = time.monotonic()
         self.turn += 1
@@ -660,6 +744,16 @@ class Agent:
                     f"<system-reminder>\nFrom the user's hooks:\n{hook_note}\n</system-reminder>"
                     f"\n\n{user_message.content}"
                 )
+        if (added := await self._auto_context(prompt)) is not None:
+            text, event = added
+            user_message.content = f"{text}\n\n{user_message.content}"
+            yield event
+        elif self._context_failed is True:
+            self._context_failed = None  # said once
+            yield ev.Warning(
+                message="Code search isn't answering, so no code context was added. "
+                "`cmcoder doctor` checks it."
+            )
         turn_usage = Usage()
         last_text = ""
         steps = 0

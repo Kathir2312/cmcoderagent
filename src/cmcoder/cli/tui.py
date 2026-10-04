@@ -317,6 +317,8 @@ class CmcoderApp(App[int]):
         elif isinstance(event, ev.Error):
             await self.finish_reply()
             self.write(f"✗ {event.message}" + (f"\n  {event.hint}" if event.hint else ""), "err")
+        elif isinstance(event, ev.CodeContext):
+            self.write(f"◦ {event.summary()}", "dim")
         elif isinstance(event, ev.Compacted):
             self._prompt_tokens = 0
             self.write(

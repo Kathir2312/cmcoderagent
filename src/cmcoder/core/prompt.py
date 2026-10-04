@@ -126,6 +126,14 @@ def load_memory_files(cwd: Path, project_root: Path) -> list[MemoryFile]:
     return out
 
 
+CODE_SEARCH_NOTE = (
+    "Code search: this project is indexed. CodeSearch finds code by what it does (use it "
+    "when you don't know the names; Grep for exact text). Code from the index may also be "
+    "added ahead of user messages; it can be a little behind the files, so Read a file "
+    "before editing it."
+)
+
+
 def build_system_prompt(
     cwd: Path,
     project_root: Path,
@@ -136,6 +144,7 @@ def build_system_prompt(
     append: str | None = None,
     skills: str | None = None,
     sandbox: str | None = None,
+    code_search: bool = False,
 ) -> str:
     """Stable content first (so server-side prefix caches are reused), dynamic last."""
     parts = [COMPACT_PROMPT if tier == "compact" else BASE_PROMPT]
@@ -150,7 +159,12 @@ def build_system_prompt(
     if append:
         parts.append(append)
     env = _environment(cwd, project_root, model)
-    parts.append(f"{env}\n{sandbox}" if sandbox else env)
+    notes = [env]
+    if sandbox:
+        notes.append(sandbox)
+    if code_search:
+        notes.append(CODE_SEARCH_NOTE)
+    parts.append("\n".join(notes))
     return "\n\n".join(parts)
 
 
