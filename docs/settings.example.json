@@ -2,7 +2,9 @@
   "providers": {
     "corp": {
       "baseUrl": "https://aiXIngerence.localnw.ae/v1",
-      "auth": { "type": "apiKey" },
+      "auth": {
+        "type": "apiKey"
+      },
       "caCertPath": null
     }
   },
@@ -13,8 +15,26 @@
   "persistSessions": true,
   "cleanupPeriodDays": 30,
   "permissions": {
-    "allow": ["Bash(npm test:*)", "Bash(pytest:*)"],
+    "allow": [
+      "Bash(npm test:*)",
+      "Bash(pytest:*)"
+    ],
     "deny": [],
     "defaultMode": "default"
+  },
+  "rag": {
+    "enabled": "auto",
+    "embeddingModel": "corp:bge-m3",
+    "store": {
+      "type": "local"
+    },
+    "exclude": [
+      "**/vendor/**"
+    ],
+    "autoContext": {
+      "enabled": true,
+      "topK": 5,
+      "maxTokens": 2000
+    }
   }
 }

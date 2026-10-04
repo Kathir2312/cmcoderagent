@@ -311,6 +311,21 @@ the project is trusted; managed settings can force it. On Linux/WSL2 it needs `b
 On macOS, commands can connect to local ports only through cmcoder's proxy; `"network": {"allowLocalhost": true}`
 lets them reach any local port (e.g. a test server they start), including services outside the sandbox.
 
+### Code search (Phase 5)
+
+An index of the project's code lets the model find code **by meaning** ("where do we retry failed payments?"): a
+`CodeSearch` tool, and the best-matching code added to your messages automatically. It needs an embedding model on
+your gateway (LiteLLM or Open WebUI) and works in the terminal and VS Code:
+
+```
+cmcoder rag setup        # embedding model, where the index lives, your settings or the project's; index now
+cmcoder index            # bring it up to date (changed files only); --status, --rebuild, --clear
+```
+
+Inside a session: `/index` and `/index status`. VS Code: "cmcoder: Set Up Code Search", and the status bar item. The
+index stays current by itself; secret files are never indexed. The index can live on this machine (built in), in
+Chroma on this machine, or on a shared Chroma server. See [docs/phase5/code-search.md](docs/phase5/code-search.md).
+
 ### Usage metrics (OpenTelemetry)
 
 Off by default. An administrator (managed settings) or you can send usage metrics to an OpenTelemetry collector

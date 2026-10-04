@@ -1,6 +1,6 @@
 # Phase 5 — Code search (RAG): plan
 
-**Status:** in progress (started 4 October 2026, with Phase 4's WSL2 check still to do).
+**Status:** built (4 October 2026); the hands-on check on Windows and `STATUS.md` are next. Phase 4's WSL2 check is still to do.
 
 **Goal:** the model can find code **by meaning** ("where do we refresh the
 auth token?") in large repositories, not only by exact words (Grep), using an
@@ -161,6 +161,16 @@ capture meaning) by an embedding model on the gateway, lets the model ask for
   stores mapped to cmcoder's), a setup page (embedding model on LiteLLM and
   on Open WebUI, local index, Chroma server), hands-on checklist on Windows,
   `STATUS.md`.
+- Status (4 Oct): done except the hands-on check and `STATUS.md`. Tests for
+  every part (all three stores, both gateways for real, the protocol, the
+  CLI, the standalone build); `evals/tasks/code-search` and `--rag off`;
+  `evals/retrieval.py` (hit@1/hit@5/MRR with your embedding model; CI runs it
+  with the mock as a harness check, since the real number needs a real
+  model). [SECURITY-REVIEW.md](SECURITY-REVIEW.md): index folders made
+  private; chromadb advisories (no fix yet) with how to run a Chroma server
+  safely. Guides: [code-search.md](code-search.md),
+  [python-guide.md](python-guide.md), [langgraph-guide.md](langgraph-guide.md);
+  checklist: [TESTING.md](TESTING.md).
 
 ## Not in Phase 5
 
@@ -176,5 +186,5 @@ or call-tree indexes. Later, if asked.
 - [x] 3. Vector stores (local, Chroma)
 - [x] 4. `CodeSearch` and automatic context
 - [x] 5. Commands, guided setup, front ends and settings
-- [ ] 6. Tests, evals, security review and docs
+- [x] 6. Tests, evals, security review and docs
 - [ ] Hands-on use on Windows, and `STATUS.md`

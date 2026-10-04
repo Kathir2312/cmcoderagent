@@ -468,7 +468,7 @@ Per-phase plans, guides and status reports live in [docs/README.md](README.md) (
 
 ### 16.1 Phase 0 status
 
-**Phase 0 is complete**; see [phase0/STATUS.md](phase0/STATUS.md). **Phase 1 is complete**; see [phase1/STATUS.md](phase1/STATUS.md). **Phase 2 is complete**; see [phase2/STATUS.md](phase2/STATUS.md). **Phase 3 is complete**; see [phase3/STATUS.md](phase3/STATUS.md). Phase 4 (Hardening) is in progress: [phase4/PLAN.md](phase4/PLAN.md). Phase 5 (Code search) is planned: [phase5/PLAN.md](phase5/PLAN.md).
+**Phase 0 is complete**; see [phase0/STATUS.md](phase0/STATUS.md). **Phase 1 is complete**; see [phase1/STATUS.md](phase1/STATUS.md). **Phase 2 is complete**; see [phase2/STATUS.md](phase2/STATUS.md). **Phase 3 is complete**; see [phase3/STATUS.md](phase3/STATUS.md). Phase 4 (Hardening) is in progress: [phase4/PLAN.md](phase4/PLAN.md). Phase 5 (Code search) is built, its hands-on check pending: [phase5/PLAN.md](phase5/PLAN.md).
 
 
 Delivered:
