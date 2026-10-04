@@ -152,8 +152,13 @@ jobs:
         run: uvx bandit -r src evals/run.py --severity-level medium
       - name: pip-audit (known vulnerabilities in the locked Python packages)
         run: |
-          uv export --format requirements-txt --no-hashes --no-emit-project > /tmp/requirements.txt
-          uvx pip-audit -r /tmp/requirements.txt --no-deps --disable-pip --strict
+          uv export --format requirements-txt --no-hashes --no-emit-project --all-extras > /tmp/requirements.txt
+          # chromadb (the optional "chroma" extra): server-side advisories with no fix
+          # yet; cmcoder only uses it as an in-process client. See
+          # docs/phase5/SECURITY-REVIEW.md, finding 2, before removing or adding any.
+          uvx pip-audit -r /tmp/requirements.txt --no-deps --disable-pip --strict \
+            --ignore-vuln PYSEC-2026-311 --ignore-vuln PYSEC-2026-3813 \
+            --ignore-vuln PYSEC-2026-3814 --ignore-vuln PYSEC-2026-3815
       - name: npm audit (extension dependencies; fails on high or critical)
         working-directory: vscode
         run: |

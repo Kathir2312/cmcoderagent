@@ -247,3 +247,19 @@ def test_off_without_a_model(project: Path) -> None:
     s = Settings.model_validate({"rag": {"enabled": False, "embeddingModel": "x"}})
     assert open_index(s, project, build_provider) is None
     assert sys.version_info >= (3, 11)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX permissions")
+async def test_the_index_is_private(code_project: Path, make_index: Any) -> None:
+    import stat
+
+    idx, _ = make_index(code_project, {"type": "local"})
+    try:
+        await idx.update()
+        top = Path(os.environ["CMCODER_CONFIG_DIR"]) / "index"
+        for folder in [idx.folder, idx.folder / "local", *idx.folder.parents]:
+            assert stat.S_IMODE(folder.stat().st_mode) == 0o700, folder
+            if folder == top:
+                break
+    finally:
+        await idx.close()

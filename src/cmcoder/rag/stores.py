@@ -25,6 +25,7 @@ from typing import Any, Protocol
 import httpx
 import numpy as np
 
+from ..config.settings import config_dir
 from ..mcp_client import expand
 from ..providers.auth import load_stored_api_key
 from ..providers.transport import TransportOptions, build_client
@@ -53,6 +54,20 @@ class VectorStore(Protocol):
     async def count(self) -> int: ...
     async def clear(self) -> None: ...
     async def close(self) -> None: ...
+
+
+def private_folder(path: Path) -> None:
+    """Create `path` readable by the user only, like the folders above it up to
+    ~/.cmcoder/index (an index holds copies of the code)."""
+    path.mkdir(parents=True, exist_ok=True)
+    top = config_dir() / "index"
+    for folder in [path, *path.parents]:
+        try:
+            folder.chmod(0o700)
+        except OSError:
+            pass
+        if folder == top or top not in folder.parents:
+            break
 
 
 def _prefix_ok(path: str, prefix: str | None) -> bool:
@@ -90,7 +105,7 @@ def _chunk(doc: str | None, meta: dict[str, Any] | None) -> Chunk:
 class LocalStore:
     def __init__(self, folder: Path) -> None:
         self.folder = folder
-        folder.mkdir(parents=True, exist_ok=True)
+        private_folder(folder)
         self._db = sqlite3.connect(folder / "index.db", check_same_thread=False)
         self._lock = threading.Lock()
         with self._lock:
@@ -315,7 +330,7 @@ class ChromaLocalStore:
                 "`uv tool install --force --reinstall cmcoder[chroma]` (or `pip install chromadb`), "
                 'or use the built-in store ("store": {"type": "local"}) or a Chroma server.'
             ) from e
-        folder.mkdir(parents=True, exist_ok=True)
+        private_folder(folder)
         self.folder = folder
         self.collection_name = collection
         self.metadata = metadata

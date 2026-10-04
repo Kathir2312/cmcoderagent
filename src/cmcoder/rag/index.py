@@ -33,6 +33,7 @@ from .stores import (
     LocalStore,
     StoreError,
     VectorStore,
+    private_folder,
 )
 
 FILES_PER_BATCH = 20
@@ -151,7 +152,7 @@ class CodeIndex:
         self._chunks = int(data.get("chunks", 0))
 
     def _save_manifest(self) -> None:
-        self.folder.mkdir(parents=True, exist_ok=True)
+        private_folder(self.folder)
         data = {
             "version": MANIFEST_VERSION,
             "project": str(self.root),
@@ -388,6 +389,8 @@ class CodeIndex:
 def open_store(cfg: RagConfig, root: Path, model: str, folder: Path) -> VectorStore:
     store = cfg.store
     meta: dict[str, Any] = {"cmcoder": 1, "embedding_model": model}
+    if store.type == "local" or not store.url:
+        private_folder(folder)
     if store.type == "local":
         return LocalStore(folder / "local")
     name = store.collection or collection_name(root, model)
