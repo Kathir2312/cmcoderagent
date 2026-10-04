@@ -193,6 +193,11 @@ Terminal.
 
 - Evals through the Open WebUI mock; sandbox tests that try to escape.
 - SAST/SCA as in Phases 2–3, plus a sandbox escape review.
+- Status (4 Oct): done. `evals/run.py --mock --gateway openwebui-ollama|openwebui-openai`
+  (23/23 on both, through `-p` and the VS Code protocol; CI runs the Ollama
+  one). Security review: [SECURITY-REVIEW.md](SECURITY-REVIEW.md), 6 issues
+  fixed (sandbox and proxy; `.git` read-only decided 4 Oct), each with a
+  test that fails on the earlier code; no vulnerable dependencies.
 
 ### 8. Guides and docs
 
@@ -213,6 +218,6 @@ client certificates: later, if needed.
 - [x] 4. OpenTelemetry
 - [x] 5. Standalone binary and per-platform VSIX
 - [x] 6. Branding: icon and name
-- [ ] 7. Tests, evals and security review
+- [x] 7. Tests, evals and security review
 - [ ] 8. Guides and docs
 - [ ] Hands-on use on Windows (LiteLLM and Open WebUI), and `STATUS.md`
