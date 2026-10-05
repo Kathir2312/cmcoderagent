@@ -35,7 +35,7 @@ from ..sensitive import safe_project_file
 # Commands the front ends handle themselves; a file can't replace them.
 BUILT_IN = {
     "help", "clear", "resume", "rewind", "todos", "compact", "model", "mode",
-    "cost", "mcp", "index", "exit", "quit",
+    "cost", "mcp", "index", "agents", "exit", "quit",
 }  # fmt: skip
 NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]*$")
 MAX_FILE_CHARS = 50_000

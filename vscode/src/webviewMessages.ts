@@ -22,6 +22,7 @@ export type FromWebview =
   | { kind: "ready" }
   | { kind: "send"; text: string; includeContext: boolean }
   | { kind: "interrupt" }
+  | { kind: "stopSubagent"; id: string }
   | { kind: "permission"; requestId: string; allow: boolean; remember: boolean; feedback?: string }
   | { kind: "showDiff"; requestId: string }
   | { kind: "setMode"; mode: string }

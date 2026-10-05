@@ -28,6 +28,7 @@ from ..core.commands import BUILT_IN, split_line
 from ..core.ide import IDE_TOOLS, format_ide_context
 from ..core.permissions import MODES, Decision, ModeNotAllowed
 from ..core.sessions import list_sessions
+from ..core.subagents import agents_command
 from ..mcp_client import status_lines
 from ..protocol import events as ev
 from ..protocol import messages as msg
@@ -67,6 +68,7 @@ BUILT_IN_HERE = {
     "todos": ("", "Show the todo list"),
     "mcp": ("", "MCP servers: status and tools"),
     "index": ("[status]", "Build or update the code index (code search), or show it"),
+    "agents": ("[n | stop n]", "Agent types and this session's subagents: status, steps, reports"),
     "help": ("", "List the commands"),
 }
 PANEL_COMMANDS = set(BUILT_IN_HERE) - {"compact"}
@@ -236,6 +238,9 @@ class StdioServer:
             self._side(self._rag_candidates())
         elif isinstance(message, msg.RagSetup):
             self._side(self._rag_setup(message))
+        elif isinstance(message, msg.StopSubagent):
+            if agent.stop_subagent(message.id) is None:
+                self.error("not_running", f"No running subagent {message.id!r}.")
         elif isinstance(message, msg.ListCommands):
             self.emit(ev.CommandList(commands=self.command_list()))
 
@@ -365,6 +370,8 @@ class StdioServer:
                     text=f"Todo list: {done}/{len(agent.ctx.todos)} done (shown at the top)."
                 ),
             ]
+        if name == "agents":
+            return [reply("Agents", "\n".join(agents_command(agent, arguments)))]
         if name == "index":
             lines = await index_command(agent, self.settings, arguments, self._progress)
             self._side(self._index("status"))

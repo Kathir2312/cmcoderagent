@@ -287,3 +287,23 @@ footer .commands .description { opacity: 0.7; margin-left: 8px; }
 .tool .steps { margin: 2px 0 2px 12px; border-left: 2px solid var(--vscode-panel-border, #8884); padding-left: 6px; }
 .tool .steps .step { opacity: 0.75; font-size: 0.95em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tool .steps .error { color: var(--vscode-errorForeground); }
+
+/* The agent map: this turn's subagents, above the input. */
+.agents {
+  padding: 4px 10px 6px;
+  border-top: 1px solid var(--vscode-panel-border, transparent);
+  font-family: var(--vscode-editor-font-family);
+  max-height: 40vh;
+  overflow-y: auto;
+}
+.agents .title { opacity: 0.7; margin-bottom: 2px; }
+.agents .agent { display: flex; align-items: center; gap: 8px; cursor: pointer; white-space: nowrap; }
+.agents .agent .name { overflow: hidden; text-overflow: ellipsis; }
+.agents .agent .detail { opacity: 0.7; overflow: hidden; text-overflow: ellipsis; flex: 1; }
+.agents .agent .stop-one { padding: 0 6px; font-size: 0.9em; }
+.agents .activity { opacity: 0.6; padding-left: 3.2em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.agents .running .name, .substatus.running { color: var(--vscode-textLink-foreground); }
+.agents .waiting .name, .agents .stopping .name, .substatus.waiting, .substatus.stopping { color: var(--vscode-editorWarning-foreground); }
+.agents .failed .name, .substatus.failed { color: var(--vscode-errorForeground); }
+.agents .queued { opacity: 0.6; }
+.tool .substatus { opacity: 0.8; padding-left: 12px; font-size: 0.95em; }

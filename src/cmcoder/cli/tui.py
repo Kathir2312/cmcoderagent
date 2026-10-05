@@ -31,12 +31,13 @@ from ..config.settings import Settings, ignored_settings_message
 from ..core.agent import Agent, PermissionAnswer, PermissionRequest
 from ..core.commands import BUILT_IN, help_lines
 from ..core.permissions import MODES, ModeNotAllowed
+from ..core.subagents import agents_command
 from ..mcp_client import status_lines
 from ..protocol import events as ev
 from ..rag.index import Progress
 from ..tools.todo import MARKS
+from .agent_map import AgentMap, ParallelTasks
 from .factory import AgentOptions, build_agent, index_command
-from .parallel import ParallelTasks
 from .repl import Repl, output_preview, short_rule, subagent_line
 
 
@@ -64,6 +65,7 @@ HELP = """\
 /cost              token usage for this session
 /mcp               MCP servers: status and tools
 /index [status]    build or update the code index (code search), or show it
+/agents [n|stop n] agent types and this session's subagents (works while cmcoder works)
 /todos             show the todo list
 /exit              quit
 Keys: Enter send · Ctrl+C interrupt (twice when idle: quit) · Shift+Tab cycle mode
@@ -145,6 +147,7 @@ class CmcoderApp(App[int]):
     #log > Static { margin-bottom: 0; }
     #prompt { border: tall $accent; }
     #status { height: 1; background: $panel; color: $text-muted; padding: 0 1; }
+    #agents { height: auto; max-height: 14; padding: 0 1; border-top: solid $panel; display: none; }
     .user { color: $text; text-style: bold; margin-top: 1; }
     .tool { color: $accent; }
     .dim { color: $text-muted; }
@@ -171,11 +174,13 @@ class CmcoderApp(App[int]):
         self._prompt_tokens = 0
         self._quit_armed = False
         self.tasks = ParallelTasks()
+        self.map = AgentMap()  # this turn's subagents, shown above the input
 
     # -- layout -------------------------------------------------------------------
 
     def compose(self) -> ComposeResult:
         yield VerticalScroll(id="log")
+        yield Static(id="agents")
         yield Input(
             placeholder=f"Ask {self.brand.product_name}…  (/help for commands)",
             id="prompt",
@@ -211,6 +216,7 @@ class CmcoderApp(App[int]):
                 f"Resumed conversation {a.session_id[:8]} ({len(a.messages) - 1} messages).", "tool"
             )
         self.update_status()
+        self.set_interval(1.0, self.refresh_map)  # running subagents' times tick
         self.query_one("#prompt", Input).focus()
         if self.initial_prompt:
             self.start_turn(self.initial_prompt)
@@ -219,6 +225,19 @@ class CmcoderApp(App[int]):
         log = self.query_one("#log", VerticalScroll)
         log.mount(Static(renderable, classes=classes))
         log.scroll_end(animate=False)
+
+    def refresh_map(self) -> None:
+        panel = self.query_one("#agents", Static)
+        lines = self.map.lines()
+        panel.display = bool(lines)
+        if not lines:
+            return
+        text = Text("Subagents", style="bold")
+        if self.map.active:
+            text.append("  ·  /agents stop <n> stops one, Ctrl+C everything", style="dim")
+        for line, style in lines:
+            text.append("\n" + line, style=style)
+        panel.update(text)
 
     def update_status(self, busy: bool = False) -> None:
         if self.agent is None:
@@ -243,6 +262,9 @@ class CmcoderApp(App[int]):
         if not line:
             return
         if self.turn is not None and self.turn.is_running:
+            if line == "/agents" or line.startswith("/agents "):  # e.g. stop one subagent
+                await self.command(line)
+                return
             self.notify("cmcoder is still working; Ctrl+C interrupts.", severity="warning")
             return
         if line.startswith("/"):
@@ -261,6 +283,7 @@ class CmcoderApp(App[int]):
         self, events: Any, interrupted: str = "Interrupted. What should cmcoder do instead?"
     ) -> None:
         self.update_status(busy=True)
+        self.map.clear()
         try:
             async for event in events:
                 await self.render_event(event)
@@ -268,6 +291,8 @@ class CmcoderApp(App[int]):
             await self.finish_reply()
             self.write(f"└ {interrupted}", "warn")
         finally:
+            self.map.clear()
+            self.refresh_map()
             self.update_status()
 
     async def finish_reply(self) -> None:
@@ -277,7 +302,10 @@ class CmcoderApp(App[int]):
 
     async def render_event(self, event: ev.Event) -> None:
         tag = self.tasks.tag(event)
-        if (line := subagent_line(event, tag)) is not None:  # a step inside a Task call
+        if isinstance(event, ev.SubagentStatus):
+            self.map.update(event)
+            self.refresh_map()
+        elif (line := subagent_line(event, tag)) is not None:  # a step inside a Task call
             if line[0]:
                 self.write(line[0], "err" if line[1] == "red" else "dim")
         elif isinstance(event, ev.AssistantDelta):
@@ -302,6 +330,9 @@ class CmcoderApp(App[int]):
                 self.write(self.todo_text(todos), "tool")
             else:
                 self.write(f"● {event.label}", "tool")
+        elif isinstance(event, ev.ToolResult) and (final := self.map.final_line(event.id)):
+            state = self.map.runs[event.id].state
+            self.write(f"  └ {tag}{final}", "err" if state == "failed" else "dim")
         elif isinstance(event, ev.ToolResult):
             if event.is_error:
                 lines = event.content.strip().splitlines()
@@ -396,6 +427,9 @@ class CmcoderApp(App[int]):
             )
         elif name == "mcp":
             self.write("\n".join(status_lines(a.mcp)))
+        elif name == "agents":
+            self.write("\n".join(agents_command(a, arg)))
+            self.refresh_map()
         elif name == "index":
             status = self.query_one("#status", Static)
 

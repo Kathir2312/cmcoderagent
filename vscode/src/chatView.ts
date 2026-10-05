@@ -251,6 +251,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       case "interrupt":
         this.interrupt();
         break;
+      case "stopSubagent":
+        this.agent?.send({ type: "stop_subagent", id: m.id });
+        break;
       case "permission":
         this.answer(m.requestId, m.allow, m.remember, m.feedback);
         break;

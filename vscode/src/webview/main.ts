@@ -2,7 +2,15 @@
 // Plain DOM code: it receives protocol events from the extension and renders them.
 
 import { marked } from "marked";
-import type { AgentEvent, CommandInfo, PermissionDenied, PermissionRequest, ToolResult, ToolUse } from "../protocol";
+import type {
+  AgentEvent,
+  CommandInfo,
+  PermissionDenied,
+  PermissionRequest,
+  SubagentStatus,
+  ToolResult,
+  ToolUse,
+} from "../protocol";
 import type { FromWebview, ToWebview } from "../webviewMessages";
 
 declare function acquireVsCodeApi(): { postMessage(message: FromWebview): void };
@@ -84,6 +92,7 @@ app.innerHTML = `
   <section class="sessions" hidden></section>
   <section class="todos" hidden></section>
   <main class="log" aria-live="polite"></main>
+  <section class="agents" hidden></section>
   <div class="status" hidden></div>
   <footer>
     <label class="context" hidden title="Send the active file, selection and problems with this message">
@@ -111,6 +120,7 @@ const modelLabel = $<HTMLElement>(".model");
 const usageLabel = $<HTMLElement>(".usage");
 const statusLine = $<HTMLElement>(".status");
 const todosPanel = $<HTMLElement>(".todos");
+const agentsPanel = $<HTMLElement>(".agents");
 const sessionsPanel = $<HTMLElement>(".sessions");
 const historyButton = $<HTMLButtonElement>(".history");
 const attachButton = $<HTMLButtonElement>(".attach");
@@ -224,6 +234,102 @@ function subagentStep(ev: ToolUse | ToolResult | PermissionDenied, parentId: str
   }
 }
 
+// --- the agent map: this turn's subagents, above the input ----------------------
+
+const STATE_MARKS: Record<string, string> = {
+  queued: "○", running: "◐", waiting: "⏸", stopping: "◑",
+  done: "✓", limit: "✓", stopped: "■", failed: "✗",
+};
+const STATE_WORDS: Record<string, string> = {
+  queued: "queued", running: "running", waiting: "waiting for permission",
+  stopping: "stopping (writing its report)", done: "done", limit: "done (step limit reached)",
+  stopped: "stopped", failed: "failed",
+};
+const ACTIVE = new Set(["queued", "running", "waiting", "stopping"]);
+const TICKING = new Set(["running", "waiting", "stopping"]);
+const agentRuns = new Map<string, { status: SubagentStatus; seen: number }>();
+let agentTimer: number | undefined;
+
+function shortCount(n: number): string {
+  return n >= 1000 ? `${(n / 1000).toFixed(1).replace(/\.0$/, "")}k` : `${n}`;
+}
+
+function duration(ms: number): string {
+  const s = Math.floor(ms / 1000);
+  return s >= 60 ? `${Math.floor(s / 60)}m${String(s % 60).padStart(2, "0")}s` : `${s}s`;
+}
+
+function agentSummary(s: SubagentStatus, live: boolean): string {
+  const entry = agentRuns.get(s.id);
+  const ms = live && entry && TICKING.has(s.state) ? s.elapsed_ms + (Date.now() - entry.seen) : s.elapsed_ms;
+  const tools = `${s.tool_uses} tool${s.tool_uses === 1 ? "" : "s"}`;
+  return [s.agent_type, `${s.steps}/${s.max_steps} steps`, tools, `${shortCount(s.tokens)} tokens`, duration(ms)].join(" · ");
+}
+
+function agentDetail(s: SubagentStatus): string {
+  if (s.state === "queued") return `${s.agent_type} · queued`;
+  const words = s.state === "running" || s.state === "done" ? "" : `${STATE_WORDS[s.state]} · `;
+  return words + agentSummary(s, true);
+}
+
+function subagentStatus(s: SubagentStatus): void {
+  agentRuns.set(s.id, { status: s, seen: Date.now() });
+  const card = toolCards.get(s.id) ?? document.querySelector<HTMLElement>(`.tool[data-task="${CSS.escape(s.id)}"]`);
+  if (card) {
+    card.dataset.task = s.id;
+    let line = card.querySelector<HTMLElement>(".substatus");
+    if (!line) line = card.insertBefore(el("div", "substatus"), card.children[1] ?? null);
+    line.className = `substatus ${s.state}`;
+    line.textContent = `${STATE_MARKS[s.state]} ${STATE_WORDS[s.state]} · ${agentSummary(s, false)}`;
+  }
+  renderAgents();
+  if (agentTimer === undefined) agentTimer = window.setInterval(renderAgents, 1000);
+}
+
+function renderAgents(): void {
+  const runs = Array.from(agentRuns.values()).map((r) => r.status);
+  const active = runs.filter((s) => ACTIVE.has(s.state));
+  agentsPanel.hidden = runs.length === 0;
+  if (!active.length && agentTimer !== undefined) {
+    window.clearInterval(agentTimer);
+    agentTimer = undefined;
+  }
+  if (!runs.length) return;
+  const done = runs.length - active.length;
+  const title = el("div", "title", `Subagents · ${active.length} active · ${done} finished`);
+  const rows = runs.map((s, i) => {
+    const row = el("div", `agent ${s.state}`);
+    row.title = "Show its card";
+    row.onclick = () => document.querySelector(`.tool[data-task="${CSS.escape(s.id)}"]`)?.scrollIntoView({ block: "center" });
+    const branch = i === runs.length - 1 ? "└─" : "├─";
+    row.append(el("span", "name", `${branch} ${STATE_MARKS[s.state]} ${s.number}. ${s.description}`));
+    row.append(el("span", "detail", agentDetail(s)));
+    if (ACTIVE.has(s.state) && s.state !== "stopping") {
+      const stop = el("button", "secondary stop-one", "Stop");
+      stop.title = "Stop this subagent: it reports what it has found so far; the others go on";
+      stop.onclick = (e) => {
+        e.stopPropagation();
+        stop.setAttribute("disabled", "");
+        post({ kind: "stopSubagent", id: s.id });
+      };
+      row.append(stop);
+    }
+    const parts = [row];
+    if (s.activity && TICKING.has(s.state)) parts.push(el("div", "activity", `└ ${s.activity}`));
+    return parts;
+  });
+  agentsPanel.replaceChildren(title, ...rows.flat());
+}
+
+function endAgents(): void {
+  // The turn ended: anything still running was stopped with it.
+  for (const entry of agentRuns.values()) {
+    if (ACTIVE.has(entry.status.state)) subagentStatus({ ...entry.status, state: "stopped", activity: "" });
+  }
+  agentRuns.clear();
+  renderAgents();
+}
+
 function onEvent(ev: AgentEvent): void {
   if ((ev.type === "tool_use" || ev.type === "tool_result" || ev.type === "permission_denied") && ev.parent_tool_use_id) {
     subagentStep(ev, ev.parent_tool_use_id);
@@ -258,6 +364,9 @@ function onEvent(ev: AgentEvent): void {
       break;
     case "tool_result":
       toolResult(ev);
+      break;
+    case "subagent_status":
+      subagentStatus(ev);
       break;
     case "permission_request":
       permissionCard(ev);
@@ -343,6 +452,7 @@ function onEvent(ev: AgentEvent): void {
       reply = undefined;
       for (const card of permissionCards.values()) answered(card, "Cancelled");
       permissionCards.clear();
+      endAgents();
       if (ev.subtype === "interrupted") note(`Interrupted. What should ${PRODUCT} do instead?`, "warn");
       else if (ev.subtype === "max_turns") note(`Stopped: ${ev.result}`, "warn");
       setBusy(false);
@@ -615,6 +725,8 @@ window.addEventListener("message", (e: MessageEvent<ToWebview>) => {
       renderTodos([]);
       toolCards.clear();
       permissionCards.clear();
+      agentRuns.clear();
+      renderAgents();
       reply = undefined;
       usageLabel.textContent = "";
       setBusy(false);

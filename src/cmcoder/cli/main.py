@@ -132,7 +132,10 @@ def main(
         typer.Option("--append-system-prompt", help="Extra text appended to the system prompt."),
     ] = None,
     verbose: Annotated[
-        bool, typer.Option("--verbose", "-v", help="Show tool calls (-p) and reasoning.")
+        bool,
+        typer.Option(
+            "--verbose", "-v", help="Show tool calls (-p), every subagent step, and reasoning."
+        ),
     ] = False,
     continue_session: Annotated[
         bool,

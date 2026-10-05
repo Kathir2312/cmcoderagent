@@ -7,8 +7,8 @@ from typing import Literal
 
 from ..config.settings import Settings, ignored_settings_message
 from ..protocol import events as ev
+from .agent_map import ParallelTasks
 from .factory import AgentOptions, build_agent
-from .parallel import ParallelTasks
 
 OutputFormat = Literal["text", "json", "stream-json"]
 

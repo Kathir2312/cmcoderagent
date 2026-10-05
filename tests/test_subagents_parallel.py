@@ -10,7 +10,7 @@ from typing import Any
 
 import pytest
 
-from cmcoder.cli.parallel import ParallelTasks
+from cmcoder.cli.agent_map import ParallelTasks
 from cmcoder.core.agent import (
     STEPS_LEFT_REMINDER,
     STOPPED_WITH_OTHERS,

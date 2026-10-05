@@ -146,6 +146,14 @@ class RagSetup(_Message):
     index_now: bool = True
 
 
+class StopSubagent(_Message):
+    """Stop one subagent (a `subagent_status` id); the turn and the other
+    subagents go on. It writes a report of what it found so far."""
+
+    type: Literal["stop_subagent"] = "stop_subagent"
+    id: str
+
+
 class Shutdown(_Message):
     """Stop the running turn, save the session and exit (EOF does the same)."""
 
@@ -166,6 +174,7 @@ ClientMessage = Annotated[
     | Index
     | RagCandidates
     | RagSetup
+    | StopSubagent
     | Shutdown,
     Field(discriminator="type"),
 ]

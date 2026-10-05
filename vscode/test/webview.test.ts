@@ -289,3 +289,40 @@ test("code search: the code added from the index is noted in the panel", async (
   assert.match(text ?? "", /Added code from the index: auth\.py:4-8, notes\.md:1-3 \(≈310 tokens\)/);
   await page.close();
 });
+
+test("the agent map: live subagent rows, Stop sends stop_subagent, cards show the status", async () => {
+  const { page, ev, sent } = await panel();
+  await page.fill("textarea", "one subagent per project");
+  await page.press("textarea", "Enter");
+  const status = (id: string, number: number, description: string, state: string, extra = {}) =>
+    ev({
+      type: "subagent_status", id, number, description, agent_type: "explore", model: "qwen-small",
+      state: state as never, steps: 3, max_steps: 100, tool_uses: 4, tokens: 31400, elapsed_ms: 72000,
+      activity: "", ...extra,
+    });
+  for (const [id, n, d] of [["a", 1, "Analyse TW.Core"], ["b", 2, "Analyse TW.Api"]] as const) {
+    await ev({ type: "tool_use", id, name: "Task", input: {}, label: `Task(explore: ${d})`, parent_tool_use_id: null });
+    await status(id, n, d, "running", { activity: "Read(Program.cs)" });
+  }
+  await status("c", 3, "Analyse TW.Web", "queued");
+  assert.equal(await page.isVisible(".agents"), true);
+  const rows = await page.locator(".agents .agent .name").allTextContents();
+  assert.deepEqual(rows, ["├─ ◐ 1. Analyse TW.Core", "├─ ◐ 2. Analyse TW.Api", "└─ ○ 3. Analyse TW.Web"]);
+  assert.match((await page.textContent(".agents .agent.running .detail")) ?? "", /explore · 3\/100 steps · 4 tools · 31\.4k tokens · 1m1[23]s/);
+  assert.equal(await page.locator(".agents .activity").count(), 2);
+  assert.match((await page.textContent(".agents .title")) ?? "", /3 active · 0 finished/);
+
+  await page.locator(".agents .agent").nth(1).locator(".stop-one").click();
+  assert.deepEqual((await sent()).filter((m) => m.kind === "stopSubagent"), [{ kind: "stopSubagent", id: "b" }]);
+
+  await status("b", 2, "Analyse TW.Api", "stopped");
+  await ev({ type: "tool_result", id: "b", name: "Task", content: "(stopped) partial", is_error: false, summary: "4 tool uses", parent_tool_use_id: null });
+  assert.match((await page.locator(".tool").nth(1).textContent()) ?? "", /■ stopped · explore · 3\/100 steps/);
+  assert.equal(await page.locator(".agents .agent.stopped .stop-one").count(), 0);
+  assert.match((await page.textContent(".agents .title")) ?? "", /2 active · 1 finished/);
+
+  await ev(result); // the turn ended: the rest count as stopped, the map goes
+  assert.equal(await page.isVisible(".agents"), false);
+  assert.match((await page.locator(".tool").first().textContent()) ?? "", /■ stopped/);
+  await page.close();
+});

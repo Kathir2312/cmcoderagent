@@ -108,7 +108,10 @@ To run several at once, ask for it ("one explore subagent per project, then
 one summary"): Task calls in one reply run in parallel, up to
 `maxParallelSubagents` (default 4). Each subagent may make `subagentMaxTurns`
 model calls (default 100); at the limit it writes its report from what it
-found instead of stopping mid-sentence.
+found instead of stopping mid-sentence. The agent map shows each one's state,
+steps, tools, tokens and time while they work; stop one with the Stop button
+(VS Code), Ctrl+C then its number (terminal) or `/agents stop <n>` (TUI), and
+see its steps and report afterwards with `/agents <n>`.
 
 ### A skill: release notes in your format
 

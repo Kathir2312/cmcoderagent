@@ -254,6 +254,27 @@ export interface RagCandidatesList {
   errors: Record<string, unknown>;
 }
 
+/**
+ * A subagent (Task call) changed: sent when it is queued, starts, calls a
+ * tool, waits for a permission, and ends. The front ends draw the agent map
+ * from these; `stop_subagent` stops one.
+ */
+export interface SubagentStatus {
+  type: "subagent_status";
+  id: string;
+  number: number;
+  description: string;
+  agent_type: string;
+  model: string;
+  state: "queued" | "running" | "waiting" | "stopping" | "done" | "limit" | "stopped" | "failed";
+  steps: number;
+  max_steps: number;
+  tool_uses: number;
+  tokens: number;
+  elapsed_ms: number;
+  activity: string;
+}
+
 export interface RagSetupResult {
   type: "rag_setup_result";
   ok: boolean;
@@ -298,6 +319,7 @@ export type AgentEvent =
   | IndexStatus
   | IndexProgress
   | RagCandidatesList
+  | SubagentStatus
   | RagSetupResult
   | Result;
 
@@ -427,6 +449,15 @@ export interface RagSetup {
   index_now?: boolean;
 }
 
+/**
+ * Stop one subagent (a `subagent_status` id); the turn and the other
+ * subagents go on. It writes a report of what it found so far.
+ */
+export interface StopSubagent {
+  type: "stop_subagent";
+  id: string;
+}
+
 /** Stop the running turn, save the session and exit (EOF does the same). */
 export interface Shutdown {
   type: "shutdown";
@@ -446,4 +477,5 @@ export type ClientMessage =
   | Index
   | RagCandidates
   | RagSetup
+  | StopSubagent
   | Shutdown;

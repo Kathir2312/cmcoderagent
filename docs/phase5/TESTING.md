@@ -95,9 +95,13 @@ then in the terminal:
 | # | Do | Expect |
 |---|---|---|
 | G1 | "Use one explore subagent per project to analyse it, then give me one summary of all" | Several Task cards **working at the same time** (their steps grow together); then one summary |
-| G2 | The same in the terminal (`cmcoder`) | Steps tagged `│ [Analyse TW.Core] ● Read(…)` while several run |
+| G2 | The same in the terminal (`cmcoder`) | The agent map under the spinner (G7); with `cmcoder -v`, every step too, tagged `│ [Analyse TW.Core] ● Read(…)` |
 | G3 | Set `"subagentMaxTurns": 5` in `~\.cmcoder\settings.json`, ask G1 with `general-purpose` subagents | "⚠ [general-purpose] Reached 5 model calls (max turns); asking for its report." and a report (not half a sentence); the card says "step limit reached". Remove the setting afterwards |
 | G4 | Ask for two `general-purpose` subagents that each need a permission (e.g. each runs a different `dotnet build`) | The questions come one after the other, never two at once; deny one: both subagents stop |
+| G5 | During G1 in VS Code: the **Subagents** box above the input | One row per subagent: ◐/⏸/○/✓, steps of the limit, tools, tokens, a ticking time, and what it's doing; each Task card has a status line |
+| G6 | Click **Stop** on one row | It turns "stopping", then "stopped"; the others carry on; the main answer says that part may be incomplete |
+| G7 | In the terminal during G1: Ctrl+C | "Stop a subagent?" with the running ones; type a number: that one stops, the turn goes on. Ctrl+C again then `a`: everything stops |
+| G8 | After the turn: `/agents`, then `/agents 1` | The agent types and this session's runs; then run 1's steps and report |
 
 ## Tell me the result
 

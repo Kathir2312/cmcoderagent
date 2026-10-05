@@ -207,11 +207,29 @@ changes can be undone with `/rewind`. Its steps are shown inside the Task call i
 
 Several Task calls in one reply **run at the same time** ("one subagent per project"): up to
 `maxParallelSubagents` (default 4; 1 runs them one after another). Their permission questions come one at a time,
-and their lines in the terminal are tagged with the task (`[Analyse TW.Core] ● Read(...)`). This needs a model that
+and with `-v` their step lines in the terminal are tagged with the task (`[Analyse TW.Core] ● Read(...)`). This needs a model that
 sends several tool calls in one reply: on by default for Qwen3 models, otherwise `"parallelToolCalls": true` in
 `modelProfiles`. A subagent may make `subagentMaxTurns` model calls (default 100, separate from `maxTurns`); it's
 told when 5 are left, and at the limit it makes one last call without tools to write its report, so the main agent
 always gets what it found (marked as possibly incomplete).
+
+**The agent map** (Claude Code style) shows the turn's subagents while they work: state (queued, running,
+waiting for permission, stopping, done, stopped, failed), steps used of its limit, tool calls, tokens, time, and
+what each is doing now.
+
+```
+├─ ◐ 1. Analyse TW.Core  explore · 14/100 steps · 22 tools · 31k tokens · 1m12s
+│     └ Read(Controllers/OrderController.cs)
+├─ ⏸ 2. Analyse TW.Api  waiting for permission · general-purpose · 6/100 steps · …
+└─ ○ 3. Analyse TW.Web  explore · queued
+```
+
+In the terminal it sits under the spinner (every step with `-v`), in the TUI above the input, in VS Code above the
+input with a **Stop** button per subagent (and a status line on each Task card). **Stopping one subagent** leaves
+the turn and the others running: it writes its report from what it has so far (a queued one simply doesn't start).
+Terminal: Ctrl+C while subagents run asks which one to stop (`a` interrupts everything, as before); TUI:
+`/agents stop <n>`. `/agents` lists the agent types and this session's runs; `/agents <n>` shows a run's steps
+and report. Protocol: `subagent_status` events and the `stop_subagent` message.
 
 ### Skills
 

@@ -187,6 +187,12 @@ agent got only its unfinished last sentence. Fixed:
   (an "always allow" answer covers a waiting question); denying one stops the
   others; terminal lines are tagged with the task. Models send several calls
   per reply only with `parallelToolCalls`, now on for Qwen3 models.
+- **The agent map** (asked for the same day, Claude Code style), in the
+  terminal, the TUI and VS Code: a live tree of the turn's subagents (state,
+  steps of its limit, tools, tokens, time, current activity), stopping one
+  subagent without stopping the turn (it reports what it has), and `/agents`
+  (agent types, this session's runs, a run's steps and report). Protocol:
+  `subagent_status` events, `stop_subagent` message.
 
 ## Not in Phase 5
 

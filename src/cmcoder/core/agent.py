@@ -61,7 +61,7 @@ from .permissions import (
 )
 from .sessions import SessionLog
 from .steer import file_work_redirect
-from .subagents import ModelChoice, SubagentRuntime, TaskDone, TaskTool
+from .subagents import ModelChoice, SubagentRun, SubagentRuntime, TaskDone, TaskTool
 from .titles import make_title
 
 TITLE_WAIT_ON_CLOSE = 2.0  # seconds a pending title may still take when closing
@@ -105,6 +105,13 @@ WRAP_UP_REQUEST = (
     "get to.</system-reminder>"
 )
 STOPPED_WITH_OTHERS = "Stopped: the user denied a tool call of a subagent running alongside."
+STOP_REQUEST = (
+    "<system-reminder>The user stopped you, so you can't use tools any more. Write "
+    "your report for the main agent now from what you have found so far, with file "
+    "paths, and say what you didn't get to.</system-reminder>"
+)
+STOPPED_SUBAGENT = "Not run: the user stopped this subagent."
+MAX_RUNS = 100  # subagent runs kept for /agents
 
 
 def last_todos(messages: list[Message]) -> list[dict[str, Any]]:
@@ -241,6 +248,12 @@ class Agent:
         # Subagents (Task tool): their own step limit, and how many run at once.
         self.subagent_max_turns = subagent_max_turns or max_turns
         self.max_parallel_subagents = max(1, max_parallel_subagents)
+        self.subagent_slots = asyncio.Semaphore(self.max_parallel_subagents)
+        # This session's subagents (the agent map, /agents); the latest MAX_RUNS.
+        self.subagent_runs: list[SubagentRun] = []
+        self._runs_started = 0
+        # A subagent asked to stop writes its report at its next step.
+        self._stop_requested = False
         self.ask = ask
         # One permission question at a time, also from subagents running in parallel.
         self._ask_lock = asyncio.Lock()
@@ -810,18 +823,26 @@ class Agent:
         try:
             while True:
                 self.save_session()  # after every step, so a crash loses little
-                if steps >= self.max_turns and self._can_wrap_up(wrapping_up):
-                    # A subagent at its limit: one more call, without tools, for its report.
+                if (steps >= self.max_turns or self._stop_requested) and self._can_wrap_up(
+                    wrapping_up
+                ):
+                    # A subagent at its limit or stopped by the user: one more
+                    # call, without tools, for its report.
                     wrapping_up = True
-                    request = WRAP_UP_REQUEST.format(limit=steps)
+                    request = (
+                        STOP_REQUEST
+                        if self._stop_requested
+                        else WRAP_UP_REQUEST.format(limit=steps)
+                    )
                     if self.messages[-1].role == "user":
                         self.messages[-1].content += "\n\n" + request
                     else:
                         self.messages.append(Message.user(request))
-                    yield ev.Warning(
-                        message=f"Reached {self.max_turns} model calls (max turns); "
-                        "asking for its report."
-                    )
+                    if not self._stop_requested:
+                        yield ev.Warning(
+                            message=f"Reached {self.max_turns} model calls (max turns); "
+                            "asking for its report."
+                        )
                 elif steps >= self.max_turns:
                     yield ev.Warning(
                         message=f"Stopped after {self.max_turns} model calls (max turns)."
@@ -1023,11 +1044,15 @@ class Agent:
 
                 stop_turn = False
                 for group in self._call_groups(msg.tool_calls):
-                    if stop_turn:
+                    if stop_turn or self._stop_requested:
                         for call in group:
                             self.messages.append(
                                 Message.tool_result(
-                                    call.id, call.name, "Skipped: the user stopped this turn."
+                                    call.id,
+                                    call.name,
+                                    STOPPED_SUBAGENT
+                                    if self._stop_requested
+                                    else "Skipped: the user stopped this turn.",
                                 )
                             )
                         continue
@@ -1068,6 +1093,42 @@ class Agent:
             if self.turn == 1 and not self._titled and self._session_started:
                 self._start_title(prompt)
 
+    # -- subagent runs (the agent map) ----------------------------------------
+
+    def new_subagent_run(
+        self, call_id: str, description: str, agent_type: str, model: str
+    ) -> SubagentRun:
+        self._runs_started += 1
+        run = SubagentRun(
+            id=call_id or f"task-{self._runs_started}",
+            number=self._runs_started,
+            description=description,
+            agent_type=agent_type,
+            model=model,
+            max_steps=self.subagent_max_turns,
+        )
+        self.subagent_runs.append(run)
+        del self.subagent_runs[:-MAX_RUNS]
+        return run
+
+    def find_subagent_run(self, ref: str) -> SubagentRun | None:
+        """A run by its Task call id or its number in this session."""
+        ref = ref.strip().lstrip("#")
+        for run in reversed(self.subagent_runs):
+            if run.id == ref or str(run.number) == ref:
+                return run
+        return None
+
+    def stop_subagent(self, ref: str) -> SubagentRun | None:
+        """Stop one subagent; the turn and the others go on. None: no such
+        run, or it isn't running."""
+        run = self.find_subagent_run(ref)
+        return run if run is not None and run.request_stop() else None
+
+    def request_stop(self) -> None:
+        """(On a subagent) write the report at the next step, without tools."""
+        self._stop_requested = True
+
     def _can_wrap_up(self, wrapping_up: bool) -> bool:
         """A subagent at its step limit gets one more call, for its report."""
         return self.is_subagent and not wrapping_up and self.messages[-1].role != "assistant"
@@ -1096,14 +1157,12 @@ class Agent:
         in the order of the calls. If the user denies a tool call of one subagent,
         the others are stopped too."""
         queue: asyncio.Queue[ev.Event | _StopTurn | BaseException | None] = asyncio.Queue()
-        slots = asyncio.Semaphore(self.max_parallel_subagents)
         start = len(self.messages)
 
         async def one(call: ToolCall, repeated: bool) -> None:
-            try:
-                async with slots:
-                    async for out in self._run_call(call, repeated):
-                        await queue.put(out)
+            try:  # (TaskTool waits for one of subagent_slots)
+                async for out in self._run_call(call, repeated):
+                    await queue.put(out)
             except asyncio.CancelledError:
                 raise
             except BaseException as e:  # passed on to the turn, as if run one at a time
@@ -1282,6 +1341,9 @@ class Agent:
             # Parallel subagents ask one at a time; an answer meanwhile ("always
             # allow") may already cover this call.
             async with self._ask_lock:
+                if self._stop_requested:  # stopped while it waited to ask
+                    yield finish(ToolResult(STOPPED_SUBAGENT, is_error=True))
+                    return
                 if hook_asks or self.policy.check(tool, args, self.ctx).decision != Decision.ALLOW:
                     self._notify(f"cmcoder needs your permission to use {label}")
                     answer = await self.ask(

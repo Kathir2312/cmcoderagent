@@ -21,7 +21,7 @@ from rich.live import Live
 from rich.markdown import Markdown
 from rich.markup import escape
 from rich.panel import Panel
-from rich.status import Status
+from rich.spinner import Spinner
 from rich.syntax import Syntax
 from rich.text import Text
 
@@ -32,14 +32,15 @@ from ..core.agent import Agent, PermissionAnswer, PermissionRequest
 from ..core.commands import BUILT_IN, help_lines
 from ..core.permissions import MODES, ModeNotAllowed
 from ..core.sessions import SessionLog, age, list_sessions, load
+from ..core.subagents import agents_command
 from ..mcp_client import status_lines
 from ..protocol import events as ev
 from ..providers.messages import Usage
 from ..providers.openai_compat import OpenAICompatProvider
 from ..rag.index import Progress
 from ..tools.todo import MARKS
+from .agent_map import AgentMap, ParallelTasks
 from .factory import AgentOptions, build_agent, index_command, resolve_model_profile
-from .parallel import ParallelTasks
 
 # Lines the permission prompt needs besides the preview: panel border and
 # title, reason, three options, the input line and the bottom toolbar.
@@ -114,12 +115,14 @@ HELP = """\
   /cost              token usage for this session
   /mcp               MCP servers: status and tools
   /index [status]    build or update the code index (code search), or show it
+  /agents [n|stop n] agent types and this session's subagents: status, steps, reports
   /exit              quit
 
 [bold]Keys[/bold]
   Enter              send            Alt+Enter / Esc Enter   new line
   Shift+Tab          cycle permission mode
-  Ctrl+C             interrupt the current turn (twice at the prompt to quit)
+  Ctrl+C             interrupt the current turn (twice at the prompt to quit);
+                     with subagents running: stop one of them, or everything
 """
 
 
@@ -142,6 +145,21 @@ class SlashCompleter(Completer):
                 yield Completion("/" + name, start_position=-len(text), display_meta=meta)
 
 
+class StatusView:
+    """The spinner line, with the agent map under it while subagents run."""
+
+    def __init__(self, agent_map: AgentMap, text: str) -> None:
+        self.map = agent_map
+        self.spinner = Spinner("dots", text=text)
+
+    def __rich_console__(self, console: Console, options: Any) -> Any:
+        yield self.spinner
+        for line, style in self.map.lines():
+            yield Text(f"  {line}", style=style)
+        if self.map.active:
+            yield Text("  Ctrl+C: stop one subagent, or everything", style="dim")
+
+
 class Repl:
     def __init__(self, settings: Settings, opts: AgentOptions, verbose: bool = False) -> None:
         self.settings = settings
@@ -149,9 +167,17 @@ class Repl:
         self.verbose = verbose
         self.console = Console(highlight=False)
         self.tasks = ParallelTasks()
+        self.map = AgentMap()  # this turn's subagents, under the spinner
         self.agent: Agent | None = None
         self.session: PromptSession[str] | None = None
-        self._status: Status | None = None
+        self._status: Live | None = None
+        self._status_view: StatusView | None = None
+        # One prompt at a time (permission questions, "stop which subagent?");
+        # while one is open, events are held and shown after it.
+        self._prompt_lock = asyncio.Lock()
+        self._prompting = False
+        self._held: list[ev.Event] = []
+        self._chooser: asyncio.Task[None] | None = None
         self._live: Live | None = None
         self._buffer = ""
         self._last_prompt_tokens = 0
@@ -162,16 +188,36 @@ class Repl:
     # -- rendering helpers ------------------------------------------------
 
     def _start_status(self, text: str = "Waiting for model…") -> None:
-        if self._status is None:
-            self._status = self.console.status(text, spinner="dots")
+        if self._prompting:
+            return
+        if self._status is None or self._status_view is None:
+            self._status_view = StatusView(self.map, text)
+            self._status = Live(
+                self._status_view, console=self.console, refresh_per_second=8, transient=True
+            )
             self._status.start()
         else:
-            self._status.update(text)
+            self._status_view.spinner.update(text=text)
 
     def _stop_status(self) -> None:
         if self._status is not None:
             self._status.stop()
             self._status = None
+            self._status_view = None
+
+    def _hold(self) -> None:
+        """A prompt opens: keep events until it closes."""
+        self._stop_status()
+        self._stop_live()
+        self._prompting = True
+
+    def _release(self) -> None:
+        self._prompting = False
+        held, self._held = self._held, []
+        for event in held:
+            self._draw(event)
+        if self._turn_task is not None and not self._turn_task.done():
+            self._start_status()
 
     def _stop_live(self) -> None:
         if self._live is not None:
@@ -181,13 +227,23 @@ class Repl:
         self._buffer = ""
 
     def _render(self, event: ev.Event) -> None:
+        if self._prompting:
+            self._held.append(event)
+        else:
+            self._draw(event)
+
+    def _draw(self, event: ev.Event) -> None:
         c = self.console
         tag = self.tasks.tag(event)
-        if (line := subagent_line(event, tag)) is not None:  # a step inside a Task call
-            if line[0]:
+        if isinstance(event, ev.SubagentStatus):
+            self.map.update(event)
+            self._start_status("Subagents working…")
+        elif (line := subagent_line(event, tag)) is not None:  # a step inside a Task call
+            # The agent map shows what each subagent is doing; every step only with -v.
+            if line[0] and self.verbose:
                 self._stop_status()
                 c.print(Text(line[0], style=line[1]))
-                self._start_status("Subagent working…")
+                self._start_status("Subagents working…")
         elif isinstance(event, ev.ReasoningDelta):
             self._start_status("Thinking…")
             if self.verbose:
@@ -216,6 +272,12 @@ class Repl:
                 self._print_todos(event.input["todos"])
                 return
             c.print(Text("● ", style="cyan") + Text(event.label, style="bold"))
+        elif isinstance(event, ev.ToolResult) and (final := self.map.final_line(event.id)):
+            state = self.map.runs[event.id].state
+            style = {"done": "green", "limit": "green", "failed": "red"}.get(state, "yellow")
+            self._stop_status()
+            c.print(Text(f"  └ {tag}{final}", style=style))
+            self._start_status()
         elif isinstance(event, ev.ToolResult):
             if event.is_error:
                 lines = event.content.strip().splitlines()
@@ -315,8 +377,14 @@ class Repl:
         )
 
     async def ask(self, req: PermissionRequest) -> PermissionAnswer:
-        self._stop_status()
-        self._stop_live()
+        async with self._prompt_lock:
+            self._hold()
+            try:
+                return await self._ask(req)
+            finally:
+                self._release()
+
+    async def _ask(self, req: PermissionRequest) -> PermissionAnswer:
         c = self.console
         source, lexer = self._preview_source(req)
         shown, hidden = clip_preview(source, self._preview_lines())
@@ -434,6 +502,9 @@ class Repl:
             c.print(f"Permission mode: [bold]{self.agent.policy.mode}[/bold]")
         elif name == "mcp":
             for line in status_lines(self.agent.mcp):
+                c.print(Text(line))
+        elif name == "agents":
+            for line in agents_command(self.agent, arg):
                 c.print(Text(line))
         elif name == "index":
             with c.status("Code index…") as spinner:
@@ -609,7 +680,49 @@ class Repl:
     def _arm_interrupt(self) -> None:
         task = self._turn_task
         if task is not None and not task.done() and self._interrupt is not None:
-            self._interrupt.arm(task.cancel)
+            self._interrupt.arm(self._on_interrupt)
+
+    def _on_interrupt(self) -> None:
+        """Ctrl+C: interrupt the turn; with subagents running, first ask
+        whether to stop just one of them."""
+        task = self._turn_task
+        if task is None or task.done():
+            return
+        if self.map.active and self._chooser is None and self.agent is not None:
+            self._chooser = asyncio.get_running_loop().create_task(self._choose_stop())
+        else:
+            task.cancel()
+
+    async def _choose_stop(self) -> None:
+        assert self.agent is not None and self.session is not None
+        c = self.console
+        try:
+            async with self._prompt_lock:
+                active = self.map.active
+                task = self._turn_task
+                if not active or task is None or task.done():
+                    return
+                self._hold()
+                c.print(Text("Stop a subagent? The others and the turn go on.", style="yellow"))
+                for st in active:
+                    c.print(Text(f"  {st.number}. {st.description} · {self.map.detail(st)}"))
+                try:
+                    choice = await self.session.prompt_async(
+                        "  number · a = interrupt everything · Enter = keep going: "
+                    )
+                except (KeyboardInterrupt, EOFError):
+                    choice = "a"
+                choice = choice.strip().lower()
+                if choice in ("a", "all"):
+                    task.cancel()
+                elif choice:
+                    for line in agents_command(self.agent, f"stop {choice}"):
+                        c.print(Text(f"  {line}", style="yellow"))
+        finally:
+            self._chooser = None
+            self._arm_interrupt()  # prompt_toolkit dropped our Ctrl+C handler
+            if self._prompting:
+                self._release()
 
     async def _run_turn(self, prompt: str, allow: list[str] | None = None) -> None:
         assert self.agent is not None
@@ -628,6 +741,8 @@ class Repl:
             async for event in events:
                 self._render(event)
 
+        self.map.clear()
+
         task = asyncio.create_task(consume())
         self._turn_task = task
         self._interrupt = InterruptHandler(asyncio.get_running_loop())
@@ -639,9 +754,14 @@ class Repl:
             self._stop_live()
             self.console.print(Text(interrupted, style="yellow"))
         finally:
+            if self._chooser is not None:  # the turn ended while choosing
+                self._chooser.cancel()
+                await asyncio.gather(self._chooser, return_exceptions=True)
             self._turn_task = None
             self._interrupt.disarm()
             self._interrupt = None
+            if self._prompting:
+                self._release()
             self._stop_status()
             self._stop_live()
 

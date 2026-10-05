@@ -291,6 +291,38 @@ class RagSetupResult(_Event):
     settings_file: str | None = None
 
 
+SubagentState = Literal[
+    "queued",  # waiting for a free slot (maxParallelSubagents)
+    "running",
+    "waiting",  # for the user's answer to a permission question
+    "stopping",  # asked to stop: writing its report
+    "done",
+    "limit",  # reached its step limit; wrote its report
+    "stopped",  # stopped by the user (with a report when it had started)
+    "failed",
+]
+
+
+class SubagentStatus(_Event):
+    """A subagent (Task call) changed: sent when it is queued, starts, calls a
+    tool, waits for a permission, and ends. The front ends draw the agent map
+    from these; `stop_subagent` stops one."""
+
+    type: Literal["subagent_status"] = "subagent_status"
+    id: str  # the Task call's id (its events carry it as parent_tool_use_id)
+    number: int  # 1, 2, ... in this session (`/agents <number>`)
+    description: str
+    agent_type: str
+    model: str
+    state: SubagentState
+    steps: int  # model calls so far
+    max_steps: int
+    tool_uses: int
+    tokens: int  # prompt + completion, all its model calls
+    elapsed_ms: int
+    activity: str = ""  # what it's doing: a tool call's label, "" while the model works
+
+
 class Result(_Event):
     type: Literal["result"] = "result"
     subtype: Literal["success", "error", "max_turns", "interrupted"]
@@ -328,6 +360,7 @@ Event = Annotated[
     | IndexStatus
     | IndexProgress
     | RagCandidatesList
+    | SubagentStatus
     | RagSetupResult
     | Result,
     Field(discriminator="type"),
