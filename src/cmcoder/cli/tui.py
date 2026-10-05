@@ -356,6 +356,8 @@ class CmcoderApp(App[int]):
 
     def write(self, renderable: Any, classes: str = "") -> None:
         log = self.query_one("#log", VerticalScroll)
+        if isinstance(renderable, str):  # plain text: "[high]" or a regex is not markup
+            renderable = Text(renderable)
         log.mount(Static(renderable, classes=classes))
         log.scroll_end(animate=False)
 

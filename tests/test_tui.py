@@ -187,3 +187,37 @@ async def test_map_and_status_updates_after_the_app_closed(mock_server: Any, pro
         app.update_status(busy=True)
     finally:
         await app.agent.close()  # type: ignore[union-attr]
+
+
+async def test_text_in_brackets_is_shown_not_read_as_markup(
+    mock_server: Any, project: Path
+) -> None:
+    # The critic's "[high]" and a tool label like Grep("[Http(Get|Post)]") are
+    # plain text; Textual would read them as style markup and drop them.
+    from cmcoder.protocol import events as ev
+
+    app = make_app(mock_server([{"content": "ok"}]), project)
+    try:
+        async with app.run_test(size=(120, 30)) as pilot:
+            await app.render_event(
+                ev.ToolUse(id="g", name="Grep", input={}, label='Grep("[Http(Get|Post)]")')
+            )
+            await app.render_event(
+                ev.ReviewResult(
+                    round=1,
+                    max_rounds=2,
+                    verdict="fail",
+                    final=False,
+                    summary="s",
+                    issues=[ev.ReviewIssue(severity="high", problem="wrong tax", where="p.py:8")],
+                )
+            )
+            await pilot.pause()
+            log = app.query_one("#log", VerticalScroll)
+            text = "\n".join(  # what is displayed, not what was passed in
+                w.render().plain for w in log.children if isinstance(w, Static)
+            )
+            assert "[Http(Get|Post)]" in text
+            assert "- [high] wrong tax (p.py:8)" in text
+    finally:
+        await app.agent.close()  # type: ignore[union-attr]
