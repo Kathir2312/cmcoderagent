@@ -10,7 +10,7 @@ its own folder. The current phase's documents are updated as features land.
 | **1 — Daily driver** | ✅ Complete | tag `phase1` | [phase1/](phase1/) |
 | **2 — VS Code** | ✅ Complete | tag `phase2` | [phase2/](phase2/) |
 | **3 — Extensibility** | ✅ Complete | tag `phase3` | [phase3/](phase3/) |
-| **4 — Hardening** | 🚧 In progress | — | [phase4/](phase4/) |
+| **4 — Hardening** | ✅ Complete | commit `e78bdb1` (code); [phase4/STATUS.md](phase4/STATUS.md) | [phase4/](phase4/) |
 | **5 — Code search (RAG)** | ✅ Complete | the commit adding [phase5/STATUS.md](phase5/STATUS.md) | [phase5/](phase5/) |
 
 The overall design, decisions and roadmap stay in one living document:

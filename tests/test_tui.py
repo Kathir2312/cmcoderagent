@@ -172,3 +172,18 @@ async def test_todo_checklist(mock_server: Any, project: Path) -> None:
             await until(pilot, lambda: "► Fix it" in log_text(app) and "☐ Test it" in log_text(app))
     finally:
         await app.agent.close()  # type: ignore[union-attr]
+
+
+async def test_map_and_status_updates_after_the_app_closed(mock_server: Any, project: Path) -> None:
+    # A turn that ends while the app quits updates the map and the status bar
+    # after its widgets are gone; that must not fail the turn (seen on Windows CI).
+    server = mock_server([{"content": "ok"}])
+    app = make_app(server, project)
+    try:
+        async with app.run_test(size=(100, 30)):
+            pass
+        app.map.start_turn("go")
+        app.refresh_map()
+        app.update_status(busy=True)
+    finally:
+        await app.agent.close()  # type: ignore[union-attr]

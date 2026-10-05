@@ -18,9 +18,10 @@ from rich.markdown import Markdown as RichMarkdown
 from rich.syntax import Syntax
 from rich.text import Text
 from textual import on
-from textual.app import App, ComposeResult
+from textual.app import App, ComposeResult, ScreenStackError
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.css.query import NoMatches
 from textual.screen import ModalScreen, Screen
 from textual.suggester import Suggester
 from textual.widgets import Button, Footer, Input, Label, Markdown, Static, Tree
@@ -359,9 +360,12 @@ class CmcoderApp(App[int]):
     def refresh_map(self) -> None:
         """The mind map above the input while the turn runs; the navigator
         screen too when it's open."""
-        if isinstance(self.screen, AgentNavigatorScreen):
-            self.screen.sync()
-        panel = self.query_one("#agents", Static)
+        try:
+            if isinstance(self.screen, AgentNavigatorScreen):
+                self.screen.sync()
+            panel = self.query_one("#agents", Static)
+        except (NoMatches, ScreenStackError):  # the app is closing (a turn ending as it quits)
+            return
         lines = self.map.mind_map(max(40, self.size.width - 4)) if self.map.busy else []
         panel.display = bool(lines)
         if not lines:
@@ -399,9 +403,11 @@ class CmcoderApp(App[int]):
             else ""
         )
         state = "working… (Ctrl+C to interrupt)" if busy else "Shift+Tab: mode"
-        self.query_one("#status", Static).update(
-            f"{a.model} · mode: {a.policy.mode}{ctx} · {state}"
-        )
+        try:
+            status = self.query_one("#status", Static)
+        except (NoMatches, ScreenStackError):  # the app is closing
+            return
+        status.update(f"{a.model} · mode: {a.policy.mode}{ctx} · {state}")
 
     # -- turns ----------------------------------------------------------------------
 

@@ -1,6 +1,6 @@
 # Phase 5 — Code search (RAG): plan
 
-**Status:** ✅ complete (5 October 2026); see [STATUS.md](STATUS.md). Phase 4's WSL2 check is still to do.
+**Status:** ✅ complete (5 October 2026); see [STATUS.md](STATUS.md).
 
 **Goal:** the model can find code **by meaning** ("where do we refresh the
 auth token?") in large repositories, not only by exact words (Grep), using an
@@ -193,6 +193,12 @@ agent got only its unfinished last sentence. Fixed:
   subagent without stopping the turn (it reports what it has), and `/agents`
   (agent types, this session's runs, a run's steps and report). Protocol:
   `subagent_status` events, `stop_subagent` message.
+- **The agent navigator** (asked for the same day): the turn as a mind map,
+  main agent → subagents → their last tool calls, with details and Stop. A
+  VS Code editor tab; under the spinner in the terminal (`/agents map`); in
+  the TUI above the input and as a navigator screen (Ctrl+G).
+- **VS Code progress line** with queued messages, and **symbols the classic
+  Windows console can draw** (code-page aware, `symbols` setting).
 
 ## Not in Phase 5
 

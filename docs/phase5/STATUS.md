@@ -1,6 +1,8 @@
 # Phase 5 — Code search (RAG): status
 
-**Status:** ✅ complete (5 October 2026). **Snapshot:** the commit that adds this file.
+**Status:** ✅ complete (5 October 2026). **Snapshot:** the code as of the
+commit that adds the agent navigator to the terminal and TUI (`e270fce`) and
+its CI fix, recorded with this file's last update.
 
 Phase 5's goal ([PLAN.md](PLAN.md)): *the model can find code by meaning in
 large repositories, not only by exact words, using an index of the project in
@@ -36,9 +38,10 @@ gateways, both stores, a tool and automatic context, no existing company RAG):
    (`evals/retrieval.py`), [SECURITY-REVIEW.md](SECURITY-REVIEW.md), the guides
    and [TESTING.md](TESTING.md).
 
-## Added during the phase (5 October, from use)
+## Features added from use (5 October)
 
-Found while using cmcoder on a .NET solution in VS Code:
+Part of Phase 5, though not code search: they came from using cmcoder on a
+.NET solution in VS Code during the phase's hands-on check.
 
 - **Subagents**: a subagent at its step limit writes its report instead of
   stopping mid-sentence; `subagentMaxTurns` (default 100) apart from
@@ -49,11 +52,13 @@ Found while using cmcoder on a .NET solution in VS Code:
   each subagent's state, steps, tools, tokens, time and current activity;
   **stop one subagent** without stopping the turn; `/agents`. Protocol:
   `subagent_status`, `stop_subagent`.
-- **Agent Navigator** (VS Code editor tab): the turn as a live mind map, main
-  agent → subagents → their last tool calls; details and Stop from the map.
-  The terminal shows the same mind map under the spinner (`/agents map`
-  afterwards); the TUI shows it above the input, with a navigator screen
-  (Ctrl+G: a tree, details, S to stop).
+- **The agent navigator** (Claude Code style mind map) in every front end:
+  the turn's main agent → its subagents (state, steps, tools, tokens, time) →
+  their last tool calls, live; a subagent's steps and report, and Stop, from
+  the map. VS Code: an editor tab ("Open Agent Navigator", or Map in the
+  Subagents box). Terminal: under the spinner, `/agents map` afterwards. TUI:
+  above the input, and a navigator screen (Ctrl+G: a tree, details, S to
+  stop).
 - **VS Code progress line**: an animated ✻ in the theme's blue with what the
   agent is doing, time, tokens and "Esc to interrupt"; messages typed while it
   works are **queued** and sent when the turn ends.
@@ -66,7 +71,7 @@ Found while using cmcoder on a .NET solution in VS Code:
 
 | Where | Result |
 |---|---|
-| CI (Linux, macOS, Windows; 11 jobs) | 609 Python tests, 18 extension tests, real-VS Code test, mock evals with `-p`/VS Code parity, real LiteLLM and Open WebUI jobs (embeddings included), a real Chroma 1.5 server, security job (Bandit, pip-audit with the extras, npm audit) |
+| CI (Linux, macOS, Windows; 11 jobs) | 611 Python tests, 20 extension tests, real-VS Code test, mock evals with `-p`/VS Code parity, real LiteLLM and Open WebUI jobs (embeddings included), a real Chroma 1.5 server, security job (Bandit, pip-audit with the extras, npm audit) |
 | Security review ([SECURITY-REVIEW.md](SECURITY-REVIEW.md)) | Index folders made private (0700); chromadb's server advisories (no fix yet) named in CI, with how to run a Chroma server safely |
 | Your Windows machine, real gateway (Qwen3.5-35B-A3B, Qwen3.6-27B) | Phase 5 marked complete by you on 5 October after using it: VS Code on a .NET solution (subagents fanned out per project), the CLI in the classic console, an MCP server over your own codebase index (`codebase_code`). The fixes above came from that use |
 
@@ -80,8 +85,9 @@ Found while using cmcoder on a .NET solution in VS Code:
   the standalone build.
 - **Guided setup** (`cmcoder rag setup` and the VS Code flow) added on 4
   October so nothing needs a settings file edited by hand.
-- The subagent, agent map, progress line and console items above were not in
-  the plan; they came from use.
+- The subagent, agent map and navigator, progress line and console items
+  above were not in the plan; they came from use and were kept as Phase 5
+  features (decided 5 October).
 
 ## Carried forward
 
@@ -92,8 +98,6 @@ Found while using cmcoder on a .NET solution in VS Code:
 - **Chroma server advisories**: no fixed chromadb release yet; the decision
   between keeping Chroma behind an authenticating proxy (documented) or adding
   pgvector as the shared store is open.
-- **Phase 4**: still in progress, its WSL2 sandbox check (TESTING.md part E)
-  waiting for WSL on your machine; then Phase 4's guides and STATUS.md.
 
 ## Guides
 

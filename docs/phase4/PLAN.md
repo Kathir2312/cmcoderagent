@@ -1,5 +1,7 @@
 # Phase 4 — Hardening: plan
 
+**Status:** ✅ complete (5 October 2026); see [STATUS.md](STATUS.md).
+
 **Goal** ([DESIGN.md §16](../DESIGN.md#16-roadmap)): a release candidate other
 developers can use. **Done when:** they install one thing, it works with the
 LiteLLM gateway or Open WebUI, the agent's shell commands can't do harm
@@ -203,8 +205,10 @@ Terminal.
 
 - Hands-on checklist: [TESTING.md](TESTING.md) (written 4 Oct). Done by the
   user on Windows on 4 Oct: parts A–D and the optional ones passed; **part E
-  (sandbox, WSL2) pending** (WSL not working on that machine yet). Guides and
-  `STATUS.md` after part E.
+  (sandbox, WSL2) pending** (WSL not working on that machine yet).
+- Status (5 Oct): done. Phase marked complete by the user; guides
+  [python-guide.md](python-guide.md) and [langgraph-guide.md](langgraph-guide.md),
+  [STATUS.md](STATUS.md).
 
 - Guide sections per item, the Open WebUI setup page; hands-on checklist on
   Windows with LiteLLM and Open WebUI; `STATUS.md`.
@@ -224,5 +228,5 @@ client certificates: later, if needed.
 - [x] 5. Standalone binary and per-platform VSIX
 - [x] 6. Branding: icon and name
 - [x] 7. Tests, evals and security review
-- [ ] 8. Guides and docs
-- [ ] Hands-on use on Windows (LiteLLM and Open WebUI), and `STATUS.md`
+- [x] 8. Guides and docs
+- [x] Hands-on use on Windows (LiteLLM and Open WebUI), and [`STATUS.md`](STATUS.md) (5 Oct)
