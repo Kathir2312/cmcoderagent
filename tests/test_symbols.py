@@ -23,14 +23,37 @@ def all_chars(s: symbols.Symbols) -> set[str]:
 
 def test_basic_set_has_nothing_the_console_fonts_lack() -> None:
     assert not all_chars(BASIC) & MISSING_IN_CONSOLE_FONTS
-    assert all(c.isascii() or 0x2000 <= ord(c) < 0x2600 or c in "×·" for c in all_chars(BASIC))
     assert all_chars(UNICODE) & MISSING_IN_CONSOLE_FONTS  # the full set is different
     assert set(BASIC.states) == set(UNICODE.states) and set(BASIC.todo) == set(UNICODE.todo)
 
 
+def test_basic_symbols_are_in_the_console_code_page() -> None:
+    # Raster fonts draw only the console's code page: each symbol must be in it.
+    for codec in ("cp437", "cp850", "cp852", "cp866", "cp1252"):
+        chosen = symbols.basic_symbols(codec)
+        assert all(symbols.has(c, codec) for c in all_chars(chosen)), codec
+    assert symbols.basic_symbols("cp437").ok == "√"  # 437 has it
+    assert symbols.basic_symbols("cp850").ok == "+"  # 850 doesn't
+
+
+def test_output_filter_turns_missing_characters_into_ascii() -> None:
+    from io import StringIO
+
+    # From the screenshot: "● Todo list", "☐ Read…", "… 11 more lines", "Waiting for model…".
+    text = "● Todo list\n  ☐ Read ✓ ⚠ ◐\n… 11 more lines · ├─ √ ’"
+    assert symbols.make_safe(text, "cp437") == (
+        "* Todo list\n  [ ] Read + ! *\n... 11 more lines · ├─ √ '"
+    )
+    assert symbols.make_safe("√ ·", "cp850") == "+ ·"
+    out = StringIO()
+    stream = symbols.SafeStream(out, "cp437")  # type: ignore[arg-type]
+    assert stream.write("Waiting for model…") == len("Waiting for model…")
+    assert out.getvalue() == "Waiting for model..." and stream.getvalue() == out.getvalue()
+
+
 def test_auto_picks_basic_only_in_the_classic_windows_console() -> None:
     win = "win32"
-    assert choose("auto", {}, win) is BASIC  # conhost: PowerShell or cmd in their own window
+    assert choose("auto", {}, win).name == "basic"  # conhost: PowerShell or cmd in their own window
     for modern in (
         {"WT_SESSION": "x"},
         {"TERM_PROGRAM": "vscode"},
@@ -43,8 +66,8 @@ def test_auto_picks_basic_only_in_the_classic_windows_console() -> None:
 
 def test_setting_and_environment_override() -> None:
     assert choose("unicode", {}, "win32") is UNICODE
-    assert choose("basic", {"WT_SESSION": "x"}, "win32") is BASIC
-    assert choose("unicode", {"CMCODER_SYMBOLS": "basic"}, "linux") is BASIC  # env wins
+    assert choose("basic", {"WT_SESSION": "x"}, "win32").name == "basic"
+    assert choose("unicode", {"CMCODER_SYMBOLS": "basic"}, "linux").name == "basic"  # env wins
     assert Settings.model_validate({"symbols": "basic"}).symbols == "basic"
     assert Settings.model_validate({}).symbols == "auto"
 
@@ -67,7 +90,7 @@ def test_the_terminal_uses_the_chosen_set() -> None:
         console = Console(record=True, width=100, color_system=None)
         console.print(StatusView(m, "Subagents working…"))
         text = console.export_text()
-        assert "└─ ► 1. Analyse core" in text and "└ Read(a.cs)" in text
+        assert "└─ » 1. Analyse core" in text and "└ Read(a.cs)" in text
         assert not set(text) & MISSING_IN_CONSOLE_FONTS
         assert (
             m.final_line(

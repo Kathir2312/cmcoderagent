@@ -280,12 +280,14 @@ For multi-step work the model keeps a todo list (TodoWrite), shown as a ☑ ► 
 `cmcoder --tui` (or `"ui": "textual"`) opens a full-screen UI with a status bar and a fixed-size permission dialog;
 it's opt-in until it has been tried on Windows terminals (`/resume` and `/rewind` are classic-only for now).
 
-**Symbols on Windows.** The classic Windows console (PowerShell or cmd in their own window) has no glyphs for the
-spinner and marks most terminals draw (⠋ ◐ ✓ ⚠ ☐): they showed as `?`. There cmcoder uses a basic set its fonts
-have (`-\|/` spinner, ► √ × ‼ ■ □), chosen automatically; Windows Terminal, the VS Code terminal, ConEmu and Git
-Bash get the full set. Override with `"symbols": "unicode"` or `"basic"` in settings (or `CMCODER_SYMBOLS`);
-`cmcoder doctor` says which set is in use. Windows Terminal (`winget install Microsoft.WindowsTerminal`) shows
-everything.
+**Symbols on Windows.** The classic Windows console (PowerShell or cmd in their own window) shows `?` for
+characters its font lacks; with a raster font that is anything outside the console's code page (437, 850, ...):
+the spinner, but also ● … ☐ ✓ ◐ ⚠. There cmcoder uses a basic set: an ASCII spinner (`- \ | /`), marks taken from
+the code page (» √ ■ · and the box lines in 437, ASCII otherwise), and every other missing character turned into
+an ASCII stand-in (`…` → `...`, `●` → `*`, `☐` → `[ ]`). It's chosen automatically; Windows Terminal, the VS Code
+terminal, ConEmu and Git Bash get the full set. Override with `"symbols": "basic"` or `"unicode"` in settings (or
+`CMCODER_SYMBOLS`); `cmcoder doctor` says which set is in use. Windows Terminal
+(`winget install Microsoft.WindowsTerminal`) shows everything.
 
 In the interactive session: `/help`, `/model`, `/mode`, `/compact`, `/resume`, `/rewind`, `/todos`, `/clear`, `/cost`, `/exit`; Shift+Tab cycles the
 permission mode; Ctrl+C interrupts the current turn.
