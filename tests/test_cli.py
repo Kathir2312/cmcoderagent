@@ -308,6 +308,10 @@ def test_mcp_commands(project: Path, tmp_path: Path) -> None:
     r = mcp("list", "--check")
     assert r.returncode == 0 and "demo: connected · 4 tools" in " ".join(r.stdout.split()), r.stdout
     assert mcp("add", "bad").returncode == 2  # neither --url nor a command
+    # `approve` on your own server: nothing to approve, and it says so.
+    r = mcp("approve", "demo")
+    out = " ".join(r.stdout.split())
+    assert r.returncode == 0 and "needs no approval" in out and "mcp list --check" in out
 
     # A project's server: listed only once the project is trusted, then approved.
     (project / ".mcp.json").write_text(

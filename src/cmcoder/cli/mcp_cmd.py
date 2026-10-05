@@ -150,6 +150,24 @@ def remove(name: str) -> None:
 def approve_server(name: str) -> None:
     s = _settings()
     cfg = s.project_mcp_servers.get(name)
+    if cfg is None and name in s.mcp_servers:
+        # Added with `cmcoder mcp add`: yours, so nothing to approve.
+        blocked = name in s.denied_mcp_servers or (
+            s.allowed_mcp_servers is not None and name not in s.allowed_mcp_servers
+        )
+        if blocked:
+            err.print(
+                f"[red]error:[/red] {name} is in your settings, but your organisation's managed "
+                "settings don't allow it (allowedMcpServers / deniedMcpServers)."
+            )
+            raise typer.Exit(1)
+        console.print(
+            f"{name} is in your own settings (added with `cmcoder mcp add`), so it needs no "
+            "approval: it starts in every session. `approve` is only for servers in a "
+            "project's .mcp.json.\nCheck that it starts and see its tools: "
+            "cmcoder mcp list --check"
+        )
+        return
     if cfg is None:
         hint = (
             " (the project isn't trusted: run `cmcoder trust` first)"
