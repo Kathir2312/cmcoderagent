@@ -1,8 +1,8 @@
 # Phase 5 — Code search (RAG): status
 
 **Status:** ✅ complete (5 October 2026). **Snapshot:** the code as of the
-commit that adds the agent navigator to the terminal and TUI (`e270fce`) and
-its CI fix, recorded with this file's last update.
+commit that adds critique (`41e4ca1`) and its type-check fix, recorded with
+this file's last update.
 
 Phase 5's goal ([PLAN.md](PLAN.md)): *the model can find code by meaning in
 large repositories, not only by exact words, using an index of the project in

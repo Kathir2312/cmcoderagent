@@ -1070,7 +1070,7 @@ class Agent:
                     if deferred:
                         # Critique: the critic reviews the answer before it's shown.
                         review_round += 1
-                        outcome: critic.Review | None = None
+                        reviewed: critic.Review | None = None
                         async for item in critic.review(
                             self,
                             prompt,
@@ -1081,29 +1081,29 @@ class Agent:
                             review_issues,
                         ):
                             if isinstance(item, critic.Review):
-                                outcome = item
+                                reviewed = item
                             else:
                                 yield item
-                        assert outcome is not None
-                        if outcome.verdict == "fail" and review_round < self.critique_rounds:
-                            yield outcome.event(review_round, self.critique_rounds, final=False)
-                            review_issues = outcome.issues
+                        assert reviewed is not None
+                        if reviewed.verdict == "fail" and review_round < self.critique_rounds:
+                            yield reviewed.event(review_round, self.critique_rounds, final=False)
+                            review_issues = reviewed.issues
                             self.messages.append(
                                 Message.user(
-                                    critic.fix_request(outcome, review_round, self.critique_rounds)
+                                    critic.fix_request(reviewed, review_round, self.critique_rounds)
                                 )
                             )
                             continue
                         review_info = {
-                            "verdict": outcome.verdict,
+                            "verdict": reviewed.verdict,
                             "rounds": review_round,
-                            "summary": outcome.summary,
-                            "issues": [i.model_dump() for i in outcome.issues],
+                            "summary": reviewed.summary,
+                            "issues": [i.model_dump() for i in reviewed.issues],
                         }
                         if held:
                             yield ev.AssistantDelta(text=held)
                         yield message_event
-                        yield outcome.event(review_round, self.critique_rounds, final=True)
+                        yield reviewed.event(review_round, self.critique_rounds, final=True)
                     yield result("success", last_text)
                     return
 

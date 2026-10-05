@@ -372,7 +372,7 @@ def review_lines(event: ev.ReviewResult) -> list[tuple[str, str]]:
         )
     else:
         return [(f"{sym.warn} Not reviewed: {event.summary}", "yellow")]
-    lines = [head]
+    lines: list[tuple[str, str]] = [head]
     for issue in event.issues:
         where = f" ({issue.where})" if issue.where else ""
         lines.append((f"  - [{issue.severity}] {issue.problem}{where}", "dim"))
