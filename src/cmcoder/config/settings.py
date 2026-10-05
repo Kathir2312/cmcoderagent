@@ -214,6 +214,15 @@ HookConfig = dict[
 ]
 
 
+class CriticConfig(_Model):
+    """Critique: a critic agent reviews the final answer before it's shown
+    (core/critic.py). Off unless switched on (decided 5 Oct)."""
+
+    enabled: bool = False
+    # Reviews per turn; after the last failed one the answer is shown "not validated".
+    max_rounds: int = Field(2, alias="maxRounds", ge=1, le=5)
+
+
 class PermissionsConfig(_Model):
     allow: list[str] = Field(default_factory=list)
     deny: list[str] = Field(default_factory=list)
@@ -263,6 +272,7 @@ class Settings(_Model):
     sandbox: SandboxConfig = Field(default_factory=lambda: SandboxConfig.model_validate({}))
     telemetry: TelemetryConfig = Field(default_factory=lambda: TelemetryConfig.model_validate({}))
     rag: RagConfig = Field(default_factory=lambda: RagConfig.model_validate({}))
+    critic: CriticConfig = Field(default_factory=lambda: CriticConfig.model_validate({}))
     # Managed settings only: server names allowed (if set) and denied.
     allowed_mcp_servers: list[str] | None = Field(None, alias="allowedMcpServers")
     denied_mcp_servers: list[str] = Field(default_factory=list, alias="deniedMcpServers")
@@ -488,6 +498,11 @@ def env_layer(environ: dict[str, str] | None = None) -> dict[str, Any]:
         rag["enabled"] = True
     if rag:
         layer["rag"] = rag
+    critique = env.get("CMCODER_CRITIC", "").strip().lower()
+    if critique in ("0", "false", "off", "no"):
+        layer["critic"] = {"enabled": False}
+    elif critique in ("1", "true", "on", "yes"):
+        layer["critic"] = {"enabled": True}
     return layer
 
 

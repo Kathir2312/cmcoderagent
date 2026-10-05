@@ -7,7 +7,7 @@ from typing import Literal
 
 from ..config.settings import Settings, ignored_settings_message
 from ..protocol import events as ev
-from .agent_map import ParallelTasks
+from .agent_map import ParallelTasks, review_lines
 from .factory import AgentOptions, build_agent
 from .symbols import sym as S
 
@@ -54,6 +54,9 @@ async def run_headless(
                 print(f"error: {event.message}{hint}", file=sys.stderr)
             elif isinstance(event, ev.Warning):
                 print(f"warning: {event.message}", file=sys.stderr)
+            elif isinstance(event, ev.ReviewResult) and output_format != "stream-json":
+                for line, _style in review_lines(event):
+                    print(line, file=sys.stderr)
             elif isinstance(event, ev.Compacted) and output_format != "stream-json":
                 print(
                     f"note: context nearly full; summarised {event.summarized_messages} earlier "

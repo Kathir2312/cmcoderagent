@@ -7,6 +7,7 @@ import type {
   CommandInfo,
   PermissionDenied,
   PermissionRequest,
+  ReviewResult,
   SubagentStatus,
   ToolResult,
   ToolUse,
@@ -463,7 +464,8 @@ function onEvent(ev: AgentEvent): void {
       break;
     case "tool_use":
       if (ev.name !== "TodoWrite") toolCard(ev);
-      setActivity(TOOL_VERBS[ev.name] ?? "Working", ev.name === "TodoWrite" ? "" : ev.label);
+      if (ev.input.subagent_type === "critic") setActivity("Reviewing the answer");
+      else setActivity(TOOL_VERBS[ev.name] ?? "Working", ev.name === "TodoWrite" ? "" : ev.label);
       break;
     case "tool_result":
       toolResult(ev);
@@ -495,6 +497,10 @@ function onEvent(ev: AgentEvent): void {
       break;
     case "error":
       note(`✗ ${ev.message}${ev.hint ? `\n${ev.hint}` : ""}`, "error");
+      break;
+    case "review_result":
+      reviewNote(ev);
+      if (!ev.final) setActivity("Fixing what the reviewer found");
       break;
     case "code_context": {
       const where = ev.items.slice(0, 4).map((i) => `${i.path}:${i.start_line}-${i.end_line}`).join(", ");
@@ -565,6 +571,32 @@ function onEvent(ev: AgentEvent): void {
       input.focus();
       flushQueue(ev.subtype === "interrupted");
       break;
+  }
+}
+
+/** Critique: what the critic decided about the answer. */
+function reviewNote(ev: ReviewResult): void {
+  const n = ev.issues.length;
+  const problems = `${n} problem${n === 1 ? "" : "s"}`;
+  let head: string;
+  let cls = "warn";
+  if (!ev.final) head = `↺ The reviewer found ${problems}; fixing ${n === 1 ? "it" : "them"} (review ${ev.round}/${ev.max_rounds}):`;
+  else if (ev.verdict === "pass") {
+    head = `✓ Reviewed: ${ev.summary}`;
+    cls = "info review-pass";
+  } else if (ev.verdict === "fail") head = `⚠ Not validated: after ${ev.round} review${ev.round === 1 ? "" : "s"} the reviewer still found ${problems}:`;
+  else head = `⚠ Not reviewed: ${ev.summary}`;
+  const box = append(el("div", `note review ${cls}`));
+  box.append(el("div", "head", head));
+  if (ev.verdict !== "pass" && ev.verdict !== "none") {
+    const list = el("ul", "issues");
+    for (const i of ev.issues) {
+      const item = el("li", `issue ${i.severity}`, `[${i.severity}] ${i.problem}${i.where ? ` (${i.where})` : ""}`);
+      if (i.fix) item.append(el("div", "fix", `fix: ${i.fix}`));
+      list.append(item);
+    }
+    if (!n && ev.summary) list.append(el("li", "issue", ev.summary));
+    box.append(list);
   }
 }
 

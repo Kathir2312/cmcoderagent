@@ -162,3 +162,59 @@ every clone of the repository finds the same index.
   function that answers each; hit@1, hit@5 and MRR for your embedding model.
 - [SECURITY-REVIEW.md](SECURITY-REVIEW.md): index folders made private
   (0700), chromadb advisories and how to run a Chroma server safely.
+
+## 7. Critique: a critic agent before the answer is shown
+
+*Code:* `core/critic.py` (`CRITIC_PROMPT`, `VerdictTool`, `turn_diff`,
+`review_prompt`, `review`, `critic_command`), the gate in `Agent._run`,
+`TaskTool.run_agent` (`core/subagents.py`), settings `critic`. *Tests:*
+`tests/test_critic.py`; the eval `evals/tasks/critic-review`.
+
+### The problem
+
+A model sometimes says "done" when half the work is done, or describes code
+it didn't change. The user finds out later. A second look before the answer
+is shown catches much of that.
+
+### The idea
+
+With critique on (`/critic on`, `--critic`, `critic.enabled`), the turn's
+final reply is **held**. A read-only **critic** subagent gets the request,
+the draft, what the agent did and the turn's diff; it checks them against the
+files and calls `Verdict(pass|fail, summary, issues)`. Pass: the answer is
+shown. Fail: the issues go back to the main agent as a reminder and the loop
+continues, up to `critic.maxRounds`; after that the answer is shown marked
+"not validated".
+
+### The code
+
+- **Holding the reply.** In `_run`, `hold = self.critique and not
+  self.is_subagent`: streamed text goes into `held` instead of out as
+  `assistant_delta`. When the step turns out to be a tool step, `held` is
+  released at once; when it's the final answer (`deferred`), it waits for the
+  review.
+- **The diff** comes from the checkpoints (`/rewind` already keeps each
+  file's state before the turn's first edit): `difflib.unified_diff` of that
+  and the file now, project files only, secret files left out (`is_secret`).
+- **The verdict is a tool call**, not JSON in text: models format tool
+  arguments far more reliably, and pydantic (`VerdictInput`) validates them.
+  The tool instance keeps the result for `review()` to read.
+- **The critic is an ordinary subagent**: `TaskTool.run_agent(definition,
+  ..., extra_tools=[verdict])` gives it a run record, `subagent_status`
+  events and a place in the agent map and navigator, for free. `critic.md`
+  (your agents folder) replaces its prompt; its tools stay read-only.
+- **Never lose the answer**: a critic that errors or gives no verdict yields
+  `Review("none")`, and the answer is shown "not reviewed".
+
+### New Python ideas
+
+- **Evaluator–optimizer loop** inside an `async` generator: `continue` sends
+  the agent back to work; the generator decides what the user sees and when.
+- **A tool as a typed return channel**: the model "returns" structured data by
+  calling a tool whose input model is the data's schema.
+
+### Try it
+
+```
+cmcoder --critic        # or /critic on in a session
+```

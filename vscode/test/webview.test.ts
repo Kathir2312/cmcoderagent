@@ -75,6 +75,7 @@ const result: AgentEvent = {
   duration_ms: 1,
   usage: {},
   session_id: "s",
+  review: null,
 };
 
 test("a turn: prompt, streamed Markdown, tool card, todo list", async () => {
@@ -377,5 +378,28 @@ test("an interrupted turn gives queued messages back to edit", async () => {
   await ev({ ...result, subtype: "interrupted" } as AgentEvent);
   assert.equal(await page.inputValue("textarea"), "next thing");
   assert.equal((await sent()).filter((m) => m.kind === "send").length, 1);
+  await page.close();
+});
+
+test("critique: the reviewer's findings while it fixes, then the verdict; the progress line says so", async () => {
+  const { page, ev } = await panel();
+  await page.fill("textarea", "fix add");
+  await page.press("textarea", "Enter");
+  await ev({ type: "tool_use", id: "r1", name: "Task", input: { description: "Review the answer (round 1/2)", subagent_type: "critic" }, label: "Review(the answer, round 1/2)", parent_tool_use_id: null });
+  assert.equal(await page.textContent(".progress .verb"), "Reviewing the answer…");
+  await ev({
+    type: "review_result", round: 1, max_rounds: 2, verdict: "fail", final: false, summary: "Wrong file.",
+    issues: [{ severity: "high", problem: "names a.py, the code is in b.py", where: "the answer", fix: "say b.py" }],
+  });
+  assert.equal(await page.textContent(".progress .verb"), "Fixing what the reviewer found…");
+  const fixing = (await page.locator(".note.review").first().textContent()) ?? "";
+  assert.match(fixing, /↺ The reviewer found 1 problem; fixing it \(review 1\/2\):/);
+  assert.match(fixing, /\[high\] names a\.py, the code is in b\.py \(the answer\)fix: say b\.py/);
+  await ev({ type: "assistant_message", text: "Corrected answer.", reasoning: "", tool_calls: [], model: null });
+  await ev({ type: "review_result", round: 2, max_rounds: 2, verdict: "pass", final: true, summary: "Now right.", issues: [] });
+  assert.equal(await page.locator(".note.review").nth(1).textContent(), "✓ Reviewed: Now right.");
+  await ev({ type: "review_result", round: 2, max_rounds: 2, verdict: "fail", final: true, summary: "x", issues: [{ severity: "low", problem: "p", where: "", fix: "" }] });
+  assert.match((await page.locator(".note.review").nth(2).textContent()) ?? "", /⚠ Not validated: after 2 reviews the reviewer still found 1 problem:\[low\] p/);
+  await ev(result);
   await page.close();
 });

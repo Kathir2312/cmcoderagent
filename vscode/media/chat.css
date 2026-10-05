@@ -346,3 +346,9 @@ footer .commands .description { opacity: 0.7; margin-left: 8px; }
 .queued .item .text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .queued .item .remove { padding: 0 6px; }
 .agents .title .open-map { padding: 0 8px; margin-left: 6px; font-size: 0.9em; }
+
+/* Critique: the reviewer's verdict on the answer. */
+.note.review .issues { margin: 2px 0 0; padding-left: 1.4em; }
+.note.review .issue.high { color: var(--vscode-errorForeground); }
+.note.review .fix { opacity: 0.75; }
+.note.review-pass { color: var(--vscode-testing-iconPassed, #73c991); }

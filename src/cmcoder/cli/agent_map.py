@@ -349,3 +349,33 @@ def _trunk(r: int, anchors: list[int], r_root: int, box: bool) -> str:
     if r in anchors:
         return "┼" if r == r_root else "├"
     return "┤" if r == r_root else "│"
+
+
+def review_lines(event: ev.ReviewResult) -> list[tuple[str, str]]:
+    """Critique's outcome as (text, style) lines, for the terminal front ends."""
+    sym = S()
+    n = len(event.issues)
+    problems = f"{n} problem{'s' if n != 1 else ''}"
+    if not event.final:
+        head = (
+            f"{sym.compacted} The reviewer found {problems}; fixing "
+            f"{'them' if n != 1 else 'it'} (review {event.round}/{event.max_rounds}):",
+            "yellow",
+        )
+    elif event.verdict == "pass":
+        return [(f"{sym.ok} Reviewed: {event.summary}".rstrip(": "), "green")]
+    elif event.verdict == "fail":
+        head = (
+            f"{sym.warn} Not validated: after {event.round} review"
+            f"{'s' if event.round != 1 else ''} the reviewer still found {problems}:",
+            "yellow",
+        )
+    else:
+        return [(f"{sym.warn} Not reviewed: {event.summary}", "yellow")]
+    lines = [head]
+    for issue in event.issues:
+        where = f" ({issue.where})" if issue.where else ""
+        lines.append((f"  - [{issue.severity}] {issue.problem}{where}", "dim"))
+    if not event.issues and event.summary:
+        lines.append((f"  - {event.summary}", "dim"))
+    return lines

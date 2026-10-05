@@ -200,6 +200,36 @@ agent got only its unfinished last sentence. Fixed:
 - **VS Code progress line** with queued messages, and **symbols the classic
   Windows console can draw** (code-page aware, `symbols` setting).
 
+## Feature: critique (planned and built 5 October 2026)
+
+A **critic agent** checks the answer before it reaches the user; only an
+answer that passes is shown. If it fails, the main agent gets the critic's
+findings, fixes the work, and the critic checks again.
+
+| Question | Decision (5 Oct) |
+|---|---|
+| When it runs | **Only when switched on**: `/critic on|off`, `--critic`, setting `critic.enabled` (default off) |
+| What it reviews | **The final (summary) answer** of the turn, not each subagent's report |
+| Its model | **The main model** |
+| Still failing after the retries | **Show the answer, marked "not validated"**, with the critic's remaining findings |
+| While the agent fixes | **The findings are shown** ("the reviewer found 2 problems; fixing them") |
+| Build/test commands as checks | **No**: the critic model only |
+
+How: the final reply is held; a read-only `critic` subagent (Read, Glob,
+Grep, CodeSearch) gets the request, the draft, what the agent did and this
+turn's diff (from the checkpoints, secrets left out), and ends with a
+`Verdict` tool call (pass/fail, issues). Pass: the answer is shown. Fail: the
+findings go back to the main agent as a reminder and the loop continues, up to
+`critic.maxRounds` (default 2). The critic shows in the agent map and
+navigator like any subagent; its prompt can be replaced with a `critic.md`
+agent file. Protocol: a `review_result` event; `result.review`.
+
+Status (5 Oct): built. `core/critic.py`, the gate in `Agent._run`,
+`/critic` in the terminal, TUI and VS Code panel, `--critic`,
+`CMCODER_CRITIC`, VS Code setting `cmcoder.critique`. Tests:
+`tests/test_critic.py`; eval `evals/tasks/critic-review` (a half-done first
+answer the critic fails; 25/25 tasks pass with `-p`/VS Code parity).
+
 ## Not in Phase 5
 
 Indexing documents other than code (wikis, PDFs: an existing company RAG

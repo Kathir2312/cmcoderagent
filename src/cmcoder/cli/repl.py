@@ -30,6 +30,7 @@ from ..compat import InterruptHandler
 from ..config.settings import Settings, config_dir, ignored_settings_message
 from ..core.agent import Agent, PermissionAnswer, PermissionRequest
 from ..core.commands import BUILT_IN, help_lines
+from ..core.critic import critic_command
 from ..core.permissions import MODES, ModeNotAllowed
 from ..core.sessions import SessionLog, age, list_sessions, load
 from ..core.subagents import agents_command
@@ -38,7 +39,7 @@ from ..protocol import events as ev
 from ..providers.messages import Usage
 from ..providers.openai_compat import OpenAICompatProvider
 from ..rag.index import Progress
-from .agent_map import AgentMap, ParallelTasks
+from .agent_map import AgentMap, ParallelTasks, review_lines
 from .factory import AgentOptions, build_agent, index_command, resolve_model_profile
 from .symbols import sym as S
 
@@ -117,6 +118,7 @@ HELP = """\
   /index [status]    build or update the code index (code search), or show it
   /agents [n|stop n] agent types and this session's subagents: status, steps, reports
   /agents map        the last turn's agents as a mind map
+  /critic [on|off]   a critic agent reviews each answer before you see it
   /exit              quit
 
 [bold]Keys[/bold]
@@ -275,6 +277,14 @@ class Repl:
                 self._print_todos(event.input["todos"])
                 return
             c.print(Text(f"{S().tool} ", style="cyan") + Text(event.label, style="bold"))
+            if event.input.get("subagent_type") == "critic":
+                self._start_status("Reviewing the answer…")
+        elif isinstance(event, ev.ReviewResult):
+            self._stop_status()
+            for line, style in review_lines(event):
+                c.print(Text(line, style=style))
+            if not event.final:
+                self._start_status("Fixing what the reviewer found…")
         elif isinstance(event, ev.ToolResult) and (final := self.map.final_line(event.id)):
             state = self.map.runs[event.id].state
             style = {"done": "green", "limit": "green", "failed": "red"}.get(state, "yellow")
@@ -519,6 +529,9 @@ class Repl:
             c.print(f"Permission mode: [bold]{self.agent.policy.mode}[/bold]")
         elif name == "mcp":
             for line in status_lines(self.agent.mcp):
+                c.print(Text(line))
+        elif name == "critic":
+            for line in critic_command(self.agent, arg):
                 c.print(Text(line))
         elif name == "agents" and arg == "map":
             self._print_agent_map()

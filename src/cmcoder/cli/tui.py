@@ -32,12 +32,13 @@ from .. import __version__, brand
 from ..config.settings import Settings, ignored_settings_message
 from ..core.agent import Agent, PermissionAnswer, PermissionRequest
 from ..core.commands import BUILT_IN, help_lines
+from ..core.critic import critic_command
 from ..core.permissions import MODES, ModeNotAllowed
 from ..core.subagents import agent_run_details, agents_command
 from ..mcp_client import status_lines
 from ..protocol import events as ev
 from ..rag.index import Progress
-from .agent_map import STATE_STYLES, AgentMap, ParallelTasks
+from .agent_map import STATE_STYLES, AgentMap, ParallelTasks, review_lines
 from .factory import AgentOptions, build_agent, index_command
 from .repl import Repl, output_preview, short_rule, subagent_line
 from .symbols import sym as S
@@ -69,6 +70,7 @@ HELP = """\
 /index [status]    build or update the code index (code search), or show it
 /agents [n|stop n] agent types and this session's subagents (works while cmcoder works)
 /agents map        the agent navigator (also Ctrl+G): the turn's agents as a tree
+/critic [on|off]   a critic agent reviews each answer before you see it
 /todos             show the todo list
 /exit              quit
 Keys: Enter send · Ctrl+C interrupt (twice when idle: quit) · Shift+Tab cycle mode · Ctrl+G agent navigator
@@ -514,6 +516,9 @@ class CmcoderApp(App[int]):
             self.write(
                 f"{S().error} {event.message}" + (f"\n  {event.hint}" if event.hint else ""), "err"
             )
+        elif isinstance(event, ev.ReviewResult):
+            for text, style in review_lines(event):
+                self.write(text, {"green": "tool", "yellow": "warn"}.get(style, "dim"))
         elif isinstance(event, ev.CodeContext):
             self.write(f"{S().note} {event.summary()}", "dim")
         elif isinstance(event, ev.Compacted):
@@ -590,6 +595,8 @@ class CmcoderApp(App[int]):
             )
         elif name == "mcp":
             self.write("\n".join(status_lines(a.mcp)))
+        elif name == "critic":
+            self.write("\n".join(critic_command(a, arg)))
         elif name == "agents" and arg == "map":
             self.action_navigator()
         elif name == "agents":

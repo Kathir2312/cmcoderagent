@@ -122,7 +122,7 @@ test("navigator: subagents as branches, their last tool calls as leaves, details
   assert.equal(await page.isVisible(".details"), false);
 
   // The turn ends: what still ran counts as stopped; a new turn starts over.
-  await ev({ type: "result", subtype: "interrupted", is_error: false, result: "", num_turns: 1, duration_ms: 1, usage: {}, session_id: "s" });
+  await ev({ type: "result", subtype: "interrupted", is_error: false, result: "", num_turns: 1, duration_ms: 1, usage: {}, session_id: "s", review: null });
   assert.equal(await page.locator(".node.agent.stopped").count(), 1);
   assert.match((await page.textContent(".node.root")) ?? "", /interrupted/);
   await page.click("header .chat");

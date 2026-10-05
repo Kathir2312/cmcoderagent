@@ -129,6 +129,13 @@ def main(
     max_turns: Annotated[
         int | None, typer.Option("--max-turns", help="Max model calls per turn.")
     ] = None,
+    critic: Annotated[
+        bool | None,
+        typer.Option(
+            "--critic/--no-critic",
+            help="A critic agent reviews each answer before it's shown (/critic in a session).",
+        ),
+    ] = None,
     append_system_prompt: Annotated[
         str | None,
         typer.Option("--append-system-prompt", help="Extra text appended to the system prompt."),
@@ -210,6 +217,7 @@ def main(
         allowed_tools=_split_rules(allowed_tools),
         disallowed_tools=_split_rules(disallowed_tools),
         max_turns=max_turns,
+        critique=critic,
         append_system_prompt=append_system_prompt,
         continue_session=continue_session,
         resume=resume,

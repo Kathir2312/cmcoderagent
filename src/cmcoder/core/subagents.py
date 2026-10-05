@@ -32,7 +32,7 @@ from __future__ import annotations
 import asyncio
 import re
 import time
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, Literal
@@ -52,7 +52,8 @@ if TYPE_CHECKING:
 # A model a subagent runs on: (provider, model, profile), like the summariser's.
 ModelChoice = Summarizer
 NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
-NOT_FOR_SUBAGENTS = {"Task", "TodoWrite"}  # no nesting; the todo list is the main agent's
+NOT_FOR_SUBAGENTS = {"Task", "TodoWrite"}
+CRITIC_NAME = "critic"  # reviews answers (core/critic.py); not offered to the Task tool  # no nesting; the todo list is the main agent's
 MAX_REPORT_CHARS = 30_000
 
 GENERAL_PURPOSE_PROMPT = """\
@@ -161,7 +162,28 @@ class SubagentRuntime:
     system_prompt: Callable[[AgentDefinition, str], str] = field(default=lambda d, model: d.prompt)
 
     def definitions(self) -> dict[str, AgentDefinition]:
-        return load_agents(self.project_root, self.project_trusted)
+        """The agents the Task tool offers (the critic isn't one of them)."""
+        found = load_agents(self.project_root, self.project_trusted)
+        found.pop(CRITIC_NAME, None)
+        return found
+
+    def critic(self) -> AgentDefinition:
+        """The critic: a `critic.md` agent file's prompt if there is one (yours,
+        or a trusted project's), always with read-only tools."""
+        from .critic import CRITIC_DEFINITION
+
+        own = load_agents(self.project_root, self.project_trusted).get(CRITIC_NAME)
+        if own is None:
+            return CRITIC_DEFINITION
+        return AgentDefinition(
+            CRITIC_NAME,
+            CRITIC_DEFINITION.description,
+            own.prompt,
+            own.origin,
+            tools=CRITIC_DEFINITION.tools,
+            model=None,  # the main model (decided 5 Oct)
+            path=own.path,
+        )
 
 
 def select_tools(tools: dict[str, Tool], allowed: list[str] | None) -> dict[str, Tool]:
@@ -449,6 +471,20 @@ class TaskTool(Tool):
                 )
             )
             return
+        async for item in self.run_agent(definition, args.description, args.prompt, call_id):
+            yield item
+
+    async def run_agent(
+        self,
+        definition: AgentDefinition,
+        description: str,
+        prompt: str,
+        call_id: str,
+        extra_tools: Sequence[Tool] = (),
+        max_turns: int | None = None,
+    ) -> AsyncIterator[ev.Event | TaskDone]:
+        """Run one subagent (shown in the agent map); the critic uses this too,
+        with its Verdict tool as an extra tool."""
         parent = self.parent
         choice = ModelChoice(parent.provider, parent.model, parent.profile)
         if definition.model and definition.model != "inherit":
@@ -462,7 +498,9 @@ class TaskTool(Tool):
                         f"can't be used ({e}); using {parent.model}."
                     )
             choice = resolved or choice
-        run = parent.new_subagent_run(call_id, args.description, definition.name, choice.model)
+        run = parent.new_subagent_run(call_id, description, definition.name, choice.model)
+        if max_turns is not None:
+            run.max_steps = max_turns
         yield run.status()
         if not await run.wait_for_slot(parent.subagent_slots):
             run.finish("stopped")
@@ -476,7 +514,9 @@ class TaskTool(Tool):
             )
             return
         try:
-            async for item in self._run_child(run, definition, choice, args.prompt, call_id):
+            async for item in self._run_child(
+                run, definition, choice, prompt, call_id, extra_tools, max_turns
+            ):
                 yield item
         finally:
             parent.subagent_slots.release()
@@ -490,13 +530,16 @@ class TaskTool(Tool):
         choice: ModelChoice,
         prompt: str,
         call_id: str,
+        extra_tools: Sequence[Tool] = (),
+        max_turns: int | None = None,
     ) -> AsyncIterator[ev.Event | TaskDone]:
         parent = self.parent
+        tools = select_tools(parent.tools, definition.tools) | {t.name: t for t in extra_tools}
         child = parent.spawn_subagent(
-            choice,
-            select_tools(parent.tools, definition.tools),
-            self.runtime.system_prompt(definition, choice.model),
+            choice, tools, self.runtime.system_prompt(definition, choice.model)
         )
+        if max_turns is not None:
+            child.max_turns = max_turns
         run.start(child)
         yield run.status()
         # The child's events and status changes from outside it (a stop, a
@@ -624,7 +667,8 @@ def agents_command(parent: Agent, arg: str, marks: dict[str, str] = STATE_MARKS)
         return ["Subagents aren't available in this session."]
     words = arg.split()
     if not words:
-        return agents_overview(task.runtime.definitions(), parent.subagent_runs, marks=marks)
+        types = {**task.runtime.definitions(), CRITIC_NAME: task.runtime.critic()}
+        return agents_overview(types, parent.subagent_runs, marks=marks)
     if words[0] == "stop" and len(words) == 2:
         run = parent.stop_subagent(words[1])
         if run is None:

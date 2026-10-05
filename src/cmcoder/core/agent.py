@@ -38,6 +38,7 @@ from ..providers.profiles import ModelProfile
 from ..providers.text_tools import Holdback, extract
 from ..telemetry import Telemetry
 from ..tools.base import FileChange, Tool, ToolContext, ToolResult, truncate_middle
+from . import critic
 from .checkpoints import Checkpoints, RestoreAction
 from .commands import (
     CommandSource,
@@ -224,6 +225,8 @@ class Agent:
         max_turns: int = 50,
         subagent_max_turns: int | None = None,
         max_parallel_subagents: int = 4,
+        critique: bool = False,
+        critique_rounds: int = 2,
         ask: AskFn | None = None,
         on_rule_saved: Callable[[str], None] | None = None,
         summarizer: Summarizer | None = None,
@@ -257,6 +260,10 @@ class Agent:
         self.ask = ask
         # One permission question at a time, also from subagents running in parallel.
         self._ask_lock = asyncio.Lock()
+        # Critique (core/critic.py): a critic agent reviews the final answer
+        # before it's shown; failed reviews send the agent back to work.
+        self.critique = critique
+        self.critique_rounds = max(1, critique_rounds)
         self.on_rule_saved = on_rule_saved
         # Where the conversation is saved (None: not saved).
         self.session = session
@@ -740,6 +747,7 @@ class Agent:
         user_message = Message.user(f"{context}\n\n{prompt}" if context else prompt)
         user_message.turn = self.turn
         self.messages.append(user_message)
+        turn_start = len(self.messages) - 1  # what this turn did, for the critic
         for message in self.startup_warnings:
             yield ev.Warning(message=message)
         self.startup_warnings = []
@@ -803,6 +811,9 @@ class Agent:
         # broken summariser isn't retried before every model call.
         can_compact = self.auto_compact
         wrapping_up = False  # a subagent's last call, for its report
+        review_round = 0  # critique: reviews of this turn's answer so far
+        review_issues: list[Any] = []  # the last review's findings, for the next one
+        review_info: dict[str, Any] | None = None  # for the turn's result
 
         def result(subtype: str, text: str, is_error: bool = False) -> ev.Result:
             return ev.Result(
@@ -818,6 +829,7 @@ class Agent:
                     "cost": turn_usage.cost,
                 },
                 session_id=self.session_id,
+                review=review_info,
             )
 
         try:
@@ -882,6 +894,10 @@ class Agent:
 
                 done: StreamDone | None = None
                 holdback = Holdback()  # keeps <tool_call> text off the screen
+                # Critique: the text is held until we know whether this is the
+                # final answer (then it waits for the review) or a tool step.
+                hold = self.critique and not self.is_subagent
+                held = ""
                 try:
                     async for sev in self.provider.stream_chat(
                         self.model,
@@ -892,7 +908,10 @@ class Agent:
                     ):
                         if isinstance(sev, TextDelta):
                             if shown := holdback.feed(sev.text):
-                                yield ev.AssistantDelta(text=shown)
+                                if hold:
+                                    held += shown
+                                else:
+                                    yield ev.AssistantDelta(text=shown)
                         elif isinstance(sev, ReasoningDelta):
                             yield ev.ReasoningDelta(text=sev.text)
                         elif isinstance(sev, StreamDone):
@@ -977,7 +996,10 @@ class Agent:
 
                 overflow_retried = False  # one retry per model call, not per turn
                 if rest := holdback.flush():
-                    yield ev.AssistantDelta(text=rest)
+                    if hold:
+                        held += rest
+                    else:
+                        yield ev.AssistantDelta(text=rest)
                 msg = done.message
                 if not msg.tool_calls and "<tool_call>" in msg.content:
                     # Tool calls written as text (no tool parser on the backend).
@@ -987,7 +1009,7 @@ class Agent:
                 self.messages.append(msg)
                 self.usage.add(done.usage)
                 turn_usage.add(done.usage)
-                yield ev.AssistantMessage(
+                message_event = ev.AssistantMessage(
                     text=msg.content,
                     reasoning=msg.reasoning,
                     tool_calls=[
@@ -996,6 +1018,12 @@ class Agent:
                     ],
                     model=done.model,
                 )
+                # The final answer under critique waits for its review.
+                deferred = hold and not msg.tool_calls and bool(msg.content.strip())
+                if not deferred:
+                    if held:
+                        yield ev.AssistantDelta(text=held)
+                    yield message_event
                 yield ev.UsageUpdate(
                     prompt_tokens=done.usage.prompt_tokens,
                     completion_tokens=done.usage.completion_tokens,
@@ -1039,6 +1067,43 @@ class Agent:
                                 )
                             )
                             continue
+                    if deferred:
+                        # Critique: the critic reviews the answer before it's shown.
+                        review_round += 1
+                        outcome: critic.Review | None = None
+                        async for item in critic.review(
+                            self,
+                            prompt,
+                            msg.content,
+                            turn_start,
+                            review_round,
+                            self.critique_rounds,
+                            review_issues,
+                        ):
+                            if isinstance(item, critic.Review):
+                                outcome = item
+                            else:
+                                yield item
+                        assert outcome is not None
+                        if outcome.verdict == "fail" and review_round < self.critique_rounds:
+                            yield outcome.event(review_round, self.critique_rounds, final=False)
+                            review_issues = outcome.issues
+                            self.messages.append(
+                                Message.user(
+                                    critic.fix_request(outcome, review_round, self.critique_rounds)
+                                )
+                            )
+                            continue
+                        review_info = {
+                            "verdict": outcome.verdict,
+                            "rounds": review_round,
+                            "summary": outcome.summary,
+                            "issues": [i.model_dump() for i in outcome.issues],
+                        }
+                        if held:
+                            yield ev.AssistantDelta(text=held)
+                        yield message_event
+                        yield outcome.event(review_round, self.critique_rounds, final=True)
                     yield result("success", last_text)
                     return
 

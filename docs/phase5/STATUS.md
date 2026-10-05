@@ -59,6 +59,12 @@ Part of Phase 5, though not code search: they came from using cmcoder on a
   Subagents box). Terminal: under the spinner, `/agents map` afterwards. TUI:
   above the input, and a navigator screen (Ctrl+G: a tree, details, S to
   stop).
+- **Critique** (decided and built 5 October): with `/critic on` (or
+  `--critic`, `critic.enabled`) a read-only critic agent reviews the turn's
+  final answer against the files and the turn's diff before it is shown; on
+  failure its findings go back to the agent ("the reviewer found 1 problem;
+  fixing it"), up to `critic.maxRounds` (2), after which the answer is shown
+  "not validated". It uses the main model and shows in the agent map.
 - **VS Code progress line**: an animated ✻ in the theme's blue with what the
   agent is doing, time, tokens and "Esc to interrupt"; messages typed while it
   works are **queued** and sent when the turn ends.
@@ -71,7 +77,7 @@ Part of Phase 5, though not code search: they came from using cmcoder on a
 
 | Where | Result |
 |---|---|
-| CI (Linux, macOS, Windows; 11 jobs) | 611 Python tests, 20 extension tests, real-VS Code test, mock evals with `-p`/VS Code parity, real LiteLLM and Open WebUI jobs (embeddings included), a real Chroma 1.5 server, security job (Bandit, pip-audit with the extras, npm audit) |
+| CI (Linux, macOS, Windows; 11 jobs) | 624 Python tests, 21 extension tests, real-VS Code test, 25 mock eval tasks, mock evals with `-p`/VS Code parity, real LiteLLM and Open WebUI jobs (embeddings included), a real Chroma 1.5 server, security job (Bandit, pip-audit with the extras, npm audit) |
 | Security review ([SECURITY-REVIEW.md](SECURITY-REVIEW.md)) | Index folders made private (0700); chromadb's server advisories (no fix yet) named in CI, with how to run a Chroma server safely |
 | Your Windows machine, real gateway (Qwen3.5-35B-A3B, Qwen3.6-27B) | Phase 5 marked complete by you on 5 October after using it: VS Code on a .NET solution (subagents fanned out per project), the CLI in the classic console, an MCP server over your own codebase index (`codebase_code`). The fixes above came from that use |
 
@@ -85,9 +91,9 @@ Part of Phase 5, though not code search: they came from using cmcoder on a
   the standalone build.
 - **Guided setup** (`cmcoder rag setup` and the VS Code flow) added on 4
   October so nothing needs a settings file edited by hand.
-- The subagent, agent map and navigator, progress line and console items
-  above were not in the plan; they came from use and were kept as Phase 5
-  features (decided 5 October).
+- The subagent, agent map and navigator, critique, progress line and console
+  items above were not in the plan; they came from use and were kept as Phase
+  5 features (decided 5 October).
 
 ## Carried forward
 

@@ -177,6 +177,7 @@ class AgentOptions:
     allowed_tools: list[str] | None = None
     disallowed_tools: list[str] | None = None
     max_turns: int | None = None
+    critique: bool | None = None  # --critic; None: settings critic.enabled
     append_system_prompt: str | None = None
     ask: AskFn | None = None
     persist_rules: bool = True
@@ -287,6 +288,8 @@ async def build_agent(settings: Settings, opts: AgentOptions) -> Agent:
         max_turns=opts.max_turns or settings.max_turns,
         subagent_max_turns=settings.subagent_max_turns,
         max_parallel_subagents=settings.max_parallel_subagents,
+        critique=settings.critic.enabled if opts.critique is None else opts.critique,
+        critique_rounds=settings.critic.max_rounds,
         ask=opts.ask,
         on_rule_saved=save_rule,
         summarizer=summarizer,

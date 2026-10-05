@@ -47,6 +47,8 @@ class Scripted:
         self, model: str, messages: list[Message], tools: list[Any], profile: Any, **kw: Any
     ) -> AsyncIterator[Any]:
         key = next(m.content for m in messages if m.role == "user")
+        if key not in self.scripts:  # a long first message: scripted by its start
+            key = next(k for k in self.scripts if key.startswith(k))
         self.requests.append((key, [t.name for t in tools], [*messages]))
         reply = self.scripts[key].pop(0)
         if callable(reply):

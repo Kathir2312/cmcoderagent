@@ -205,6 +205,13 @@ You are a careful reviewer. Report problems with file:line references.
 `PreToolUse`/`PostToolUse` hooks and `SubagentStop` when it finishes, can't start subagents itself, and its file
 changes can be undone with `/rewind`. Its steps are shown inside the Task call in every front end.
 
+**Critique.** `/critic on` (or `cmcoder --critic`, `"critic": {"enabled": true}`, VS Code's `cmcoder.critique`)
+turns on a reviewer: before an answer is shown, a read-only **critic agent** (the main model) checks it against
+your request, the files and the turn's changes. It passes, and you see the answer ("✓ Reviewed"); or it fails,
+you see what it found ("The reviewer found 1 problem; fixing it"), cmcoder fixes it and the critic looks again, up
+to `critic.maxRounds` (2) times, after which the answer is shown marked "not validated". A `critic.md` in your
+agents folder replaces its instructions (e.g. your team's standards). `/critic off` turns it off.
+
 Several Task calls in one reply **run at the same time** ("one subagent per project"): up to
 `maxParallelSubagents` (default 4; 1 runs them one after another). Their permission questions come one at a time,
 and with `-v` their step lines in the terminal are tagged with the task (`[Analyse TW.Core] ● Read(...)`). This needs a model that

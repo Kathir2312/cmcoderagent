@@ -323,6 +323,28 @@ class SubagentStatus(_Event):
     activity: str = ""  # what it's doing: a tool call's label, "" while the model works
 
 
+class ReviewIssue(BaseModel):
+    severity: Literal["high", "medium", "low"] = "medium"
+    problem: str
+    where: str = ""
+    fix: str = ""
+
+
+class ReviewResult(_Event):
+    """Critique (`/critic on`): the critic's verdict on the turn's answer.
+    Not final: the agent is fixing the problems and will be reviewed again.
+    Final: the answer has just been shown (passed, out of rounds, or not
+    reviewed: verdict "none")."""
+
+    type: Literal["review_result"] = "review_result"
+    round: int
+    max_rounds: int
+    verdict: Literal["pass", "fail", "none"]
+    final: bool
+    summary: str = ""
+    issues: list[ReviewIssue] = Field(default_factory=list)
+
+
 class Result(_Event):
     type: Literal["result"] = "result"
     subtype: Literal["success", "error", "max_turns", "interrupted"]
@@ -332,6 +354,8 @@ class Result(_Event):
     duration_ms: int
     usage: dict[str, Any]
     session_id: str
+    # With critique on: {"verdict": "pass"|"fail"|"none", "rounds": n, "issues": [...]}.
+    review: dict[str, Any] | None = None
 
 
 Event = Annotated[
@@ -361,6 +385,7 @@ Event = Annotated[
     | IndexProgress
     | RagCandidatesList
     | SubagentStatus
+    | ReviewResult
     | RagSetupResult
     | Result,
     Field(discriminator="type"),

@@ -65,3 +65,29 @@ context; the index is kept current by itself.
   REST API with the same HTTP client as the gateway (company CA, proxy).
 - **Secrets.** Loaders load what they're given; cmcoder's selector refuses
   secret files with the same rules as its Read tool.
+
+## Critique (a critic agent before the answer is shown)
+
+### The LangGraph way
+
+The evaluator–optimizer pattern: a `generate` node, an `evaluate` node with
+structured output (`llm.with_structured_output(Grade)`), and a conditional
+edge back to `generate` until it passes or a counter runs out.
+
+```python
+graph.add_edge("generate", "evaluate")
+graph.add_conditional_edges("evaluate", lambda s: END if s["grade"] == "pass" or s["tries"] >= 2 else "generate")
+```
+
+### The cmcoder way
+
+The same loop, inside the agent: the final reply is held, a read-only
+`critic` subagent checks it against the files and the turn's diff and calls a
+`Verdict` tool (structured output through a tool call), and a failed verdict
+sends the findings back to the agent, up to `critic.maxRounds`.
+
+### Why they differ
+
+In a graph, the evaluator sees what the state holds. cmcoder's critic is an
+agent with tools: it reads the files to check what the answer claims, rather
+than judging the text alone.

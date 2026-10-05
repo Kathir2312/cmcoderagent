@@ -38,7 +38,7 @@ async def test_panel_commands(mock_server: Any, project: Path) -> None:
         await agent.next()  # system_init
         await agent.send(type="list_commands")
         names = [c["name"] for c in (await agent.until("command_list"))["commands"]]
-        assert names[:9] == [
+        assert names[:10] == [
             "compact",
             "rewind",
             "model",
@@ -47,8 +47,12 @@ async def test_panel_commands(mock_server: Any, project: Path) -> None:
             "mcp",
             "index",
             "agents",
+            "critic",
             "help",
         ]
+        critique = (await command(agent, "/critic on"))[0]["text"]
+        assert critique.startswith("Critique is on")
+        assert (await command(agent, "/critic off"))[0]["text"].startswith("Critique is off")
 
         help_text = (await command(agent, "/help"))[0]["text"]
         assert "/rewind" in help_text and "/model [name]" in help_text

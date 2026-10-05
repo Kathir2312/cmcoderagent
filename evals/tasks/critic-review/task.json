@@ -1,0 +1,7 @@
+{
+  "prompt": "The price helpers in prices.py give wrong numbers. Fix them so the tests pass.",
+  "check": "\"$PYTHON\" -m unittest -q",
+  "permission_mode": "bypassPermissions",
+  "max_turns": 20,
+  "args": ["--critic"]
+}

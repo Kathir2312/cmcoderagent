@@ -131,6 +131,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     const mode = config.get<string>("permissionMode");
     const allArgs = [
       ...(mode ? ["--permission-mode", mode] : []),
+      ...(config.get<boolean>("critique", false) ? ["--critic"] : []),
       // The project's own .cmcoder settings (env, allow rules) only for a
       // workspace VS Code trusts; cmcoder never reads gateways from a project.
       ...(vscode.workspace.isTrusted ? ["--trust-project"] : []),

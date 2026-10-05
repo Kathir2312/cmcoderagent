@@ -33,6 +33,13 @@ export interface HistoryItem {
   text: string;
 }
 
+export interface ReviewIssue {
+  severity: "high" | "medium" | "low";
+  problem: string;
+  where: string;
+  fix: string;
+}
+
 export interface RewindAction {
   path: string;
   action: string;
@@ -275,6 +282,22 @@ export interface SubagentStatus {
   activity: string;
 }
 
+/**
+ * Critique (`/critic on`): the critic's verdict on the turn's answer.
+ * Not final: the agent is fixing the problems and will be reviewed again.
+ * Final: the answer has just been shown (passed, out of rounds, or not
+ * reviewed: verdict "none").
+ */
+export interface ReviewResult {
+  type: "review_result";
+  round: number;
+  max_rounds: number;
+  verdict: "pass" | "fail" | "none";
+  final: boolean;
+  summary: string;
+  issues: ReviewIssue[];
+}
+
 export interface RagSetupResult {
   type: "rag_setup_result";
   ok: boolean;
@@ -291,6 +314,7 @@ export interface Result {
   duration_ms: number;
   usage: Record<string, unknown>;
   session_id: string;
+  review: Record<string, unknown> | null;
 }
 
 export type AgentEvent =
@@ -320,6 +344,7 @@ export type AgentEvent =
   | IndexProgress
   | RagCandidatesList
   | SubagentStatus
+  | ReviewResult
   | RagSetupResult
   | Result;
 

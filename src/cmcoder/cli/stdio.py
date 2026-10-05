@@ -25,6 +25,7 @@ from pydantic import ValidationError
 from ..config.settings import RagConfig, Settings, SettingsError, ignored_settings_message
 from ..core.agent import Agent, PermissionAnswer, PermissionRequest, parse_tool_arguments
 from ..core.commands import BUILT_IN, split_line
+from ..core.critic import critic_command
 from ..core.ide import IDE_TOOLS, format_ide_context
 from ..core.permissions import MODES, Decision, ModeNotAllowed
 from ..core.sessions import list_sessions
@@ -69,6 +70,7 @@ BUILT_IN_HERE = {
     "mcp": ("", "MCP servers: status and tools"),
     "index": ("[status]", "Build or update the code index (code search), or show it"),
     "agents": ("[n | stop n]", "Agent types and this session's subagents: status, steps, reports"),
+    "critic": ("[on | off]", "A critic agent reviews each answer before you see it"),
     "help": ("", "List the commands"),
 }
 PANEL_COMMANDS = set(BUILT_IN_HERE) - {"compact"}
@@ -372,6 +374,8 @@ class StdioServer:
             ]
         if name == "agents":
             return [reply("Agents", "\n".join(agents_command(agent, arguments)))]
+        if name == "critic":
+            return [ev.AssistantMessage(text="\n\n".join(critic_command(agent, arguments)))]
         if name == "index":
             lines = await index_command(agent, self.settings, arguments, self._progress)
             self._side(self._index("status"))
