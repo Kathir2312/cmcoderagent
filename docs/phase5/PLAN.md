@@ -172,6 +172,22 @@ capture meaning) by an embedding model on the gateway, lets the model ask for
   [python-guide.md](python-guide.md), [langgraph-guide.md](langgraph-guide.md);
   checklist: [TESTING.md](TESTING.md).
 
+## Found in use (5 October 2026)
+
+Asked in VS Code to "fan out subagents, one per project", a `general-purpose`
+subagent used all 50 model calls reading controllers and was stopped; the main
+agent got only its unfinished last sentence. Fixed:
+
+- **A report at the limit.** A subagent is told when 5 calls are left; at the
+  limit it makes one last call without tools and writes its report, marked as
+  possibly incomplete.
+- **Its own limit:** `subagentMaxTurns` (default 100), separate from `maxTurns`.
+- **In parallel:** Task calls in one reply run at the same time, up to
+  `maxParallelSubagents` (default 4); permission questions come one at a time
+  (an "always allow" answer covers a waiting question); denying one stops the
+  others; terminal lines are tagged with the task. Models send several calls
+  per reply only with `parallelToolCalls`, now on for Qwen3 models.
+
 ## Not in Phase 5
 
 Indexing documents other than code (wikis, PDFs: an existing company RAG

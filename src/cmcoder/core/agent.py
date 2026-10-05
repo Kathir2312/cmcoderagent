@@ -91,6 +91,21 @@ TODO_REMINDER = (
     "reminder to the user.</system-reminder>"
 )
 
+# A subagent that reaches its step limit is warned first, then makes one last
+# call without tools to write its report (the main agent sees nothing else).
+SUBAGENT_STEPS_WARNING = 5  # model calls left when the subagent is told
+STEPS_LEFT_REMINDER = (
+    "\n\n<system-reminder>You have {left} model calls left for this task. Finish what "
+    "matters most, then write your report.</system-reminder>"
+)
+WRAP_UP_REQUEST = (
+    "<system-reminder>You have used all {limit} model calls you have for this task, so "
+    "you can't use tools any more. Write your report for the main agent now from what "
+    "you have found: the answer or what you did, with file paths, and what you didn't "
+    "get to.</system-reminder>"
+)
+STOPPED_WITH_OTHERS = "Stopped: the user denied a tool call of a subagent running alongside."
+
 
 def last_todos(messages: list[Message]) -> list[dict[str, Any]]:
     """The todo list from the last TodoWrite call (to restore it on resume)."""
@@ -200,6 +215,8 @@ class Agent:
         system_prompt: str,
         *,
         max_turns: int = 50,
+        subagent_max_turns: int | None = None,
+        max_parallel_subagents: int = 4,
         ask: AskFn | None = None,
         on_rule_saved: Callable[[str], None] | None = None,
         summarizer: Summarizer | None = None,
@@ -221,7 +238,12 @@ class Agent:
         self.policy = policy
         self.ctx = ctx
         self.max_turns = max_turns
+        # Subagents (Task tool): their own step limit, and how many run at once.
+        self.subagent_max_turns = subagent_max_turns or max_turns
+        self.max_parallel_subagents = max(1, max_parallel_subagents)
         self.ask = ask
+        # One permission question at a time, also from subagents running in parallel.
+        self._ask_lock = asyncio.Lock()
         self.on_rule_saved = on_rule_saved
         # Where the conversation is saved (None: not saved).
         self.session = session
@@ -565,7 +587,7 @@ class Agent:
                 code_index=self.ctx.code_index,
             ),
             prompt,
-            max_turns=self.max_turns,
+            max_turns=self.subagent_max_turns,
             ask=self.ask,
             on_rule_saved=self.on_rule_saved,
             summarizer=self.summarizer,
@@ -578,6 +600,7 @@ class Agent:
         child._session_hooks_done = True
         child.session_id = self.session_id
         child.checkpoints = self.checkpoints
+        child._ask_lock = self._ask_lock
         child.turn = self.turn - 1  # its run() is this turn
         return child
 
@@ -766,6 +789,7 @@ class Agent:
         # Turned off for the rest of the turn if summarising fails, so a
         # broken summariser isn't retried before every model call.
         can_compact = self.auto_compact
+        wrapping_up = False  # a subagent's last call, for its report
 
         def result(subtype: str, text: str, is_error: bool = False) -> ev.Result:
             return ev.Result(
@@ -786,7 +810,19 @@ class Agent:
         try:
             while True:
                 self.save_session()  # after every step, so a crash loses little
-                if steps >= self.max_turns:
+                if steps >= self.max_turns and self._can_wrap_up(wrapping_up):
+                    # A subagent at its limit: one more call, without tools, for its report.
+                    wrapping_up = True
+                    request = WRAP_UP_REQUEST.format(limit=steps)
+                    if self.messages[-1].role == "user":
+                        self.messages[-1].content += "\n\n" + request
+                    else:
+                        self.messages.append(Message.user(request))
+                    yield ev.Warning(
+                        message=f"Reached {self.max_turns} model calls (max turns); "
+                        "asking for its report."
+                    )
+                elif steps >= self.max_turns:
                     yield ev.Warning(
                         message=f"Stopped after {self.max_turns} model calls (max turns)."
                     )
@@ -829,7 +865,7 @@ class Agent:
                     async for sev in self.provider.stream_chat(
                         self.model,
                         self.messages,
-                        self.tool_specs(),
+                        [] if wrapping_up else self.tool_specs(),
                         self.profile,
                         max_tokens=budget.max_tokens(self.messages),
                     ):
@@ -925,6 +961,8 @@ class Agent:
                 if not msg.tool_calls and "<tool_call>" in msg.content:
                     # Tool calls written as text (no tool parser on the backend).
                     msg.content, msg.tool_calls = extract(msg.content, set(self.tools))
+                if wrapping_up:
+                    msg.tool_calls = []  # no tools now: what it wrote is the report
                 self.messages.append(msg)
                 self.usage.add(done.usage)
                 turn_usage.add(done.usage)
@@ -984,22 +1022,31 @@ class Agent:
                     return
 
                 stop_turn = False
-                for call in msg.tool_calls:
+                for group in self._call_groups(msg.tool_calls):
                     if stop_turn:
-                        self.messages.append(
-                            Message.tool_result(
-                                call.id, call.name, "Skipped: the user stopped this turn."
+                        for call in group:
+                            self.messages.append(
+                                Message.tool_result(
+                                    call.id, call.name, "Skipped: the user stopped this turn."
+                                )
                             )
-                        )
                         continue
-                    if call.name == "TodoWrite":
-                        todo_reminded = True
-                    signature = f"{call.name}:{call.arguments.strip()}"
-                    recent_calls.append(signature)
-                    repeated = len(recent_calls) >= MAX_IDENTICAL_CALLS and all(
-                        s == signature for s in recent_calls[-MAX_IDENTICAL_CALLS:]
+                    repeats: list[bool] = []
+                    for call in group:
+                        if call.name == "TodoWrite":
+                            todo_reminded = True
+                        signature = f"{call.name}:{call.arguments.strip()}"
+                        recent_calls.append(signature)
+                        repeats.append(
+                            len(recent_calls) >= MAX_IDENTICAL_CALLS
+                            and all(s == signature for s in recent_calls[-MAX_IDENTICAL_CALLS:])
+                        )
+                    runs = (
+                        self._run_parallel(group, repeats)
+                        if len(group) > 1
+                        else self._run_call(group[0], repeats[0])
                     )
-                    async for out in self._run_call(call, repeated):
+                    async for out in runs:
                         if isinstance(out, _StopTurn):
                             stop_turn = True
                         else:
@@ -1010,6 +1057,9 @@ class Agent:
                 if not todo_reminded and self._needs_todo_reminder(len(recent_calls)):
                     todo_reminded = True
                     self.messages[-1].content += TODO_REMINDER
+                left = self.max_turns - steps
+                if self.is_subagent and left == SUBAGENT_STEPS_WARNING < self.max_turns // 2:
+                    self.messages[-1].content += STEPS_LEFT_REMINDER.format(left=left)
         except asyncio.CancelledError:
             self._repair_after_interrupt()
             raise
@@ -1017,6 +1067,85 @@ class Agent:
             self.save_session()
             if self.turn == 1 and not self._titled and self._session_started:
                 self._start_title(prompt)
+
+    def _can_wrap_up(self, wrapping_up: bool) -> bool:
+        """A subagent at its step limit gets one more call, for its report."""
+        return self.is_subagent and not wrapping_up and self.messages[-1].role != "assistant"
+
+    def _call_groups(self, calls: list[ToolCall]) -> list[list[ToolCall]]:
+        """The calls of one reply in order; Task calls next to each other form one
+        group that runs in parallel (other tools run one at a time)."""
+        groups: list[list[ToolCall]] = []
+        for call in calls:
+            if (
+                call.name == "Task"
+                and self.max_parallel_subagents > 1
+                and groups
+                and groups[-1][-1].name == "Task"
+            ):
+                groups[-1].append(call)
+            else:
+                groups.append([call])
+        return groups
+
+    async def _run_parallel(
+        self, calls: list[ToolCall], repeats: list[bool]
+    ) -> AsyncIterator[ev.Event | _StopTurn]:
+        """Run several Task calls at the same time (at most max_parallel_subagents),
+        passing their events on as they come. The results go into the conversation
+        in the order of the calls. If the user denies a tool call of one subagent,
+        the others are stopped too."""
+        queue: asyncio.Queue[ev.Event | _StopTurn | BaseException | None] = asyncio.Queue()
+        slots = asyncio.Semaphore(self.max_parallel_subagents)
+        start = len(self.messages)
+
+        async def one(call: ToolCall, repeated: bool) -> None:
+            try:
+                async with slots:
+                    async for out in self._run_call(call, repeated):
+                        await queue.put(out)
+            except asyncio.CancelledError:
+                raise
+            except BaseException as e:  # passed on to the turn, as if run one at a time
+                await queue.put(e)
+            finally:
+                queue.put_nowait(None)
+
+        tasks = [asyncio.create_task(one(c, r)) for c, r in zip(calls, repeats, strict=True)]
+        running = len(tasks)
+        stopped = False
+        try:
+            while running:
+                item = await queue.get()
+                if item is None:
+                    running -= 1
+                elif isinstance(item, BaseException):
+                    raise item
+                elif isinstance(item, _StopTurn):
+                    if not stopped:
+                        stopped = True
+                        for t in tasks:
+                            t.cancel()
+                else:
+                    yield item
+        finally:
+            for t in tasks:
+                t.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+        # Calls stopped before they finished still need a result.
+        answered = {m.tool_call_id for m in self.messages[start:]}
+        for call in calls:
+            if call.id not in answered:
+                self.messages.append(Message.tool_result(call.id, call.name, STOPPED_WITH_OTHERS))
+                yield ev.ToolResult(
+                    id=call.id, name=call.name, content=STOPPED_WITH_OTHERS, is_error=True
+                )
+        order = {c.id: n for n, c in enumerate(calls)}
+        self.messages[start:] = sorted(
+            self.messages[start:], key=lambda m: order.get(m.tool_call_id or "", len(order))
+        )
+        if stopped:
+            yield _StopTurn()
 
     def _needs_todo_reminder(self, calls_this_turn: int) -> bool:
         """True when this turn has made several tool calls and there is no open todo list."""
@@ -1105,6 +1234,7 @@ class Agent:
             self._redirected = None
 
         check = self.policy.check(tool, args, self.ctx)
+        hook_asks = False  # a PreToolUse hook wants the user asked, whatever the rules say
         if self.hooks is not None and check.decision != Decision.DENY:
             outcome = await self._hook(
                 "PreToolUse",
@@ -1125,6 +1255,7 @@ class Agent:
             ):
                 check = PermissionCheck(Decision.ALLOW, "allowed by a PreToolUse hook")
             elif outcome.permission == "ask" and check.decision == Decision.ALLOW:
+                hook_asks = True
                 check = PermissionCheck(
                     Decision.ASK, outcome.reason or "a PreToolUse hook asks to confirm"
                 )
@@ -1148,35 +1279,45 @@ class Agent:
                 yield ev.PermissionDenied(id=call.id, name=tool.name, reason=reason)
                 yield finish(ToolResult(f"Permission denied: {reason}", is_error=True))
                 return
-            self._notify(f"cmcoder needs your permission to use {label}")
-            answer = await self.ask(
-                PermissionRequest(
-                    call_id=call.id,
-                    tool_name=tool.name,
-                    label=label,
-                    input=args.model_dump(),
-                    suggested_rule=rule,
-                    reason=check.reason,
-                    can_remember=not check.high_risk and not self.policy.allow_rules_locked,
-                    change=tool.proposed_change(args, self.ctx),
-                )
-            )
-            if not answer.allow:
-                feedback = (answer.feedback or "").strip()
-                yield ev.PermissionDenied(id=call.id, name=tool.name, reason="denied by user")
-                msg = "The user denied this action."
-                if feedback:
-                    msg += f" Their feedback: {feedback}"
-                else:
-                    msg += " Stop and wait for the user's instructions."
-                yield finish(ToolResult(msg, is_error=True))
-                if not feedback:
-                    yield _StopTurn()
-                return
-            if answer.remember and not check.high_risk and not self.policy.allow_rules_locked:
-                self.policy.add_allow(rule)
-                if self.on_rule_saved:
-                    self.on_rule_saved(rule)
+            # Parallel subagents ask one at a time; an answer meanwhile ("always
+            # allow") may already cover this call.
+            async with self._ask_lock:
+                if hook_asks or self.policy.check(tool, args, self.ctx).decision != Decision.ALLOW:
+                    self._notify(f"cmcoder needs your permission to use {label}")
+                    answer = await self.ask(
+                        PermissionRequest(
+                            call_id=call.id,
+                            tool_name=tool.name,
+                            label=label,
+                            input=args.model_dump(),
+                            suggested_rule=rule,
+                            reason=check.reason,
+                            can_remember=not check.high_risk and not self.policy.allow_rules_locked,
+                            change=tool.proposed_change(args, self.ctx),
+                        )
+                    )
+                    if not answer.allow:
+                        feedback = (answer.feedback or "").strip()
+                        yield ev.PermissionDenied(
+                            id=call.id, name=tool.name, reason="denied by user"
+                        )
+                        msg = "The user denied this action."
+                        if feedback:
+                            msg += f" Their feedback: {feedback}"
+                        else:
+                            msg += " Stop and wait for the user's instructions."
+                        yield finish(ToolResult(msg, is_error=True))
+                        if not feedback:
+                            yield _StopTurn()
+                        return
+                    if (
+                        answer.remember
+                        and not check.high_risk
+                        and not self.policy.allow_rules_locked
+                    ):
+                        self.policy.add_allow(rule)
+                        if self.on_rule_saved:
+                            self.on_rule_saved(rule)
 
         if tool.name in FILE_EDIT_TOOLS:
             target = tool.permission_target(args, self.ctx)

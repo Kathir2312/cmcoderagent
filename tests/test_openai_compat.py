@@ -93,7 +93,17 @@ async def test_request_body(mock_server: Any) -> None:
     assert body["tools"][0]["function"]["name"] == "Read"
     assert body["chat_template_kwargs"] == {"enable_thinking": False}
     assert body["stream_options"] == {"include_usage": True}
-    assert body["parallel_tool_calls"] is False
+    assert "parallel_tool_calls" not in body  # Qwen3: several calls per reply (the default)
+
+
+async def test_parallel_tool_calls_off(mock_server: Any) -> None:
+    server = mock_server([{"content": "ok"}])
+    provider = make_provider(server)
+    profile = resolve_profile("qwen3-27b", overrides=[{"parallelToolCalls": False}])
+    async for _ in provider.stream_chat("qwen3-27b", [Message.user("hi")], [TOOL], profile):
+        pass
+    await provider.aclose()
+    assert server.requests[0]["parallel_tool_calls"] is False
 
 
 def test_prompt_thinking_switch() -> None:

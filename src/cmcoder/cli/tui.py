@@ -36,6 +36,7 @@ from ..protocol import events as ev
 from ..rag.index import Progress
 from ..tools.todo import MARKS
 from .factory import AgentOptions, build_agent, index_command
+from .parallel import ParallelTasks
 from .repl import Repl, output_preview, short_rule, subagent_line
 
 
@@ -169,6 +170,7 @@ class CmcoderApp(App[int]):
         self._last_update = 0.0
         self._prompt_tokens = 0
         self._quit_armed = False
+        self.tasks = ParallelTasks()
 
     # -- layout -------------------------------------------------------------------
 
@@ -274,7 +276,8 @@ class CmcoderApp(App[int]):
         self._md, self._text = None, ""
 
     async def render_event(self, event: ev.Event) -> None:
-        if (line := subagent_line(event)) is not None:  # a step inside a Task call
+        tag = self.tasks.tag(event)
+        if (line := subagent_line(event, tag)) is not None:  # a step inside a Task call
             if line[0]:
                 self.write(line[0], "err" if line[1] == "red" else "dim")
         elif isinstance(event, ev.AssistantDelta):
@@ -303,10 +306,11 @@ class CmcoderApp(App[int]):
             if event.is_error:
                 lines = event.content.strip().splitlines()
                 self.write(
-                    "  └ " + "\n    ".join(lines[:4]) + ("\n    …" if len(lines) > 4 else ""), "err"
+                    f"  └ {tag}" + "\n    ".join(lines[:4]) + ("\n    …" if len(lines) > 4 else ""),
+                    "err",
                 )
             else:
-                self.write(f"  └ {event.summary or 'done'}", "dim")
+                self.write(f"  └ {tag}{event.summary or 'done'}", "dim")
                 if preview := output_preview(event, 3):
                     self.write(preview, "dim")
         elif isinstance(event, ev.PermissionDenied):

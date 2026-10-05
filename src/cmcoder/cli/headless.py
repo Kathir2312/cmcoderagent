@@ -8,6 +8,7 @@ from typing import Literal
 from ..config.settings import Settings, ignored_settings_message
 from ..protocol import events as ev
 from .factory import AgentOptions, build_agent
+from .parallel import ParallelTasks
 
 OutputFormat = Literal["text", "json", "stream-json"]
 
@@ -41,6 +42,7 @@ async def run_headless(
                 print(f"warning: {w}", file=sys.stderr)
             if expansion is not None:
                 prompt, allow = expansion.prompt, expansion.allowed_tools
+        tasks = ParallelTasks()  # tells parallel subagents' lines apart
         async for event in agent.run(prompt, allow=allow):
             if output_format == "stream-json":
                 _emit(event)
@@ -60,10 +62,12 @@ async def run_headless(
             elif verbose and isinstance(event, ev.CodeContext):
                 print(f"◦ {event.summary()}", file=sys.stderr)
             elif verbose and isinstance(event, ev.ToolUse):
-                print(f"● {event.label}", file=sys.stderr)
+                inside = "  │ " if event.parent_tool_use_id else ""
+                print(f"{inside}{tasks.tag(event)}● {event.label}", file=sys.stderr)
             elif verbose and isinstance(event, ev.ToolResult):
+                inside = "  │ " if event.parent_tool_use_id else ""
                 status = "error" if event.is_error else (event.summary or "done")
-                print(f"  └ {status}", file=sys.stderr)
+                print(f"{inside}{tasks.tag(event)}  └ {status}", file=sys.stderr)
             elif isinstance(event, ev.PermissionDenied) and output_format != "stream-json":
                 print(f"permission denied: {event.reason}", file=sys.stderr)
     finally:

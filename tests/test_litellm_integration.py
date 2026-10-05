@@ -127,7 +127,7 @@ async def test_streaming_reasoning_tools_and_thinking_switch(
     ]
     backend.state.requests.clear()
     p = provider(base)
-    profile = resolve_profile("qwen3-27b")
+    profile = resolve_profile("qwen3-27b", overrides=[{"parallelToolCalls": False}])
     tool = ToolSpec(
         "Read", "read", {"type": "object", "properties": {"file_path": {"type": "string"}}}
     )

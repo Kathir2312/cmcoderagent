@@ -205,6 +205,14 @@ You are a careful reviewer. Report problems with file:line references.
 `PreToolUse`/`PostToolUse` hooks and `SubagentStop` when it finishes, can't start subagents itself, and its file
 changes can be undone with `/rewind`. Its steps are shown inside the Task call in every front end.
 
+Several Task calls in one reply **run at the same time** ("one subagent per project"): up to
+`maxParallelSubagents` (default 4; 1 runs them one after another). Their permission questions come one at a time,
+and their lines in the terminal are tagged with the task (`[Analyse TW.Core] ● Read(...)`). This needs a model that
+sends several tool calls in one reply: on by default for Qwen3 models, otherwise `"parallelToolCalls": true` in
+`modelProfiles`. A subagent may make `subagentMaxTurns` model calls (default 100, separate from `maxTurns`); it's
+told when 5 are left, and at the limit it makes one last call without tools to write its report, so the main agent
+always gets what it found (marked as possibly incomplete).
+
 ### Skills
 
 A skill is a folder with a `SKILL.md`: instructions for one kind of task, plus any templates, references or

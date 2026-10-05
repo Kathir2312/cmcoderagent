@@ -285,6 +285,8 @@ async def build_agent(settings: Settings, opts: AgentOptions) -> Agent:
         ),
         system_prompt,
         max_turns=opts.max_turns or settings.max_turns,
+        subagent_max_turns=settings.subagent_max_turns,
+        max_parallel_subagents=settings.max_parallel_subagents,
         ask=opts.ask,
         on_rule_saved=save_rule,
         summarizer=summarizer,

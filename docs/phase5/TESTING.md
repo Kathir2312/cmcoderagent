@@ -87,6 +87,18 @@ for a team. For a quick local try: `uv tool install chromadb` then
 | F4 | Stop the Chroma server, ask C1 again | One warning "Code search isn't answering…", and the answer still comes |
 | F5 | Set it back to the built-in store: `cmcoder rag setup` again (store: on this machine) | |
 
+## G. Subagents in parallel (the fix from 5 October)
+
+In a solution with several projects (e.g. your .NET solution), in VS Code and
+then in the terminal:
+
+| # | Do | Expect |
+|---|---|---|
+| G1 | "Use one explore subagent per project to analyse it, then give me one summary of all" | Several Task cards **working at the same time** (their steps grow together); then one summary |
+| G2 | The same in the terminal (`cmcoder`) | Steps tagged `│ [Analyse TW.Core] ● Read(…)` while several run |
+| G3 | Set `"subagentMaxTurns": 5` in `~\.cmcoder\settings.json`, ask G1 with `general-purpose` subagents | "⚠ [general-purpose] Reached 5 model calls (max turns); asking for its report." and a report (not half a sentence); the card says "step limit reached". Remove the setting afterwards |
+| G4 | Ask for two `general-purpose` subagents that each need a permission (e.g. each runs a different `dotnet build`) | The questions come one after the other, never two at once; deny one: both subagents stop |
+
 ## Tell me the result
 
 All good: say so, and I'll write `STATUS.md`. Something wrong: the row

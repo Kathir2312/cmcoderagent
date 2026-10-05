@@ -69,6 +69,8 @@ BUILTIN_PROFILES: list[dict[str, Any]] = [
         "match": "*qwen3*",
         "contextWindow": 32768,
         "maxOutput": 8192,
+        # Several tool calls in one reply: needed to run subagents in parallel.
+        "parallelToolCalls": True,
         "reasoning": "auto",
         "thinkingSwitch": "chat_template_kwargs",
         "promptTier": "full",

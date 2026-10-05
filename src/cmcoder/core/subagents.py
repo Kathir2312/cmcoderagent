@@ -7,6 +7,9 @@ and SubagentStop instead of Stop), and can't start subagents itself.
 
 Built in: `general-purpose` (every tool, the main model) and `explore`
 (read-only search: Read, Glob, Grep; `subagentModel`, else `smallFastModel`).
+A subagent may make `subagentMaxTurns` model calls; at the limit it writes its
+report without tools. Task calls in one reply run in parallel
+(`maxParallelSubagents`).
 Your own are Markdown files in Claude Code's format:
 
     ~/.cmcoder/agents/reviewer.md     (yours, every project)
@@ -55,6 +58,7 @@ You are a subagent of cmcoder, a coding assistant. You were given one task by
 the main agent. Do it completely with your tools, without asking questions:
 nobody can answer them. Search broadly when you don't know where something is,
 read the relevant files, and make changes only if the task asks for them.
+Your model calls are limited: read what the task needs, not everything.
 
 When you are done, reply with a concise report for the main agent: what you
 found or did, with file paths (and line numbers when useful). That report is
@@ -216,6 +220,13 @@ class TaskTool(Tool):
             "Its report isn't shown to the user: summarise what matters.\n\n"
             f"Agents (subagent_type):\n{agents}"
         )
+        parent = self.parent
+        if parent.profile.parallel_tool_calls and parent.max_parallel_subagents > 1:
+            spec.description += (
+                "\n\nSeveral Task calls in one reply run at the same time (up to "
+                f"{parent.max_parallel_subagents}): use that for independent parts, e.g. one "
+                "subagent per project or folder. Don't give two of them the same files to change."
+            )
         return spec
 
     def describe(self, args: TaskInput, ctx: ToolContext) -> str:
@@ -281,6 +292,12 @@ class TaskTool(Tool):
             )
         elif final.subtype == "success":
             report = final.result.strip() or "(The subagent finished without a report.)"
+            if final.num_turns > child.max_turns:  # its report after reaching the limit
+                report = (
+                    f"(The subagent used all {child.max_turns} model calls it may make, so this "
+                    "report may be incomplete.)\n\n" + report
+                )
+                summary += " · step limit reached"
             if len(report) > MAX_REPORT_CHARS:
                 report = report[:MAX_REPORT_CHARS] + "\n... [report truncated]"
             yield TaskDone(ToolResult(report, summary=summary))

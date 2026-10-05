@@ -239,7 +239,11 @@ class Settings(_Model):
     permissions: PermissionsConfig = Field(
         default_factory=lambda: PermissionsConfig.model_validate({})
     )
-    max_turns: int = Field(50, alias="maxTurns")
+    max_turns: int = Field(50, alias="maxTurns", ge=1)
+    # Model calls a subagent (Task tool) may make before it must write its report.
+    subagent_max_turns: int = Field(100, alias="subagentMaxTurns", ge=1)
+    # Subagents started in one reply that run at the same time (1: one after another).
+    max_parallel_subagents: int = Field(4, alias="maxParallelSubagents", ge=1, le=16)
     # Summarise older turns when the prompt reaches this share of the window.
     auto_compact: bool = Field(True, alias="autoCompact")
     auto_compact_threshold: float = Field(0.8, alias="autoCompactThreshold", ge=0.3, le=0.95)

@@ -104,6 +104,12 @@ check my change"); its steps show inside the Task call, and only its report
 comes back to the main conversation. `model: small` uses your
 `smallFastModel`. The built-in `explore` agent does read-only searches.
 
+To run several at once, ask for it ("one explore subagent per project, then
+one summary"): Task calls in one reply run in parallel, up to
+`maxParallelSubagents` (default 4). Each subagent may make `subagentMaxTurns`
+model calls (default 100); at the limit it writes its report from what it
+found instead of stopping mid-sentence.
+
 ### A skill: release notes in your format
 
 `.cmcoder/skills/release-notes/SKILL.md`:

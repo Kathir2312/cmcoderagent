@@ -39,6 +39,7 @@ from ..providers.openai_compat import OpenAICompatProvider
 from ..rag.index import Progress
 from ..tools.todo import MARKS
 from .factory import AgentOptions, build_agent, index_command, resolve_model_profile
+from .parallel import ParallelTasks
 
 # Lines the permission prompt needs besides the preview: panel border and
 # title, reason, three options, the input line and the bottom toolbar.
@@ -76,17 +77,17 @@ def clip_preview(text: str, max_lines: int) -> tuple[str, int]:
     return "\n".join(shown), hidden
 
 
-def subagent_line(event: ev.Event) -> tuple[str, str] | None:
+def subagent_line(event: ev.Event, tag: str = "") -> tuple[str, str] | None:
     """A subagent's tool call or problem as one indented line: (text, style)."""
     if getattr(event, "parent_tool_use_id", None) is None:
         return None
     if isinstance(event, ev.ToolUse):
-        return f"  │ ● {event.label}", "dim"
+        return f"  │ {tag}● {event.label}", "dim"
     if isinstance(event, ev.ToolResult) and event.is_error:
         first = (event.content.strip().splitlines() or [""])[0]
-        return f"  │   └ {first[:200]}", "red"
+        return f"  │ {tag}  └ {first[:200]}", "red"
     if isinstance(event, ev.PermissionDenied):
-        return f"  │   └ denied: {event.reason}", "yellow"
+        return f"  │ {tag}  └ denied: {event.reason}", "yellow"
     return "", ""
 
 
@@ -147,6 +148,7 @@ class Repl:
         self.opts = opts
         self.verbose = verbose
         self.console = Console(highlight=False)
+        self.tasks = ParallelTasks()
         self.agent: Agent | None = None
         self.session: PromptSession[str] | None = None
         self._status: Status | None = None
@@ -180,7 +182,8 @@ class Repl:
 
     def _render(self, event: ev.Event) -> None:
         c = self.console
-        if (line := subagent_line(event)) is not None:  # a step inside a Task call
+        tag = self.tasks.tag(event)
+        if (line := subagent_line(event, tag)) is not None:  # a step inside a Task call
             if line[0]:
                 self._stop_status()
                 c.print(Text(line[0], style=line[1]))
@@ -217,9 +220,9 @@ class Repl:
             if event.is_error:
                 lines = event.content.strip().splitlines()
                 preview = "\n    ".join(lines[:4]) + ("\n    …" if len(lines) > 4 else "")
-                c.print(Text(f"  └ {preview}", style="red"))
+                c.print(Text(f"  └ {tag}{preview}", style="red"))
             else:
-                c.print(Text(f"  └ {event.summary or 'done'}", style="dim"))
+                c.print(Text(f"  └ {tag}{event.summary or 'done'}", style="dim"))
                 if preview := output_preview(event, 20 if self.verbose else 3):
                     c.print(Text(preview, style="dim"))
             self._start_status()

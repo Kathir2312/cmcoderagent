@@ -159,7 +159,7 @@ It must cope with these known differences between servers:
 | No `usage` in the stream | Estimate tokens with a tokenizer for the model, or ~4 chars per token |
 | `max_tokens` vs `max_completion_tokens`; `system` vs `developer` role | Set per model profile |
 | Reasoning in `reasoning_content`, `reasoning`, or `<think>…</think>` in text | Normalise to `reasoning` and don't send it back in later requests unless the profile says to |
-| No parallel tool calls | Set `parallel_tool_calls: false` and run calls one at a time |
+| No parallel tool calls | Set `parallel_tool_calls: false` (profile `parallelToolCalls`; on for Qwen3, so subagents can run in parallel) and run other calls one at a time |
 | `content: null` with tool calls; empty assistant turns | Clean up before sending |
 | HTTP 429 / 5xx / dropped stream | Retry with backoff and jitter, honouring `Retry-After`; resume the turn |
 | Slow first token on a busy or cold remote server (model loading) | Separate connect, first-token and idle-stream timeouts; show "waiting for model" in the UI |
