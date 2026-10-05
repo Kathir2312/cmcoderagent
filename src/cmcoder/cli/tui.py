@@ -456,9 +456,10 @@ class CmcoderApp(App[int]):
             self.update_status()
 
     async def finish_reply(self) -> None:
-        if self._md is not None:
-            await self._md.update(self._text)
+        md, text = self._md, self._text
         self._md, self._text = None, ""
+        if md is not None and self.is_running and md.is_mounted:  # not if the app is closing
+            await md.update(text)
 
     async def render_event(self, event: ev.Event) -> None:
         tag = self.tasks.tag(event)
@@ -471,6 +472,9 @@ class CmcoderApp(App[int]):
             if line[0]:
                 self.write(line[0], "err" if line[1] == "red" else "dim")
         elif isinstance(event, ev.AssistantDelta):
+            if not self.is_running:  # the app is closing: the reply has nowhere to go
+                self._text += event.text
+                return
             if self._md is None:
                 self._md = Markdown()
                 log = self.query_one("#log", VerticalScroll)

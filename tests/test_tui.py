@@ -221,3 +221,21 @@ async def test_text_in_brackets_is_shown_not_read_as_markup(
             assert "- [high] wrong tax (p.py:8)" in text
     finally:
         await app.agent.close()  # type: ignore[union-attr]
+
+
+async def test_a_reply_finishing_after_the_app_closed(mock_server: Any, project: Path) -> None:
+    # The reply's last text arriving while the app quits must not fail the
+    # turn (seen on Windows CI): its Markdown widget is already gone.
+    from cmcoder.protocol import events as ev
+
+    app = make_app(mock_server([{"content": "ok"}]), project)
+    try:
+        async with app.run_test(size=(100, 30)) as pilot:
+            await app.render_event(ev.AssistantDelta(text="Half of the "))
+            await pilot.pause()
+        await app.render_event(ev.AssistantDelta(text="reply"))
+        await app.render_event(
+            ev.AssistantMessage(text="Half of the reply", reasoning="", tool_calls=[], model=None)
+        )
+    finally:
+        await app.agent.close()  # type: ignore[union-attr]
