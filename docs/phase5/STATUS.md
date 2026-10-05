@@ -65,6 +65,15 @@ Part of Phase 5, though not code search: they came from using cmcoder on a
   failure its findings go back to the agent ("the reviewer found 1 problem;
   fixing it"), up to `critic.maxRounds` (2), after which the answer is shown
   "not validated". It uses the main model and shows in the agent map.
+  Screenshots (a scripted run of the `critic-review` eval): terminal
+  [reviewing](screenshots/critic-1-reviewing.png),
+  [fixing](screenshots/critic-2-fixing.png),
+  [passed](screenshots/critic-3-passed.png),
+  [not validated](screenshots/critic-4-not-validated.png); VS Code
+  [fixing](screenshots/critic-vscode-fixing.png),
+  [passed](screenshots/critic-vscode-passed.png),
+  [not validated](screenshots/critic-vscode-not-validated.png); the
+  [TUI](screenshots/critic-tui.png).
 - **VS Code progress line**: an animated ✻ in the theme's blue with what the
   agent is doing, time, tokens and "Esc to interrupt"; messages typed while it
   works are **queued** and sent when the turn ends.
