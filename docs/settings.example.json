@@ -13,6 +13,7 @@
   "maxTurns": 50,
   "subagentMaxTurns": 100,
   "maxParallelSubagents": 4,
+  "symbols": "auto",
   "autoCompact": true,
   "autoCompactThreshold": 0.8,
   "persistSessions": true,

@@ -35,10 +35,10 @@ from ..core.subagents import agents_command
 from ..mcp_client import status_lines
 from ..protocol import events as ev
 from ..rag.index import Progress
-from ..tools.todo import MARKS
 from .agent_map import AgentMap, ParallelTasks
 from .factory import AgentOptions, build_agent, index_command
 from .repl import Repl, output_preview, short_rule, subagent_line
+from .symbols import sym as S
 
 
 class SlashSuggester(Suggester):
@@ -210,7 +210,7 @@ class CmcoderApp(App[int]):
             )
         )
         if warning := ignored_settings_message(self.settings):
-            self.write(f"⚠ {warning}", "warn")
+            self.write(f"{S().warn} {warning}", "warn")
         if len(a.messages) > 1:
             self.write(
                 f"Resumed conversation {a.session_id[:8]} ({len(a.messages) - 1} messages).", "tool"
@@ -329,7 +329,7 @@ class CmcoderApp(App[int]):
             if isinstance(todos, list):
                 self.write(self.todo_text(todos), "tool")
             else:
-                self.write(f"● {event.label}", "tool")
+                self.write(f"{S().tool} {event.label}", "tool")
         elif isinstance(event, ev.ToolResult) and (final := self.map.final_line(event.id)):
             state = self.map.runs[event.id].state
             self.write(f"  └ {tag}{final}", "err" if state == "failed" else "dim")
@@ -350,16 +350,18 @@ class CmcoderApp(App[int]):
             self._prompt_tokens = event.prompt_tokens
             self.update_status(busy=True)
         elif isinstance(event, ev.Warning):
-            self.write(f"⚠ {event.message}", "warn")
+            self.write(f"{S().warn} {event.message}", "warn")
         elif isinstance(event, ev.Error):
             await self.finish_reply()
-            self.write(f"✗ {event.message}" + (f"\n  {event.hint}" if event.hint else ""), "err")
+            self.write(
+                f"{S().error} {event.message}" + (f"\n  {event.hint}" if event.hint else ""), "err"
+            )
         elif isinstance(event, ev.CodeContext):
-            self.write(f"◦ {event.summary()}", "dim")
+            self.write(f"{S().note} {event.summary()}", "dim")
         elif isinstance(event, ev.Compacted):
             self._prompt_tokens = 0
             self.write(
-                f"✻ Compacted the conversation: summarised {event.summarized_messages} earlier "
+                f"{S().compacted} Compacted the conversation: summarised {event.summarized_messages} earlier "
                 f"messages with {event.model} (≈{event.tokens_before:,} → {event.tokens_after:,} tokens).",
                 "tool",
             )
@@ -368,12 +370,15 @@ class CmcoderApp(App[int]):
 
     @staticmethod
     def todo_text(todos: list[Any]) -> Text:
-        out = Text("● Todo list")
+        out = Text(f"{S().tool} Todo list")
         for t in todos:
             if isinstance(t, dict):
                 status = str(t.get("status", "pending"))
                 style = {"completed": "strike dim", "in_progress": "bold"}.get(status, "")
-                out.append(f"\n  {MARKS.get(status, '☐')} {t.get('content', '')}", style=style)
+                out.append(
+                    f"\n  {S().todo.get(status, S().todo['pending'])} {t.get('content', '')}",
+                    style=style,
+                )
         return out
 
     async def ask(self, req: PermissionRequest) -> PermissionAnswer:
@@ -428,7 +433,7 @@ class CmcoderApp(App[int]):
         elif name == "mcp":
             self.write("\n".join(status_lines(a.mcp)))
         elif name == "agents":
-            self.write("\n".join(agents_command(a, arg)))
+            self.write("\n".join(agents_command(a, arg, S().states)))
             self.refresh_map()
         elif name == "index":
             status = self.query_one("#status", Static)
@@ -460,7 +465,7 @@ class CmcoderApp(App[int]):
                 expansion, warnings = None, []
                 name = ""
             for w in warnings:
-                self.write(f"⚠ {w}", "warn")
+                self.write(f"{S().warn} {w}", "warn")
             if expansion is not None:
                 self.turn = self.run_worker(
                     self.stream(a.run(expansion.prompt, allow=expansion.allowed_tools)),

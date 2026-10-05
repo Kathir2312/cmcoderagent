@@ -5,8 +5,9 @@ from __future__ import annotations
 
 import time
 
-from ..core.subagents import ACTIVE_STATES, STATE_MARKS, STATE_WORDS, summary_line
+from ..core.subagents import ACTIVE_STATES, STATE_WORDS, summary_line
 from ..protocol import events as ev
+from .symbols import sym as S
 
 STATE_STYLES = {
     "queued": "dim",
@@ -96,13 +97,14 @@ class AgentMap:
             last = i == len(items) - 1
             out.append(
                 (
-                    f"{'└─' if last else '├─'} {STATE_MARKS[s.state]} {s.number}. "
+                    f"{S().last if last else S().branch} {S().states[s.state]} {s.number}. "
                     f"{s.description}  {self.detail(s)}",
                     STATE_STYLES[s.state],
                 )
             )
             if s.activity and s.state in TICKING:
-                out.append((f"{'  ' if last else '│ '}    └ {s.activity}", "dim"))
+                pad = "  " if last else S().pipe + " "
+                out.append((f"{pad}    {S().end} {s.activity}", "dim"))
         return out
 
     def final_line(self, task_id: str) -> str | None:
@@ -110,4 +112,4 @@ class AgentMap:
         s = self.runs.get(task_id)
         if s is None:
             return None
-        return f"{STATE_MARKS[s.state]} {STATE_WORDS[s.state]} · {summary_line(s)}"
+        return f"{S().states[s.state]} {STATE_WORDS[s.state]} · {summary_line(s)}"

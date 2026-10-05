@@ -9,6 +9,7 @@ from ..config.settings import Settings, ignored_settings_message
 from ..protocol import events as ev
 from .agent_map import ParallelTasks
 from .factory import AgentOptions, build_agent
+from .symbols import sym as S
 
 OutputFormat = Literal["text", "json", "stream-json"]
 
@@ -60,14 +61,14 @@ async def run_headless(
                     file=sys.stderr,
                 )
             elif verbose and isinstance(event, ev.CodeContext):
-                print(f"◦ {event.summary()}", file=sys.stderr)
+                print(f"{S().note} {event.summary()}", file=sys.stderr)
             elif verbose and isinstance(event, ev.ToolUse):
-                inside = "  │ " if event.parent_tool_use_id else ""
-                print(f"{inside}{tasks.tag(event)}● {event.label}", file=sys.stderr)
+                inside = f"  {S().pipe} " if event.parent_tool_use_id else ""
+                print(f"{inside}{tasks.tag(event)}{S().tool} {event.label}", file=sys.stderr)
             elif verbose and isinstance(event, ev.ToolResult):
-                inside = "  │ " if event.parent_tool_use_id else ""
+                inside = f"  {S().pipe} " if event.parent_tool_use_id else ""
                 status = "error" if event.is_error else (event.summary or "done")
-                print(f"{inside}{tasks.tag(event)}  └ {status}", file=sys.stderr)
+                print(f"{inside}{tasks.tag(event)}  {S().end} {status}", file=sys.stderr)
             elif isinstance(event, ev.PermissionDenied) and output_format != "stream-json":
                 print(f"permission denied: {event.reason}", file=sys.stderr)
     finally:

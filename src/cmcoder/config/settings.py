@@ -250,6 +250,9 @@ class Settings(_Model):
     env: dict[str, str] = Field(default_factory=dict)
     # "classic": the prompt_toolkit REPL; "textual": the full-screen UI (also --tui).
     ui: Literal["classic", "textual"] = "classic"
+    # Terminal symbols: "basic" for consoles that show "?" for ◐ ✓ ⚠ and the
+    # Braille spinner (the classic Windows console); "auto" detects it.
+    symbols: Literal["auto", "unicode", "basic"] = "auto"
     # Save conversations for --continue / --resume, and delete them after N days.
     persist_sessions: bool = Field(True, alias="persistSessions")
     cleanup_period_days: int = Field(30, alias="cleanupPeriodDays", ge=1)

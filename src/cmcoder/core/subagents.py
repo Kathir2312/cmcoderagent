@@ -355,7 +355,10 @@ STATE_MARKS: dict[str, str] = {
 
 
 def agents_overview(
-    definitions: dict[str, AgentDefinition], runs: list[SubagentRun], limit: int = 20
+    definitions: dict[str, AgentDefinition],
+    runs: list[SubagentRun],
+    limit: int = 20,
+    marks: dict[str, str] = STATE_MARKS,
 ) -> list[str]:
     """`/agents`: the agent types, then this session's runs."""
     lines = ["Agent types (Task subagent_type):"]
@@ -369,18 +372,16 @@ def agents_overview(
     active = sum(r.active for r in runs)
     lines += ["", f"This session: {len(runs)} run{'s' if len(runs) != 1 else ''}, {active} active"]
     for r in runs[-limit:]:
-        lines.append(
-            f"  {r.number:>2}. {STATE_MARKS[r.state]} {r.description} · {STATE_WORDS[r.state]}"
-        )
+        lines.append(f"  {r.number:>2}. {marks[r.state]} {r.description} · {STATE_WORDS[r.state]}")
         lines.append(f"      {summary_line(r)}" + (f" · now: {r.activity}" if r.activity else ""))
     lines += ["", "/agents <n> shows a run's steps and report; /agents stop <n> stops one."]
     return lines
 
 
-def agent_run_details(run: SubagentRun) -> list[str]:
+def agent_run_details(run: SubagentRun, marks: dict[str, str] = STATE_MARKS) -> list[str]:
     """`/agents <n>`: one run's state, steps and report."""
     lines = [
-        f"{run.number}. {run.description} · {STATE_WORDS[run.state]}",
+        f"{run.number}. {marks[run.state]} {run.description} · {STATE_WORDS[run.state]}",
         f"{summary_line(run)} · model {run.model}",
     ]
     if run.activity:
@@ -616,14 +617,14 @@ class TaskTool(Tool):
             )
 
 
-def agents_command(parent: Agent, arg: str) -> list[str]:
-    """`/agents [n | stop n]` for every front end."""
+def agents_command(parent: Agent, arg: str, marks: dict[str, str] = STATE_MARKS) -> list[str]:
+    """`/agents [n | stop n]` for every front end (`marks`: the terminal's symbols)."""
     task = parent.tools.get("Task")
     if not isinstance(task, TaskTool):
         return ["Subagents aren't available in this session."]
     words = arg.split()
     if not words:
-        return agents_overview(task.runtime.definitions(), parent.subagent_runs)
+        return agents_overview(task.runtime.definitions(), parent.subagent_runs, marks=marks)
     if words[0] == "stop" and len(words) == 2:
         run = parent.stop_subagent(words[1])
         if run is None:
@@ -634,5 +635,5 @@ def agents_command(parent: Agent, arg: str) -> list[str]:
             f"Stopping {run.number}. {run.description}: it writes its report after its current step."
         ]
     if len(words) == 1 and (run := parent.find_subagent_run(words[0])) is not None:
-        return agent_run_details(run)
+        return agent_run_details(run, marks)
     return ["Usage: /agents, /agents <n> (a run's steps and report), /agents stop <n>."]

@@ -34,6 +34,7 @@ from ..rag.setup import (
 )
 from ..rag.stores import StoreError
 from .factory import build_provider
+from .symbols import configure, sym
 
 console = Console(highlight=False)
 err = Console(stderr=True, highlight=False)
@@ -49,7 +50,9 @@ rag_app = typer.Typer(
 def _settings(trust_project: bool = False) -> tuple[Settings, Path]:
     try:
         cwd = Path.cwd().resolve()
-        return load_settings(cwd, trust_project=trust_project), find_project_root(cwd)
+        settings = load_settings(cwd, trust_project=trust_project)
+        configure(settings.symbols)
+        return settings, find_project_root(cwd)
     except SettingsError as e:
         err.print(f"[red]error:[/red] {e}")
         raise typer.Exit(2) from e
@@ -78,7 +81,8 @@ async def run_update(index: CodeIndex, *, rebuild: bool = False) -> int:
         await index.clear()
     with Progress(
         TextColumn("Indexing"),
-        BarColumn(),
+        # The bar's ━ is "?" in the classic Windows console: just the counts there.
+        *([BarColumn()] if sym().name == "unicode" else []),
         MofNCompleteColumn(),
         TextColumn("files · {task.fields[chunks]} pieces"),
         TimeElapsedColumn(),
@@ -218,7 +222,7 @@ async def _setup(
     # 1. The embedding model.
     if model is None:
         console.print("[bold]1. Embedding model[/bold] (turns code into vectors; on your gateway)")
-        with console.status("Asking the gateway for its models…"):
+        with console.status(spinner=sym().spinner, status="Asking the gateway for its models…"):
             likely, other, errors = await embedding_candidates(settings, build_provider)
         for name, e in errors.items():
             console.print(f"[yellow]Couldn't list the models of {name}:[/yellow] {escape(e)}")
@@ -235,12 +239,12 @@ async def _setup(
             model = shown[choice] if choice < len(shown) else typer.prompt("provider:model")
     model = str(model)
     try:
-        with console.status(f"Checking {model}…"):
+        with console.status(spinner=sym().spinner, status=f"Checking {model}…"):
             ref, dim = await check_embedding_model(settings, model, build_provider)
     except (ProviderError, SettingsError) as e:
         err.print(f"[red]{model} doesn't work as an embedding model:[/red] {escape(str(e))}")
         raise typer.Exit(1) from e
-    console.print(f"[green]✓[/green] {ref} answers ({dim} dimensions).")
+    console.print(f"[green]{sym().ok}[/green] {ref} answers ({dim} dimensions).")
     # 2. Where the index lives.
     kinds = ["local", "chroma", "chroma-server"]
     if store is None:
@@ -278,12 +282,12 @@ async def _setup(
             )
     choice = SetupChoice(ref, store, url, api_key, "user", read_only)  # type: ignore[arg-type]
     try:
-        with console.status("Checking the store…"):
+        with console.status(spinner=sym().spinner, status="Checking the store…"):
             where = await check_store(choice)
     except StoreError as e:
         err.print(f"[red]{escape(str(e))}[/red]")
         raise typer.Exit(1) from e
-    console.print(f"[green]✓[/green] The index will be kept in {escape(where)}.")
+    console.print(f"[green]{sym().ok}[/green] The index will be kept in {escape(where)}.")
     # 3. Whose settings.
     if scope is None:
         if interactive:
@@ -304,7 +308,7 @@ async def _setup(
         raise typer.Exit(2)
     choice.scope = scope  # type: ignore[assignment]
     path = apply_setup(choice, root)
-    console.print(f"[green]✓[/green] Saved in {path}.")
+    console.print(f"[green]{sym().ok}[/green] Saved in {path}.")
     if api_key and store == "chroma-server":
         console.print("  The server's API key went to your OS keychain, not the file.")
     if scope == "project" and store == "chroma-server":

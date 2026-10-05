@@ -37,9 +37,19 @@ from ..providers.profiles import ModelProfile, resolve_profile
 from ..providers.text_tools import extract
 from ..providers.transport import TransportOptions, build_ssl_context, proxy_bypassed
 from .factory import PROBE_SOURCE, build_provider, resolve_model_profile, save_learned_window
+from .symbols import sym
 
 OK, WARN, FAIL, INFO = "ok", "warn", "fail", "info"
-_STYLE = {OK: ("✓", "green"), WARN: ("⚠", "yellow"), FAIL: ("✗", "red"), INFO: ("•", "cyan")}
+
+
+def _style(status: str) -> tuple[str, str]:
+    s = sym()
+    return {
+        OK: (s.ok, "green"),
+        WARN: (s.warn, "yellow"),
+        FAIL: (s.error, "red"),
+        INFO: ("•", "cyan"),
+    }[status]
 
 
 @dataclass
@@ -56,7 +66,7 @@ class Doctor:
         self.failed = False
 
     def report(self, status: str, title: str, detail: str = "") -> None:
-        icon, style = _STYLE[status]
+        icon, style = _style(status)
         self.console.print(Text(f"{icon} ", style=style) + Text(title))
         if detail:
             for line in detail.splitlines():
@@ -150,6 +160,15 @@ class Doctor:
             self.report(OK, "git found", git)
         else:
             self.report(WARN, "git not found", "Prompts won't include git status.")
+        chosen = sym()
+        why = "symbols setting" if s.symbols != "auto" else "detected"
+        hint = (
+            "the classic Windows console's fonts lack some symbols (they showed as ?); "
+            'Windows Terminal has them ("symbols": "unicode" forces the full set)'
+            if chosen.name == "basic"
+            else '"symbols": "basic" if you see "?" instead of symbols'
+        )
+        self.report(INFO, f"Terminal symbols: {chosen.name} ({why})", hint)
         if not s.providers:
             self.report(
                 FAIL,
@@ -703,7 +722,9 @@ class Doctor:
         self.console.print()
         if self.failed:
             self.console.print(
-                "[bold red]Some checks failed.[/bold red] Fix the items marked ✗ above."
+                "[bold red]Some checks failed.[/bold red] Fix the items marked "
+                + sym().error
+                + " above."
             )
             return 1
         self.console.print("[bold green]All checks passed.[/bold green]")

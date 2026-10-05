@@ -38,9 +38,9 @@ from ..protocol import events as ev
 from ..providers.messages import Usage
 from ..providers.openai_compat import OpenAICompatProvider
 from ..rag.index import Progress
-from ..tools.todo import MARKS
 from .agent_map import AgentMap, ParallelTasks
 from .factory import AgentOptions, build_agent, index_command, resolve_model_profile
+from .symbols import sym as S
 
 # Lines the permission prompt needs besides the preview: panel border and
 # title, reason, three options, the input line and the bottom toolbar.
@@ -83,12 +83,12 @@ def subagent_line(event: ev.Event, tag: str = "") -> tuple[str, str] | None:
     if getattr(event, "parent_tool_use_id", None) is None:
         return None
     if isinstance(event, ev.ToolUse):
-        return f"  │ {tag}● {event.label}", "dim"
+        return f"  {S().pipe} {tag}{S().tool} {event.label}", "dim"
     if isinstance(event, ev.ToolResult) and event.is_error:
         first = (event.content.strip().splitlines() or [""])[0]
-        return f"  │ {tag}  └ {first[:200]}", "red"
+        return f"  {S().pipe} {tag}  {S().end} {first[:200]}", "red"
     if isinstance(event, ev.PermissionDenied):
-        return f"  │ {tag}  └ denied: {event.reason}", "yellow"
+        return f"  {S().pipe} {tag}  {S().end} denied: {event.reason}", "yellow"
     return "", ""
 
 
@@ -150,7 +150,7 @@ class StatusView:
 
     def __init__(self, agent_map: AgentMap, text: str) -> None:
         self.map = agent_map
-        self.spinner = Spinner("dots", text=text)
+        self.spinner = Spinner(S().spinner, text=text)
 
     def __rich_console__(self, console: Console, options: Any) -> Any:
         yield self.spinner
@@ -271,7 +271,7 @@ class Repl:
             if event.name == "TodoWrite" and isinstance(event.input.get("todos"), list):
                 self._print_todos(event.input["todos"])
                 return
-            c.print(Text("● ", style="cyan") + Text(event.label, style="bold"))
+            c.print(Text(f"{S().tool} ", style="cyan") + Text(event.label, style="bold"))
         elif isinstance(event, ev.ToolResult) and (final := self.map.final_line(event.id)):
             state = self.map.runs[event.id].state
             style = {"done": "green", "limit": "green", "failed": "red"}.get(state, "yellow")
@@ -294,21 +294,21 @@ class Repl:
             self._last_prompt_tokens = event.prompt_tokens
         elif isinstance(event, ev.Warning):
             self._stop_status()
-            c.print(Text(f"⚠ {event.message}", style="yellow"))
+            c.print(Text(f"{S().warn} {event.message}", style="yellow"))
         elif isinstance(event, ev.Error):
             self._stop_status()
             self._stop_live()
-            c.print(Text(f"✗ {event.message}", style="bold red"))
+            c.print(Text(f"{S().error} {event.message}", style="bold red"))
             if event.hint:
                 c.print(Text(f"  {event.hint}", style="red"))
         elif isinstance(event, ev.CodeContext):
-            c.print(Text(f"◦ {event.summary()}", style="dim"))
+            c.print(Text(f"{S().note} {event.summary()}", style="dim"))
         elif isinstance(event, ev.Compacted):
             self._stop_status()
             how = "Compacted" if event.trigger == "manual" else "Context nearly full: compacted"
             c.print(
                 Text(
-                    f"✻ {how} the conversation: summarised {event.summarized_messages} earlier "
+                    f"{S().compacted} {how} the conversation: summarised {event.summarized_messages} earlier "
                     f"messages with {event.model} (≈{event.tokens_before:,} → "
                     f"{event.tokens_after:,} tokens).",
                     style="cyan",
@@ -321,11 +321,11 @@ class Repl:
 
     def _print_todos(self, todos: list[Any]) -> None:
         styles = {"completed": "dim strike", "in_progress": "bold cyan", "pending": ""}
-        self.console.print(Text("● Todo list", style="cyan"))
+        self.console.print(Text(f"{S().tool} Todo list", style="cyan"))
         for t in todos:
             if isinstance(t, dict):
                 status = str(t.get("status", "pending"))
-                mark = MARKS.get(status, "☐")
+                mark = S().todo.get(status, S().todo["pending"])
                 self.console.print(
                     Text(f"  {mark} {t.get('content', '')}", style=styles.get(status, ""))
                 )
@@ -504,10 +504,10 @@ class Repl:
             for line in status_lines(self.agent.mcp):
                 c.print(Text(line))
         elif name == "agents":
-            for line in agents_command(self.agent, arg):
+            for line in agents_command(self.agent, arg, S().states):
                 c.print(Text(line))
         elif name == "index":
-            with c.status("Code index…") as spinner:
+            with c.status("Code index…", spinner=S().spinner) as spinner:
 
                 def show(p: Progress) -> None:
                     spinner.update(f"Indexing: {p.done}/{p.total} files, {p.chunks} pieces…")
@@ -527,7 +527,7 @@ class Repl:
                 c.print(Text(str(e), style="red"))
                 return True
             for w in warnings:
-                c.print(Text(f"⚠ {w}", style="yellow"))
+                c.print(Text(f"{S().warn} {w}", style="yellow"))
             if expansion is None:
                 c.print(f"[red]Unknown command /{name}. Type /help.[/red]")
             else:
@@ -716,7 +716,7 @@ class Repl:
                 if choice in ("a", "all"):
                     task.cancel()
                 elif choice:
-                    for line in agents_command(self.agent, f"stop {choice}"):
+                    for line in agents_command(self.agent, f"stop {choice}", S().states):
                         c.print(Text(f"  {line}", style="yellow"))
         finally:
             self._chooser = None
@@ -791,7 +791,7 @@ class Repl:
             )
         )
         if warning := ignored_settings_message(self.settings):
-            self.console.print(Text(f"⚠ {warning}", style="yellow"))
+            self.console.print(Text(f"{S().warn} {warning}", style="yellow"))
         if len(agent.messages) > 1:
             self._show_resumed()
         bindings = KeyBindings()

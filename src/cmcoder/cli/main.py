@@ -54,10 +54,12 @@ sub_app = typer.Typer(
 
 def _load(cwd: Path | None = None, trust_project: bool = False) -> Settings:
     try:
-        return load_settings(cwd, trust_project=trust_project)
+        settings = load_settings(cwd, trust_project=trust_project)
     except SettingsError as e:
         err_console.print(f"[red]error:[/red] {e}")
         raise typer.Exit(2) from e
+    configure_symbols(settings.symbols)
+    return settings
 
 
 def key_problem(key: str) -> str | None:
@@ -475,6 +477,7 @@ def version() -> None:
 
 from .mcp_cmd import mcp_app  # noqa: E402
 from .rag_cmd import index_command, rag_app  # noqa: E402
+from .symbols import configure as configure_symbols  # noqa: E402
 
 sub_app.add_typer(mcp_app, name="mcp")
 sub_app.add_typer(rag_app, name="rag")
