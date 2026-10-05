@@ -41,6 +41,7 @@ export async function run(): Promise<void> {
     "cmcoder.setupCodeSearch",
     "cmcoder.updateIndex",
     "cmcoder.codeSearch",
+    "cmcoder.openNavigator",
   ]) {
     assert.ok(commands.includes(c), `command ${c} missing`);
   }
@@ -84,4 +85,10 @@ export async function run(): Promise<void> {
   assert.match((tool as Extract<AgentEvent, { type: "tool_result" }>).content, /app\.py:1:1 warning: x is never used/);
   assert.equal((await event("result", mark)).result, "Checked the problems.");
   problems.dispose();
+
+  // 3. The Agent Navigator opens as an editor tab.
+  await vscode.commands.executeCommand("cmcoder.openNavigator");
+  await until("the Agent Navigator tab", () =>
+    vscode.window.tabGroups.all.some((g) => g.tabs.some((t) => t.label.endsWith("Agent Navigator"))),
+  );
 }

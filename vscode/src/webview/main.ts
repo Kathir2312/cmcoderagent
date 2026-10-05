@@ -394,7 +394,11 @@ function renderAgents(): void {
   }
   if (!runs.length) return;
   const done = runs.length - active.length;
-  const title = el("div", "title", `Subagents · ${active.length} active · ${done} finished`);
+  const title = el("div", "title", `Subagents · ${active.length} active · ${done} finished `);
+  const map = el("button", "secondary open-map", "Map");
+  map.title = "Open the Agent Navigator: this turn's agents as a mind map";
+  map.onclick = () => post({ kind: "openNavigator" });
+  title.append(map);
   const rows = runs.map((s, i) => {
     const row = el("div", `agent ${s.state}`);
     row.title = "Show its card";

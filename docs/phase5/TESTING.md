@@ -104,6 +104,7 @@ then in the terminal:
 | G8 | After the turn: `/agents`, then `/agents 1` | The agent types and this session's runs; then run 1's steps and report |
 | G9 | VS Code: send any task | Above the input: an animated ✻ with a word ("Considering…"), then "Running… Bash(…)" etc., the seconds ticking, "↓ N tokens", "Esc to interrupt" |
 | G10 | While it works, type another message and press Enter | It shows as "↳ …" above the input (× removes it); when the turn ends it is sent by itself. Esc instead: it comes back into the input |
+| G11 | During G1: click **Map** in the Subagents box (or "cmcoder: Open Agent Navigator") | An editor tab beside the chat: main agent → subagents (coloured by state, links moving while they run) → their last 3 tool calls; click one: its steps and report on the right; Stop works from the node |
 
 ## Tell me the result
 

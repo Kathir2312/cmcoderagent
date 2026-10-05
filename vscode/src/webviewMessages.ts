@@ -23,6 +23,7 @@ export type FromWebview =
   | { kind: "send"; text: string; includeContext: boolean }
   | { kind: "interrupt" }
   | { kind: "stopSubagent"; id: string }
+  | { kind: "openNavigator" }
   | { kind: "permission"; requestId: string; allow: boolean; remember: boolean; feedback?: string }
   | { kind: "showDiff"; requestId: string }
   | { kind: "setMode"; mode: string }
@@ -33,3 +34,17 @@ export type FromWebview =
   | { kind: "attachFile" }
   | { kind: "restart" }
   | { kind: "openLink"; href: string };
+
+// Messages between the extension and the Agent Navigator (an editor tab with
+// the current turn's agents as a mind map).
+
+export type ToNavigator =
+  /** A new turn (or the tab just opened): start the map again. */
+  | { kind: "reset"; prompt: string; model: string; busy: boolean }
+  /** A protocol event of the current turn. */
+  | { kind: "event"; event: AgentEvent };
+
+export type FromNavigator =
+  | { kind: "ready" }
+  | { kind: "stopSubagent"; id: string }
+  | { kind: "openChat" };

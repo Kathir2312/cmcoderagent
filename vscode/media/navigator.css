@@ -1,0 +1,106 @@
+/* The Agent Navigator: the turn's agents as a mind map (VS Code theme colours). */
+:root {
+  --running: var(--vscode-progressBar-background, var(--vscode-textLink-foreground, #0078d4));
+  --waiting: var(--vscode-editorWarning-foreground, #cca700);
+  --done: var(--vscode-testing-iconPassed, #73c991);
+  --failed: var(--vscode-errorForeground, #f85149);
+  --muted: var(--vscode-descriptionForeground, #9d9d9d);
+  --border: var(--vscode-panel-border, #80808059);
+  --node-bg: var(--vscode-editorWidget-background, #252526);
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  color: var(--vscode-foreground);
+  background: var(--vscode-editor-background);
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size, 13px);
+}
+#app { display: flex; flex-direction: column; height: 100vh; }
+button {
+  color: var(--vscode-button-foreground);
+  background: var(--vscode-button-background);
+  border: none; border-radius: 2px; padding: 2px 8px; cursor: pointer; font: inherit;
+}
+button.secondary {
+  color: var(--vscode-button-secondaryForeground);
+  background: var(--vscode-button-secondaryBackground);
+}
+button[disabled] { opacity: 0.5; cursor: default; }
+
+header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 12px; border-bottom: 1px solid var(--border);
+}
+header .title { font-weight: 600; }
+header .summary { color: var(--muted); }
+header .spacer { flex: 1; }
+header .zoom-level { color: var(--muted); min-width: 3em; text-align: center; }
+
+.body { flex: 1; display: flex; min-height: 0; }
+.viewport { flex: 1; overflow: auto; }
+.canvas { position: relative; transform-origin: 0 0; }
+.canvas > svg { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; }
+
+.link { fill: none; stroke: var(--muted); stroke-width: 2; opacity: 0.7; }
+.link.thin { stroke-width: 1.2; opacity: 0.5; }
+.link.running, .link.stopping { stroke: var(--running); stroke-dasharray: 6 5; animation: flow 1s linear infinite; }
+.link.waiting { stroke: var(--waiting); }
+.link.done, .link.limit { stroke: var(--done); }
+.link.failed { stroke: var(--failed); }
+.link.queued { stroke-dasharray: 2 5; }
+@keyframes flow { to { stroke-dashoffset: -11; } }
+
+.node {
+  position: absolute; overflow: hidden;
+  background: var(--node-bg); border: 1px solid var(--border); border-radius: 8px;
+  padding: 6px 10px; cursor: pointer;
+}
+.node > div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.node .line2, .node .line3 { color: var(--muted); font-size: 0.92em; }
+.node.root { border-width: 2px; border-color: var(--running); cursor: default; }
+.node.root .line1 { font-weight: 600; }
+.node.root .prompt { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; color: var(--vscode-foreground); }
+.node.root.working { box-shadow: 0 0 0 3px color-mix(in srgb, var(--running) 25%, transparent); }
+.node.agent { border-left-width: 4px; padding-right: 64px; }
+.node.agent .line1 { font-weight: 600; }
+.node.agent.running, .node.agent.stopping { border-left-color: var(--running); }
+.node.agent.waiting { border-left-color: var(--waiting); }
+.node.agent.waiting .line2 { color: var(--waiting); }
+.node.agent.done, .node.agent.limit { border-left-color: var(--done); }
+.node.agent.failed { border-left-color: var(--failed); }
+.node.agent.queued, .node.agent.stopped { opacity: 0.7; }
+.node.agent.selected { outline: 2px solid var(--vscode-focusBorder, var(--running)); }
+.node.agent .stop { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); }
+.node.leaf {
+  padding: 3px 10px; border-radius: 13px; font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 0.9em; white-space: nowrap; text-overflow: ellipsis;
+}
+.node.leaf.current { border-color: var(--running); color: var(--running); }
+.node.leaf.current.waiting { border-color: var(--waiting); color: var(--waiting); }
+.node.leaf.problem { border-color: var(--failed); color: var(--failed); }
+.node.leaf.more { color: var(--muted); font-style: italic; border-style: dashed; }
+.empty { position: absolute; color: var(--muted); padding: 8px 0; line-height: 1.5; }
+
+.details {
+  width: 380px; flex-shrink: 0; overflow: auto; padding: 10px 14px;
+  border-left: 1px solid var(--border); background: var(--vscode-sideBar-background, var(--node-bg));
+}
+.details .head { display: flex; align-items: flex-start; gap: 8px; }
+.details .name { flex: 1; font-weight: 600; font-size: 1.05em; }
+.details .name.running { color: var(--running); }
+.details .name.waiting { color: var(--waiting); }
+.details .name.failed { color: var(--failed); }
+.details .state, .details .model, .details .now { color: var(--muted); margin-top: 4px; }
+.details .stop { margin-top: 8px; }
+.details .section { margin-top: 14px; font-weight: 600; }
+.details .steps { margin: 4px 0 0; padding-left: 2.2em; font-family: var(--vscode-editor-font-family, monospace); font-size: 0.9em; }
+.details .steps li { margin: 2px 0; overflow-wrap: anywhere; }
+.details .steps .problem, .details .steps .why, .details .report.problem { color: var(--failed); }
+.details .steps .none { color: var(--muted); list-style: none; }
+.details .report {
+  white-space: pre-wrap; overflow-wrap: anywhere; margin: 4px 0 0; padding: 8px;
+  background: var(--vscode-textCodeBlock-background, #0000001f); border-radius: 4px;
+  font-family: var(--vscode-editor-font-family, monospace); font-size: 0.9em;
+}
+@media (prefers-reduced-motion: reduce) { .link { animation: none !important; } }

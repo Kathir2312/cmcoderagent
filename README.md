@@ -225,7 +225,11 @@ what each is doing now.
 ```
 
 In the terminal it sits under the spinner (every step with `-v`), in the TUI above the input, in VS Code above the
-input with a **Stop** button per subagent (and a status line on each Task card). **Stopping one subagent** leaves
+input with a **Stop** button per subagent (and a status line on each Task card). VS Code also has the **Agent
+Navigator** ("cmcoder: Open Agent Navigator", the hierarchy icon in the chat's title bar, or **Map** in the
+Subagents box): an editor tab with the turn as a live mind map, the main agent on the left, its subagents as
+branches (state colours, steps, tools, tokens, time, Stop) and each one's last three tool calls as leaves; click a
+subagent for all its steps and its report. It stays until the next message. **Stopping one subagent** leaves
 the turn and the others running: it writes its report from what it has so far (a queued one simply doesn't start).
 Terminal: Ctrl+C while subagents run asks which one to stop (`a` interrupts everything, as before); TUI:
 `/agents stop <n>`. `/agents` lists the agent types and this session's runs; `/agents <n>` shows a run's steps

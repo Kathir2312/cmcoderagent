@@ -312,6 +312,8 @@ test("the agent map: live subagent rows, Stop sends stop_subagent, cards show th
   assert.equal(await page.locator(".agents .activity").count(), 2);
   assert.match((await page.textContent(".agents .title")) ?? "", /3 active · 0 finished/);
 
+  await page.click(".agents .open-map");
+  assert.deepEqual((await sent()).filter((m) => m.kind === "openNavigator"), [{ kind: "openNavigator" }]);
   await page.locator(".agents .agent").nth(1).locator(".stop-one").click();
   assert.deepEqual((await sent()).filter((m) => m.kind === "stopSubagent"), [{ kind: "stopSubagent", id: "b" }]);
 

@@ -102,6 +102,12 @@
         "icon": "$(terminal)"
       },
       {
+        "command": "cmcoder.openNavigator",
+        "title": "Open Agent Navigator",
+        "category": "cmcoder",
+        "icon": "$(type-hierarchy)"
+      },
+      {
         "command": "cmcoder.showLog",
         "title": "Show Log",
         "category": "cmcoder"
@@ -138,6 +144,11 @@
           "command": "cmcoder.openTerminal",
           "when": "view == cmcoder.chat",
           "group": "navigation@2"
+        },
+        {
+          "command": "cmcoder.openNavigator",
+          "when": "view == cmcoder.chat",
+          "group": "navigation@3"
         },
         {
           "command": "cmcoder.continueConversation",

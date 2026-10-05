@@ -54,6 +54,14 @@ const builds = args.has("--integration")
         format: "iife",
         target: "es2022",
       },
+      {
+        ...common,
+        entryPoints: ["src/navigator/main.ts"],
+        outfile: "dist/navigator.js",
+        platform: "browser",
+        format: "iife",
+        target: "es2022",
+      },
     ];
 
 if (args.has("--watch")) {

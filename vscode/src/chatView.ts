@@ -6,6 +6,7 @@ import * as vscode from "vscode";
 import { AgentProcess } from "./agentProcess";
 import { productName } from "./brand";
 import { DiffReview } from "./diffReview";
+import { AgentNavigator } from "./navigator";
 import { cmcoderCommand } from "./executable";
 import { contextLabel, currentEditor, editorContext, IDE_TOOLS, runIdeTool } from "./editorContext";
 import type { AgentEvent, ClientMessage, FileChange, RewindPoint } from "./protocol";
@@ -22,12 +23,20 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private readonly events = new vscode.EventEmitter<AgentEvent>();
   /** Every protocol event from cmcoder (used by the integration tests). */
   readonly onEvent = this.events.event;
+  /** The Agent Navigator tab (the turn's agents as a mind map). */
+  readonly navigator: AgentNavigator;
 
   constructor(
     private readonly extensionUri: vscode.Uri,
     private readonly log: vscode.OutputChannel,
     private readonly diffs: DiffReview,
-  ) {}
+  ) {
+    this.navigator = new AgentNavigator(
+      extensionUri,
+      (id) => this.agent?.send({ type: "stop_subagent", id }),
+      () => void vscode.commands.executeCommand(`${ChatViewProvider.viewId}.focus`),
+    );
+  }
 
   resolveWebviewView(view: vscode.WebviewView): void {
     this.view = view;
@@ -45,7 +54,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   sendText(text: string, includeContext: boolean): boolean {
     const enabled = vscode.workspace.getConfiguration("cmcoder").get<boolean>("autoContext", true);
     const context = includeContext && enabled ? editorContext(currentEditor()) : null;
-    if (this.agent?.send({ type: "user_message", text, context })) return true;
+    if (this.agent?.send({ type: "user_message", text, context })) {
+      this.navigator.startTurn(text);
+      return true;
+    }
     this.setState("exited", `${productName()} isn't running. Click Restart.`);
     return false;
   }
@@ -53,6 +65,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   async newConversation(extraArgs: string[] = []): Promise<void> {
     await this.stopAgent();
     this.post({ kind: "reset" });
+    this.navigator.reset();
     this.startAgent(extraArgs);
   }
 
@@ -101,6 +114,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   }
 
   async dispose(): Promise<void> {
+    this.navigator.dispose();
     await this.stopAgent();
   }
 
@@ -161,6 +175,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private async onAgentEvent(event: AgentEvent): Promise<void> {
     // The panel sees every event first and in order; side effects come after.
     this.post({ kind: "event", event });
+    this.navigator.event(event);
     this.events.fire(event);
     switch (event.type) {
       case "system_init":
@@ -253,6 +268,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         break;
       case "stopSubagent":
         this.agent?.send({ type: "stop_subagent", id: m.id });
+        break;
+      case "openNavigator":
+        this.navigator.open();
         break;
       case "permission":
         this.answer(m.requestId, m.allow, m.remember, m.feedback);
