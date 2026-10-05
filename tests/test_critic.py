@@ -214,6 +214,18 @@ def test_the_turn_diff_leaves_out_secrets_and_outside_files(project: Path, tmp_p
     assert "secret" not in diff and ".env" not in diff and "outside" not in diff
 
 
+def test_the_turn_diff_shows_only_changed_lines_of_a_crlf_file(project: Path) -> None:
+    # A Windows file: the checkpoint and the file on disk both have CRLF.
+    agent = make_agent(Scripted({}), project)
+    agent.turn = 1
+    (project / "w.py").write_bytes(b"x = 1\r\ny = 0\r\n")
+    agent.checkpoints.capture(1, project / "w.py")
+    (project / "w.py").write_bytes(b"x = 2\r\ny = 0\r\n")
+    diff = turn_diff(agent)
+    assert "-x = 1\n+x = 2\n y = 0" in diff
+    assert "-y = 0" not in diff and "\r" not in diff
+
+
 def test_critic_command_and_settings(project: Path) -> None:
     from cmcoder.config.settings import Settings
 

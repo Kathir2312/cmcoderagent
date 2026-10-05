@@ -140,7 +140,9 @@ def _clip(text: str, limit: int) -> str:
 
 def turn_diff(agent: Agent) -> str:
     """This turn's changes to the project's files (from the checkpoints), as
-    a unified diff. Secret files and files outside the project are left out."""
+    a unified diff. Secret files and files outside the project are left out.
+    Lines are compared without their endings, so a Windows (CRLF) file shows
+    only the lines that changed."""
     root = agent.ctx.project_root
     seen: set[str] = set()
     parts: list[str] = []
@@ -157,18 +159,19 @@ def turn_diff(agent: Agent) -> str:
             continue
         try:
             before = agent.checkpoints._get(entry.blob).decode() if entry.blob else ""
-            after = path.read_text(encoding="utf-8") if path.is_file() else ""
+            after = path.read_bytes().decode() if path.is_file() else ""
         except (OSError, UnicodeDecodeError, KeyError):
             parts.append(f"(changed: {rel}, not shown)")
             continue
         diff = difflib.unified_diff(
-            before.splitlines(keepends=True),
-            after.splitlines(keepends=True),
+            before.splitlines(),
+            after.splitlines(),
             fromfile=f"a/{rel}" if entry.blob else "/dev/null",
             tofile=f"b/{rel}" if path.exists() else "/dev/null",
+            lineterm="",
         )
-        parts.append("".join(diff))
-    return "\n".join(p for p in parts if p)
+        parts.append("\n".join(diff))
+    return "\n\n".join(p for p in parts if p)
 
 
 def turn_actions(messages: list[Message], start: int) -> str:
