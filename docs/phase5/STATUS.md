@@ -51,6 +51,9 @@ Found while using cmcoder on a .NET solution in VS Code:
   `subagent_status`, `stop_subagent`.
 - **Agent Navigator** (VS Code editor tab): the turn as a live mind map, main
   agent → subagents → their last tool calls; details and Stop from the map.
+  The terminal shows the same mind map under the spinner (`/agents map`
+  afterwards); the TUI shows it above the input, with a navigator screen
+  (Ctrl+G: a tree, details, S to stop).
 - **VS Code progress line**: an animated ✻ in the theme's blue with what the
   agent is doing, time, tokens and "Esc to interrupt"; messages typed while it
   works are **queued** and sent when the turn ends.

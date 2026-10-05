@@ -116,6 +116,7 @@ HELP = """\
   /mcp               MCP servers: status and tools
   /index [status]    build or update the code index (code search), or show it
   /agents [n|stop n] agent types and this session's subagents: status, steps, reports
+  /agents map        the last turn's agents as a mind map
   /exit              quit
 
 [bold]Keys[/bold]
@@ -154,8 +155,10 @@ class StatusView:
 
     def __rich_console__(self, console: Console, options: Any) -> Any:
         yield self.spinner
-        for line, style in self.map.lines():
-            yield Text(f"  {line}", style=style)
+        if not self.map.busy:  # e.g. /compact: the last turn's map isn't live
+            return
+        for line in self.map.mind_map(max(40, options.max_width - 2)):
+            yield Text("  ") + line
         if self.map.active:
             yield Text("  Ctrl+C: stop one subagent, or everything", style="dim")
 
@@ -235,8 +238,8 @@ class Repl:
     def _draw(self, event: ev.Event) -> None:
         c = self.console
         tag = self.tasks.tag(event)
+        self.map.observe(event)
         if isinstance(event, ev.SubagentStatus):
-            self.map.update(event)
             self._start_status("Subagents working…")
         elif (line := subagent_line(event, tag)) is not None:  # a step inside a Task call
             # The agent map shows what each subagent is doing; every step only with -v.
@@ -318,6 +321,20 @@ class Repl:
         elif isinstance(event, ev.Result):
             self._stop_status()
             self._stop_live()
+
+    def _print_agent_map(self) -> None:
+        """/agents map: the last turn's agents as a mind map."""
+        lines = self.map.mind_map(self.console.width)
+        if not lines:
+            self.console.print(
+                Text("No subagents in the last turn. /agents lists this session's.", style="dim")
+            )
+            return
+        prompt = self.map.prompt if len(self.map.prompt) <= 80 else self.map.prompt[:77] + "..."
+        self.console.print(Text(f"Agent map · last turn: “{prompt}”", style="bold"))
+        for line in lines:
+            self.console.print(line)
+        self.console.print(Text("/agents <n> shows a subagent's steps and report.", style="dim"))
 
     def _print_todos(self, todos: list[Any]) -> None:
         styles = {"completed": "dim strike", "in_progress": "bold cyan", "pending": ""}
@@ -503,6 +520,8 @@ class Repl:
         elif name == "mcp":
             for line in status_lines(self.agent.mcp):
                 c.print(Text(line))
+        elif name == "agents" and arg == "map":
+            self._print_agent_map()
         elif name == "agents":
             for line in agents_command(self.agent, arg, S().states):
                 c.print(Text(line))
@@ -688,7 +707,7 @@ class Repl:
         task = self._turn_task
         if task is None or task.done():
             return
-        if self.map.active and self._chooser is None and self.agent is not None:
+        if self.map.busy and self.map.active and self._chooser is None and self.agent is not None:
             self._chooser = asyncio.get_running_loop().create_task(self._choose_stop())
         else:
             task.cancel()
@@ -726,6 +745,7 @@ class Repl:
 
     async def _run_turn(self, prompt: str, allow: list[str] | None = None) -> None:
         assert self.agent is not None
+        self.map.start_turn(prompt, self.agent.model)
         await self._run_stream(self.agent.run(prompt, allow=allow))
 
     async def _run_stream(
@@ -740,8 +760,6 @@ class Repl:
             self._start_status(status)
             async for event in events:
                 self._render(event)
-
-        self.map.clear()
 
         task = asyncio.create_task(consume())
         self._turn_task = task
@@ -758,6 +776,7 @@ class Repl:
                 self._chooser.cancel()
                 await asyncio.gather(self._chooser, return_exceptions=True)
             self._turn_task = None
+            self.map.busy = False
             self._interrupt.disarm()
             self._interrupt = None
             if self._prompting:

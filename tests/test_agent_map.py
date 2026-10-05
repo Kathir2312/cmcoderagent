@@ -339,25 +339,80 @@ def status_event(id: str, number: int, state: str, **extra: Any) -> ev.SubagentS
     return ev.SubagentStatus(**(fields | extra))
 
 
-def test_terminal_agent_map_and_status_view() -> None:
-    from rich.console import Console
-
+def mind_map_example() -> Any:
     from cmcoder.cli.agent_map import AgentMap
-    from cmcoder.cli.repl import StatusView
 
     m = AgentMap()
-    m.update(status_event("core", 1, "running", activity="Read(Program.cs)"))
-    m.update(status_event("api", 2, "waiting", activity="Bash(dotnet build)"))
-    m.update(status_event("web", 3, "queued"))
-    console = Console(record=True, width=120, color_system=None)
+    m.start_turn("analyse each project", "qwen3-27b")
+    for id_ in ("core", "api", "web"):
+        m.observe(ev.ToolUse(id=id_, name="Task", input={}, label="Task"))
+    m.observe(ev.ToolUse(id="own", name="Glob", input={}, label="Glob(*.sln)"))
+    for n, label in enumerate(["Glob(*.cs)", "Read(a.cs)", "Read(b.cs)", "Read(Program.cs)"]):
+        m.observe(
+            ev.ToolUse(id=f"c{n}", name="Read", input={}, label=label, parent_tool_use_id="core")
+        )
+    m.observe(
+        ev.ToolUse(
+            id="a1", name="Bash", input={}, label="Bash(dotnet build)", parent_tool_use_id="api"
+        )
+    )
+    m.observe(
+        ev.ToolUse(id="a0", name="Read", input={}, label="Read(gone.cs)", parent_tool_use_id="api")
+    )
+    m.observe(
+        ev.ToolResult(
+            id="a0", name="Read", content="No such file", is_error=True, parent_tool_use_id="api"
+        )
+    )
+    m.observe(status_event("core", 1, "running", activity="Read(Program.cs)"))
+    m.observe(status_event("api", 2, "waiting", activity="Bash(dotnet build)"))
+    m.observe(status_event("web", 3, "queued"))
+    return m
+
+
+def test_terminal_mind_map_and_status_view() -> None:
+    from rich.console import Console
+
+    from cmcoder.cli.repl import StatusView
+
+    m = mind_map_example()
+    console = Console(record=True, width=140, color_system=None)
     console.print(StatusView(m, "Subagents working…"))
-    text = console.export_text()
-    assert "├─ ◐ 1. Analyse core  explore · 3/100 steps · 4 tools · 1.2k tokens · 5s" in text
-    assert "│     └ Read(Program.cs)" in text
-    assert "├─ ⏸ 2. Analyse api  waiting for permission · explore" in text
-    assert "└─ ○ 3. Analyse web  explore · queued" in text
+    lines = console.export_text().splitlines()
+    text = "\n".join(lines)
+    # Main agent -> subagents -> their last 3 tool calls, left to right.
+    assert any(
+        "┌─ ◐ 1. Analyse core ─" in line and line.rstrip().endswith("┬─ ... 1 earlier step")
+        for line in lines
+    )
+    assert any(line.rstrip().endswith("└─ Read(Program.cs)") for line in lines)
+    assert any("● main agent ──" in line and "┼─ ⏸ 2. Analyse api ─" in line for line in lines)
+    assert "waiting for permission · explore · 3/100 steps" in text
+    assert "Read(gone.cs) - No such file" in text
+    assert "└─ ○ 3. Analyse web" in text and "explore · queued" in text
+    assert "qwen3-27b" in text and "working..." in text and "1 own tool call" in text
     assert "Ctrl+C: stop one subagent, or everything" in text
-    m.update(status_event("core", 1, "done"))
+    # Narrow terminals: the same as a tree.
+    narrow = "\n".join(line.plain for line in m.mind_map(70))
+    assert narrow.startswith("● main agent  qwen3-27b  working...  1 own tool call")
+    assert "├─ ◐ 1. Analyse core\n│    explore · 3/100 steps\n│    4 tools · 1.2k tokens" in narrow
+    assert "│    └─ Read(Program.cs)" in narrow
+    # After the turn the live view shows no map (/agents map still does).
+    m.observe(
+        ev.Result(
+            subtype="success",
+            is_error=False,
+            result="",
+            num_turns=1,
+            duration_ms=1,
+            usage={},
+            session_id="s",
+        )
+    )
+    console = Console(record=True, width=140, color_system=None)
+    console.print(StatusView(m, "x"))
+    assert "main agent" not in console.export_text() and m.mind_map(140)
+    m.observe(status_event("core", 1, "done"))
     assert m.final_line("core") == "✓ done · explore · 3/100 steps · 4 tools · 1.2k tokens · 5s"
     assert m.final_line("nope") is None and len(m.active) == 2
 
@@ -378,6 +433,7 @@ async def test_terminal_ctrl_c_offers_to_stop_one_subagent(project: Path) -> Non
     repl.agent = make_agent(Scripted({}), project)
     run_ = repl.agent.new_subagent_run("t1", "Analyse core", "explore", "m")
     run_.state = "running"
+    repl.map.start_turn("go")
     repl.map.update(run_.status())
     turn = asyncio.create_task(asyncio.Event().wait())
     repl._turn_task = turn
@@ -410,3 +466,57 @@ async def test_terminal_ctrl_c_without_subagents_interrupts(project: Path) -> No
     repl._on_interrupt()
     await asyncio.sleep(0)
     assert turn.cancelled() and repl._chooser is None
+
+
+async def test_tui_agent_navigator_screen(project: Path) -> None:
+    from textual.widgets import Static, Tree
+
+    from cmcoder.cli.tui import AgentNavigatorScreen, CmcoderApp
+    from cmcoder.config.settings import Settings
+
+    from .test_tui import until
+
+    box: dict[str, Any] = {}
+
+    async def slow() -> dict[str, Any]:
+        await box["agent"].subagent_runs[0]._stopped.wait()
+        return {"content": "partial findings"}
+
+    provider = Scripted(
+        {
+            "go": [{"calls": [task("survey", "Survey A")]}, {"content": "main done"}],
+            "survey": [{"calls": [("Glob", {"pattern": "*.cs"})]}, slow, {"content": "report"}],
+        }
+    )
+    settings = Settings.model_validate(
+        {"providers": {"fake": {"baseUrl": "http://fake"}}, "model": "fake:qwen3-27b"}
+    )
+    app = CmcoderApp(settings)
+    app.agent = box["agent"] = make_agent(provider, project)
+    try:
+        async with app.run_test(size=(140, 40)) as pilot:
+            app.start_turn("go")
+            panel = app.query_one("#agents", Static)
+            await until(pilot, lambda: panel.display and 'Glob("*.cs")' in str(panel.content))
+            assert "main agent" in str(panel.content) and "Ctrl+G navigator" in str(panel.content)
+
+            await pilot.press("ctrl+g")
+            await until(pilot, lambda: isinstance(app.screen, AgentNavigatorScreen))
+            screen = app.screen
+            tree = screen.query_one(Tree)
+            subagent = tree.root.children[0]
+            assert "1. Survey A" in str(subagent.label)
+            assert [str(leaf.label) for leaf in subagent.children] == ['Glob("*.cs")']
+            assert "this turn" in str(screen.query_one("#title", Static).content)
+            tree.move_cursor(subagent)
+            await pilot.pause()
+            assert "Steps:" in str(screen.query_one("#details", Static).content)
+
+            await pilot.press("s")  # stop the selected subagent
+            await until(pilot, lambda: app.turn is not None and not app.turn.is_running)
+            assert box["agent"].subagent_runs[0].state == "stopped"
+            await until(pilot, lambda: "■" in str(subagent.label))
+            await pilot.press("escape")
+            await until(pilot, lambda: not isinstance(app.screen, AgentNavigatorScreen))
+    finally:
+        await app.agent.close()  # type: ignore[union-attr]

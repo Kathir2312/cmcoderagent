@@ -21,9 +21,10 @@ from textual import on
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.screen import ModalScreen
+from textual.screen import ModalScreen, Screen
 from textual.suggester import Suggester
-from textual.widgets import Button, Input, Label, Markdown, Static
+from textual.widgets import Button, Footer, Input, Label, Markdown, Static, Tree
+from textual.widgets.tree import TreeNode
 from textual.worker import Worker
 
 from .. import __version__, brand
@@ -31,11 +32,11 @@ from ..config.settings import Settings, ignored_settings_message
 from ..core.agent import Agent, PermissionAnswer, PermissionRequest
 from ..core.commands import BUILT_IN, help_lines
 from ..core.permissions import MODES, ModeNotAllowed
-from ..core.subagents import agents_command
+from ..core.subagents import agent_run_details, agents_command
 from ..mcp_client import status_lines
 from ..protocol import events as ev
 from ..rag.index import Progress
-from .agent_map import AgentMap, ParallelTasks
+from .agent_map import STATE_STYLES, AgentMap, ParallelTasks
 from .factory import AgentOptions, build_agent, index_command
 from .repl import Repl, output_preview, short_rule, subagent_line
 from .symbols import sym as S
@@ -66,9 +67,10 @@ HELP = """\
 /mcp               MCP servers: status and tools
 /index [status]    build or update the code index (code search), or show it
 /agents [n|stop n] agent types and this session's subagents (works while cmcoder works)
+/agents map        the agent navigator (also Ctrl+G): the turn's agents as a tree
 /todos             show the todo list
 /exit              quit
-Keys: Enter send · Ctrl+C interrupt (twice when idle: quit) · Shift+Tab cycle mode
+Keys: Enter send · Ctrl+C interrupt (twice when idle: quit) · Shift+Tab cycle mode · Ctrl+G agent navigator
 /resume and /rewind: use the classic UI (cmcoder without --tui) for now."""
 
 UPDATE_EVERY = 0.08  # seconds between Markdown re-renders while streaming
@@ -140,6 +142,133 @@ class PermissionScreen(ModalScreen[PermissionAnswer]):
         self.dismiss(PermissionAnswer(allow=False, feedback=event.value.strip() or None))
 
 
+class AgentNavigatorScreen(Screen[None]):
+    """The turn's agents as a tree you can move through: the main agent,
+    its subagents, every tool call of each. The selected subagent's steps and
+    report on the right; S stops it."""
+
+    DEFAULT_CSS = """
+    AgentNavigatorScreen #body { height: 1fr; }
+    AgentNavigatorScreen Tree { width: 3fr; border-right: solid $panel; }
+    AgentNavigatorScreen #side { width: 2fr; }
+    AgentNavigatorScreen #details { width: 100%; padding: 0 1; }
+    AgentNavigatorScreen #title { height: 1; padding: 0 1; background: $panel; }
+    """
+    BINDINGS = [
+        Binding("escape", "close", "Back to the chat"),
+        Binding("ctrl+g", "close", "Back", show=False),
+        Binding("s", "stop", "Stop subagent"),
+    ]
+
+    def __init__(self, chat: CmcoderApp) -> None:
+        super().__init__()
+        self.chat = chat
+        self.nodes: dict[str, TreeNode[str]] = {}
+        self.leaves: dict[str, list[TreeNode[str]]] = {}
+
+    def compose(self) -> ComposeResult:
+        yield Static(id="title")
+        with Horizontal(id="body"):
+            yield Tree(Text(f"{S().tool} main agent"), data="", id="tree")
+            with VerticalScroll(id="side"):
+                yield Static(id="details")
+        yield Footer()
+
+    def on_mount(self) -> None:
+        tree = self.query_one(Tree)
+        tree.root.expand()
+        self.sync()
+        tree.focus()
+
+    def reset(self) -> None:
+        """A new turn: start the tree again."""
+        self.query_one(Tree).root.remove_children()
+        self.nodes.clear()
+        self.leaves.clear()
+        self.sync()
+
+    def sync(self) -> None:
+        m = self.chat.map
+        prompt = m.prompt if len(m.prompt) <= 90 else m.prompt[:87] + "..."
+        self.query_one("#title", Static).update(
+            Text(f"Agent navigator · {'this turn' if m.busy else 'last turn'}: “{prompt}”", "bold")
+        )
+        tree = self.query_one(Tree)
+        tree.root.set_label(
+            Text.assemble(
+                (f"{S().tool} main agent", "bold"), ("  " + "  ".join(m.root_lines()), "dim")
+            )
+        )
+        for s in m.runs.values():
+            label = Text.assemble(
+                (
+                    f"{S().states[s.state]} {s.number}. {s.description}",
+                    f"bold {STATE_STYLES[s.state]}",
+                ),
+                ("  " + m.stats(s), "dim"),
+            )
+            node = self.nodes.get(s.id)
+            if node is None:
+                node = self.nodes[s.id] = tree.root.add(label, data=s.id, expand=True)
+                self.leaves[s.id] = []
+            else:
+                node.set_label(label)
+            steps = m.steps.get(s.id, [])
+            shown = self.leaves[s.id]
+            for step in steps[len(shown) :]:
+                shown.append(node.add_leaf(Text(step.label, "dim"), data=s.id))
+            for leaf, step in zip(shown, steps, strict=False):
+                if step.problem:
+                    leaf.set_label(Text(f"{step.label} - {step.problem}", "red"))
+        if not m.runs and not tree.root.children:
+            tree.root.add_leaf(Text("No subagents in this turn yet.", "dim"), data="")
+        elif m.runs:
+            for child in list(tree.root.children):
+                if not child.data:
+                    child.remove()
+        self.show_details()
+
+    def selected(self) -> str:
+        node = self.query_one(Tree).cursor_node
+        return str(node.data) if node is not None and node.data else ""
+
+    def show_details(self) -> None:
+        details = self.query_one("#details", Static)
+        agent = self.chat.agent
+        run = (
+            agent.find_subagent_run(self.selected())
+            if agent is not None and self.selected()
+            else None
+        )
+        if run is None:
+            details.update(
+                Text(
+                    "Select a subagent (arrow keys) to see its steps and report; S stops it.", "dim"
+                )
+            )
+            return
+        details.update(Text("\n".join(agent_run_details(run, S().states))))
+
+    @on(Tree.NodeHighlighted)
+    def _highlighted(self) -> None:
+        self.show_details()
+
+    def action_stop(self) -> None:
+        agent = self.chat.agent
+        run = (
+            agent.find_subagent_run(self.selected())
+            if agent is not None and self.selected()
+            else None
+        )
+        if agent is None or run is None:
+            self.notify("Select a subagent first.", severity="warning")
+            return
+        self.notify("\n".join(agents_command(agent, f"stop {run.number}", S().states)))
+
+    def action_close(self) -> None:
+        self.app.pop_screen()
+
+
 class CmcoderApp(App[int]):
     TITLE = "cmcoder"  # replaced by the brand's name in __init__
     CSS = """
@@ -147,7 +276,7 @@ class CmcoderApp(App[int]):
     #log > Static { margin-bottom: 0; }
     #prompt { border: tall $accent; }
     #status { height: 1; background: $panel; color: $text-muted; padding: 0 1; }
-    #agents { height: auto; max-height: 14; padding: 0 1; border-top: solid $panel; display: none; }
+    #agents { height: auto; max-height: 24; padding: 0 1; border-top: solid $panel; display: none; }
     .user { color: $text; text-style: bold; margin-top: 1; }
     .tool { color: $accent; }
     .dim { color: $text-muted; }
@@ -157,6 +286,7 @@ class CmcoderApp(App[int]):
     BINDINGS = [
         Binding("ctrl+c", "interrupt", "Interrupt", priority=True),
         Binding("shift+tab", "cycle_mode", "Mode", priority=True),
+        Binding("ctrl+g", "navigator", "Agent navigator"),
         Binding("ctrl+d", "quit", "Quit"),
     ]
 
@@ -227,17 +357,37 @@ class CmcoderApp(App[int]):
         log.scroll_end(animate=False)
 
     def refresh_map(self) -> None:
+        """The mind map above the input while the turn runs; the navigator
+        screen too when it's open."""
+        if isinstance(self.screen, AgentNavigatorScreen):
+            self.screen.sync()
         panel = self.query_one("#agents", Static)
-        lines = self.map.lines()
+        lines = self.map.mind_map(max(40, self.size.width - 4)) if self.map.busy else []
         panel.display = bool(lines)
         if not lines:
             return
         text = Text("Subagents", style="bold")
         if self.map.active:
-            text.append("  ·  /agents stop <n> stops one, Ctrl+C everything", style="dim")
-        for line, style in lines:
-            text.append("\n" + line, style=style)
+            text.append(
+                "  ·  Ctrl+G navigator · /agents stop <n> stops one · Ctrl+C everything",
+                style="dim",
+            )
+        for line in lines:
+            text.append("\n")
+            text.append_text(line)
         panel.update(text)
+
+    def new_map(self, prompt: str) -> None:
+        assert self.agent is not None
+        self.map.start_turn(prompt, self.agent.model)
+        if isinstance(self.screen, AgentNavigatorScreen):
+            self.screen.reset()
+
+    def action_navigator(self) -> None:
+        if isinstance(self.screen, AgentNavigatorScreen):
+            self.pop_screen()
+        else:
+            self.push_screen(AgentNavigatorScreen(self))
 
     def update_status(self, busy: bool = False) -> None:
         if self.agent is None:
@@ -275,6 +425,7 @@ class CmcoderApp(App[int]):
     def start_turn(self, prompt: str) -> None:
         assert self.agent is not None
         self.write(Text(f"> {prompt}"), "user")
+        self.new_map(prompt)
         self.turn = self.run_worker(
             self.stream(self.agent.run(prompt)), exclusive=True, group="turn"
         )
@@ -283,7 +434,6 @@ class CmcoderApp(App[int]):
         self, events: Any, interrupted: str = "Interrupted. What should cmcoder do instead?"
     ) -> None:
         self.update_status(busy=True)
-        self.map.clear()
         try:
             async for event in events:
                 await self.render_event(event)
@@ -291,7 +441,7 @@ class CmcoderApp(App[int]):
             await self.finish_reply()
             self.write(f"└ {interrupted}", "warn")
         finally:
-            self.map.clear()
+            self.map.busy = False  # the map stays for /agents map until the next turn
             self.refresh_map()
             self.update_status()
 
@@ -302,10 +452,12 @@ class CmcoderApp(App[int]):
 
     async def render_event(self, event: ev.Event) -> None:
         tag = self.tasks.tag(event)
-        if isinstance(event, ev.SubagentStatus):
-            self.map.update(event)
+        self.map.observe(event)
+        if isinstance(event, ev.SubagentStatus | ev.Result) or getattr(
+            event, "parent_tool_use_id", None
+        ):
             self.refresh_map()
-        elif (line := subagent_line(event, tag)) is not None:  # a step inside a Task call
+        if (line := subagent_line(event, tag)) is not None:  # a step inside a Task call
             if line[0]:
                 self.write(line[0], "err" if line[1] == "red" else "dim")
         elif isinstance(event, ev.AssistantDelta):
@@ -432,6 +584,8 @@ class CmcoderApp(App[int]):
             )
         elif name == "mcp":
             self.write("\n".join(status_lines(a.mcp)))
+        elif name == "agents" and arg == "map":
+            self.action_navigator()
         elif name == "agents":
             self.write("\n".join(agents_command(a, arg, S().states)))
             self.refresh_map()
@@ -467,6 +621,7 @@ class CmcoderApp(App[int]):
             for w in warnings:
                 self.write(f"{S().warn} {w}", "warn")
             if expansion is not None:
+                self.new_map(line)
                 self.turn = self.run_worker(
                     self.stream(a.run(expansion.prompt, allow=expansion.allowed_tools)),
                     exclusive=True,

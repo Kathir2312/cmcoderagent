@@ -224,7 +224,11 @@ what each is doing now.
 └─ ○ 3. Analyse TW.Web  explore · queued
 ```
 
-In the terminal it sits under the spinner (every step with `-v`), in the TUI above the input, in VS Code above the
+In the terminal it sits under the spinner as a mind map, left to right: the main agent, its subagents, each one's
+last three tool calls (a tree in terminals under 96 columns; every step with `-v`); `/agents map` shows the last
+turn's again. In the TUI the same map is above the input, and Ctrl+G (or `/agents map`) opens the **agent
+navigator**: the turn as a tree you move through with the arrow keys, the selected subagent's steps and report on
+the right, S to stop it, Esc back to the chat. In VS Code it's above the
 input with a **Stop** button per subagent (and a status line on each Task card). VS Code also has the **Agent
 Navigator** ("cmcoder: Open Agent Navigator", the hierarchy icon in the chat's title bar, or **Map** in the
 Subagents box): an editor tab with the turn as a live mind map, the main agent on the left, its subagents as

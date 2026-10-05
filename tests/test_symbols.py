@@ -78,7 +78,11 @@ def test_the_terminal_uses_the_chosen_set() -> None:
     from cmcoder.protocol import events as ev
 
     m = AgentMap()
-    m.update(
+    m.start_turn("go", "m")
+    m.observe(
+        ev.ToolUse(id="s1", name="Read", input={}, label="Read(a.cs)", parent_tool_use_id="t")
+    )
+    m.observe(
         ev.SubagentStatus(
             id="t", number=1, description="Analyse core", agent_type="explore", model="m",
             state="running", steps=1, max_steps=100, tool_uses=1, tokens=10, elapsed_ms=0,
@@ -87,10 +91,14 @@ def test_the_terminal_uses_the_chosen_set() -> None:
     )  # fmt: skip
     try:
         symbols.configure("basic", {})
-        console = Console(record=True, width=100, color_system=None)
+        console = Console(record=True, width=120, color_system=None)
         console.print(StatusView(m, "Subagents working…"))
         text = console.export_text()
-        assert "└─ » 1. Analyse core" in text and "└ Read(a.cs)" in text
+        assert (
+            "» main agent ─" in text
+            and "── » 1. Analyse core ─" in text
+            and "── Read(a.cs)" in text
+        )
         assert not set(text) & MISSING_IN_CONSOLE_FONTS
         assert (
             m.final_line(
@@ -100,6 +108,6 @@ def test_the_terminal_uses_the_chosen_set() -> None:
         )
     finally:
         symbols.configure("unicode", {})
-    console = Console(record=True, width=100, color_system=None)
+    console = Console(record=True, width=120, color_system=None)
     console.print(StatusView(m, "x"))
-    assert "└─ ◐ 1. Analyse core" in console.export_text()
+    assert "── ◐ 1. Analyse core ─" in console.export_text()
