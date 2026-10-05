@@ -93,8 +93,10 @@ app.innerHTML = `
   <section class="todos" hidden></section>
   <main class="log" aria-live="polite"></main>
   <section class="agents" hidden></section>
+  <div class="progress" hidden role="status"><span class="spark">✻</span><span class="verb"></span><span class="detail"></span><span class="meta"></span></div>
   <div class="status" hidden></div>
   <footer>
+    <div class="queued" hidden></div>
     <label class="context" hidden title="Send the active file, selection and problems with this message">
       <input type="checkbox" checked> <span></span>
     </label>
@@ -119,6 +121,8 @@ const modeSelect = $<HTMLSelectElement>(".mode");
 const modelLabel = $<HTMLElement>(".model");
 const usageLabel = $<HTMLElement>(".usage");
 const statusLine = $<HTMLElement>(".status");
+const progressLine = $<HTMLElement>(".progress");
+const queuedBox = $<HTMLElement>(".queued");
 const todosPanel = $<HTMLElement>(".todos");
 const agentsPanel = $<HTMLElement>(".agents");
 const sessionsPanel = $<HTMLElement>(".sessions");
@@ -144,13 +148,107 @@ const permissionCards = new Map<string, HTMLElement>();
 const deniedHere = new Set<string>();
 
 function setBusy(value: boolean): void {
+  const was = busy;
   busy = value;
   sendButton.hidden = value;
   stopButton.hidden = !value;
   input.placeholder = value
-    ? `${PRODUCT} is working… (Esc to stop)`
+    ? "Queue another message… (Esc to stop)"
     : `Ask ${PRODUCT}… (Enter to send, Shift+Enter for a new line)`;
   if (!value) showStatus();
+  if (value && !was) startProgress();
+  if (!value) stopProgress();
+}
+
+// --- the progress line: "✻ Considering… (12s · ↓ 1.2k tokens · Esc to interrupt)" ---
+
+const SPARKS = ["·", "✢", "✳", "✶", "✻", "✽", "✻", "✶", "✳", "✢"];
+const VERBS = ["Considering", "Pondering", "Thinking", "Working", "Reasoning", "Exploring", "Analysing", "Composing"];
+// What the agent is doing, from the tool it runs.
+const TOOL_VERBS: Record<string, string> = {
+  Read: "Reading", Write: "Writing", Edit: "Editing", MultiEdit: "Editing", Bash: "Running",
+  Grep: "Searching", Glob: "Searching", CodeSearch: "Searching", WebFetch: "Fetching",
+  Task: "Delegating", Skill: "Using a skill",
+};
+const progress = { started: 0, tokens: 0, verb: "Considering", activity: "", detail: "", waiting: false, frame: 0 };
+let progressTimer: number | undefined;
+
+function startProgress(): void {
+  Object.assign(progress, {
+    started: Date.now(), tokens: 0, activity: "", detail: "", waiting: false, frame: 0,
+    verb: VERBS[Math.floor(Math.random() * VERBS.length)],
+  });
+  progressLine.hidden = false;
+  renderProgress();
+  if (progressTimer === undefined) progressTimer = window.setInterval(tickProgress, 120);
+}
+
+function stopProgress(): void {
+  progressLine.hidden = true;
+  if (progressTimer !== undefined) window.clearInterval(progressTimer);
+  progressTimer = undefined;
+}
+
+/** What it's doing now ("" = the turn's word), and a detail such as the tool call. */
+function setActivity(activity = "", detail = ""): void {
+  progress.activity = activity;
+  progress.detail = detail;
+  progress.waiting = false;
+  if (busy) renderProgress();
+}
+
+function tickProgress(): void {
+  progress.frame = (progress.frame + 1) % SPARKS.length;
+  renderProgress();
+}
+
+function renderProgress(): void {
+  const spark = progressLine.querySelector<HTMLElement>(".spark")!;
+  spark.textContent = progress.waiting ? "✻" : SPARKS[progress.frame];
+  progressLine.classList.toggle("waiting", progress.waiting);
+  const verb = progress.waiting ? "Waiting for your answer" : progress.activity || progress.verb;
+  progressLine.querySelector(".verb")!.textContent = `${verb}…`;
+  progressLine.querySelector(".detail")!.textContent = progress.detail && !progress.waiting ? progress.detail : "";
+  const parts = [duration(Date.now() - progress.started)];
+  if (progress.tokens) parts.push(`↓ ${shortCount(progress.tokens)} tokens`);
+  parts.push("Esc to interrupt");
+  progressLine.querySelector(".meta")!.textContent = `(${parts.join(" · ")})`;
+}
+
+// --- messages typed while it works: sent together when the turn ends ---------
+
+const queue: { text: string; includeContext: boolean }[] = [];
+
+function renderQueue(): void {
+  queuedBox.hidden = queue.length === 0;
+  queuedBox.replaceChildren(
+    ...queue.map((q, i) => {
+      const row = el("div", "item");
+      row.append(el("span", "text", `↳ ${q.text}`));
+      const remove = el("button", "secondary remove", "×");
+      remove.title = "Don't send this";
+      remove.onclick = () => {
+        queue.splice(i, 1);
+        renderQueue();
+      };
+      row.append(remove);
+      return row;
+    }),
+  );
+}
+
+/** The turn ended: send what was queued, or (interrupted) give it back to edit. */
+function flushQueue(interrupted: boolean): void {
+  if (!queue.length) return;
+  const items = queue.splice(0);
+  renderQueue();
+  const text = items.map((q) => q.text).join("\n\n");
+  if (interrupted) {
+    input.value = text + (input.value ? `\n\n${input.value}` : "");
+    input.focus();
+    return;
+  }
+  submit(text, items.some((q) => q.includeContext));
 }
 
 function showStatus(text?: string): void {
@@ -221,7 +319,7 @@ function subagentStep(ev: ToolUse | ToolResult | PermissionDenied, parentId: str
       steps.append(el("summary", "", "Subagent steps"));
     }
     subagentSteps.set(ev.id, steps.appendChild(el("div", "step", `● ${ev.label}`)));
-    showStatus("Subagent working…");
+    setActivity("Subagents working");
     return;
   }
   const row = subagentSteps.get(ev.id);
@@ -342,13 +440,13 @@ function onEvent(ev: AgentEvent): void {
       modeSelect.value = ev.permission_mode;
       break;
     case "assistant_delta":
-      showStatus();
+      if (progress.activity || progress.detail) setActivity();
       if (!reply) reply = { el: append(el("div", "msg assistant")), text: "" };
       reply.text += ev.text;
       queueRender();
       break;
     case "reasoning_delta":
-      showStatus("Thinking…");
+      if (progress.activity !== "Thinking") setActivity("Thinking");
       break;
     case "assistant_message":
       if (ev.text && !reply) reply = { el: append(el("div", "msg assistant")), text: "" };
@@ -357,13 +455,15 @@ function onEvent(ev: AgentEvent): void {
         renderReply();
       }
       reply = undefined;
-      if (ev.tool_calls.length) showStatus("Working…");
+      if (ev.tool_calls.length) setActivity();
       break;
     case "tool_use":
       if (ev.name !== "TodoWrite") toolCard(ev);
+      setActivity(TOOL_VERBS[ev.name] ?? "Working", ev.name === "TodoWrite" ? "" : ev.label);
       break;
     case "tool_result":
       toolResult(ev);
+      setActivity();
       break;
     case "subagent_status":
       subagentStatus(ev);
@@ -382,6 +482,8 @@ function onEvent(ev: AgentEvent): void {
       usageLabel.textContent = ev.context_window
         ? `${k(ev.prompt_tokens)} / ${k(ev.context_window)} tokens`
         : `${k(ev.prompt_tokens)} tokens`;
+      progress.tokens += ev.completion_tokens;
+      if (busy) renderProgress();
       break;
     }
     case "warning":
@@ -457,6 +559,7 @@ function onEvent(ev: AgentEvent): void {
       else if (ev.subtype === "max_turns") note(`Stopped: ${ev.result}`, "warn");
       setBusy(false);
       input.focus();
+      flushQueue(ev.subtype === "interrupted");
       break;
   }
 }
@@ -489,7 +592,8 @@ function toolResult(ev: ToolResult): void {
 }
 
 function permissionCard(ev: PermissionRequest): void {
-  showStatus();
+  progress.waiting = true;
+  if (busy) renderProgress();
   const card = el("div", "permission");
   card.dataset.toolUseId = ev.tool_use_id;
   card.append(el("div", "title", `Allow ${ev.label}?`));
@@ -553,6 +657,7 @@ function permissionPreview(ev: PermissionRequest): string {
 }
 
 function answered(card: HTMLElement, text: string): void {
+  progress.waiting = false;
   card.querySelectorAll("button, input").forEach((e) => e.remove());
   card.classList.add("answered");
   card.append(el("div", "answer", `└ ${text}`));
@@ -574,15 +679,23 @@ function renderTodos(todos: Record<string, unknown>[]): void {
 
 function send(): void {
   const text = input.value.trim();
-  if (!text || busy || !ready) return;
+  if (!text || !ready) return;
   const includeContext = !contextChip.hidden && contextBox.checked;
-  const bubble = append(el("div", "msg user", text));
-  if (includeContext) bubble.append(el("div", "attached", `📎 ${contextText.textContent}`));
   input.value = "";
   commandsPopup.hidden = true;
   contextBox.checked = true; // turning it off counts for one message
+  if (busy) {
+    queue.push({ text, includeContext }); // sent when this turn ends
+    renderQueue();
+    return;
+  }
+  submit(text, includeContext);
+}
+
+function submit(text: string, includeContext: boolean): void {
+  const bubble = append(el("div", "msg user", text));
+  if (includeContext) bubble.append(el("div", "attached", `📎 ${contextText.textContent}`));
   setBusy(true);
-  showStatus("Thinking…");
   post({ kind: "send", text, includeContext });
 }
 
@@ -727,6 +840,8 @@ window.addEventListener("message", (e: MessageEvent<ToWebview>) => {
       permissionCards.clear();
       agentRuns.clear();
       renderAgents();
+      queue.splice(0);
+      renderQueue();
       reply = undefined;
       usageLabel.textContent = "";
       setBusy(false);

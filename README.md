@@ -419,6 +419,12 @@ code --install-extension cmcoder.vsix
 CI also builds `cmcoder.vsix` (the `cmcoder-vsix` artifact of the "VS Code extension" job). See
 [vscode/README.md](vscode/README.md) for how to use it.
 
+While it works, the panel shows a progress line above the input, as Claude Code does: an animated ✻, what it's
+doing ("Considering…", "Thinking…", "Running… Bash(dotnet build)", "Waiting for your answer…"), the time, the tokens
+it has written this turn, and "Esc to interrupt". You can keep typing: messages sent meanwhile are queued (shown
+above the input, × to drop one) and go out together when the turn ends; if you interrupt, they come back into
+the input to edit.
+
 ## Development
 
 ```bash

@@ -326,3 +326,54 @@ test("the agent map: live subagent rows, Stop sends stop_subagent, cards show th
   assert.match((await page.locator(".tool").first().textContent()) ?? "", /■ stopped/);
   await page.close();
 });
+
+test("progress line while working, and messages queued meanwhile are sent when the turn ends", async () => {
+  const { page, ev, sent } = await panel();
+  await page.fill("textarea", "convert the files");
+  await page.press("textarea", "Enter");
+  assert.equal(await page.isVisible(".progress"), true);
+  assert.match((await page.textContent(".progress .verb")) ?? "", /^(Considering|Pondering|Thinking|Working|Reasoning|Exploring|Analysing|Composing)…$/);
+  assert.match((await page.textContent(".progress .meta")) ?? "", /\(\d+s · Esc to interrupt\)/);
+  const spark1 = await page.textContent(".progress .spark");
+  await page.waitForTimeout(300);
+  assert.notEqual(await page.textContent(".progress .spark"), spark1, "the spark is animated");
+
+  await ev({ type: "reasoning_delta", text: "hmm" });
+  assert.equal(await page.textContent(".progress .verb"), "Thinking…");
+  await ev({ type: "tool_use", id: "1", name: "Bash", input: {}, label: "Bash(dotnet build)", parent_tool_use_id: null });
+  assert.equal(await page.textContent(".progress .verb"), "Running…");
+  assert.equal(await page.textContent(".progress .detail"), "Bash(dotnet build)");
+  await ev({ type: "usage", prompt_tokens: 5000, completion_tokens: 1234, estimated: false, cost: null, context_window: 32768 });
+  assert.match((await page.textContent(".progress .meta")) ?? "", /↓ 1\.2k tokens/);
+
+  // Typing meanwhile queues; nothing is sent until the turn ends.
+  assert.match((await page.getAttribute("textarea", "placeholder")) ?? "", /^Queue another message/);
+  await page.fill("textarea", "also update the README");
+  await page.press("textarea", "Enter");
+  await page.fill("textarea", "and the docs");
+  await page.press("textarea", "Enter");
+  assert.deepEqual(await page.locator(".queued .item .text").allTextContents(), ["↳ also update the README", "↳ and the docs"]);
+  assert.equal((await sent()).filter((m) => m.kind === "send").length, 1);
+
+  await ev(result);
+  const sends = (await sent()).filter((m) => m.kind === "send");
+  assert.equal(sends.length, 2);
+  assert.equal((sends[1] as { text: string }).text, "also update the README\n\nand the docs");
+  assert.equal(await page.isVisible(".queued"), false);
+  assert.equal(await page.isVisible(".progress"), true, "the queued message started a new turn");
+  await ev(result);
+  assert.equal(await page.isVisible(".progress"), false);
+  await page.close();
+});
+
+test("an interrupted turn gives queued messages back to edit", async () => {
+  const { page, ev, sent } = await panel();
+  await page.fill("textarea", "start");
+  await page.press("textarea", "Enter");
+  await page.fill("textarea", "next thing");
+  await page.press("textarea", "Enter");
+  await ev({ ...result, subtype: "interrupted" } as AgentEvent);
+  assert.equal(await page.inputValue("textarea"), "next thing");
+  assert.equal((await sent()).filter((m) => m.kind === "send").length, 1);
+  await page.close();
+});

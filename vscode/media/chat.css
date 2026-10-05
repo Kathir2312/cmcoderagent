@@ -307,3 +307,41 @@ footer .commands .description { opacity: 0.7; margin-left: 8px; }
 .agents .failed .name, .substatus.failed { color: var(--vscode-errorForeground); }
 .agents .queued { opacity: 0.6; }
 .tool .substatus { opacity: 0.8; padding-left: 12px; font-size: 0.95em; }
+
+/* The progress line while the agent works (Claude Code style). */
+.progress {
+  padding: 4px 10px;
+  display: flex;
+  align-items: baseline;
+  gap: 0;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.progress .spark {
+  color: var(--vscode-charts-orange, #d97757);
+  display: inline-block;
+  width: 1.4em;
+  font-weight: 600;
+}
+.progress .verb { font-weight: 600; }
+.progress .detail { margin-left: 0.5em; opacity: 0.7; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex-shrink: 1; }
+.progress .meta { margin-left: 0.4em; opacity: 0.55; flex-shrink: 0; }
+.progress.waiting .spark { color: var(--vscode-editorWarning-foreground); }
+.progress:not(.waiting) .verb {
+  background: linear-gradient(90deg, currentColor 40%, var(--vscode-charts-orange, #d97757) 50%, currentColor 60%);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shimmer 2.4s linear infinite;
+}
+@keyframes shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .progress:not(.waiting) .verb { animation: none; -webkit-text-fill-color: currentColor; }
+}
+
+/* Messages typed while it works: sent when the turn ends. */
+.queued { margin-bottom: 4px; }
+.queued .item { display: flex; align-items: center; gap: 6px; opacity: 0.75; font-style: italic; }
+.queued .item .text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.queued .item .remove { padding: 0 6px; }

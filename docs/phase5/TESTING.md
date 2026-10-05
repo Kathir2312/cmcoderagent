@@ -102,6 +102,8 @@ then in the terminal:
 | G6 | Click **Stop** on one row | It turns "stopping", then "stopped"; the others carry on; the main answer says that part may be incomplete |
 | G7 | In the terminal during G1: Ctrl+C | "Stop a subagent?" with the running ones; type a number: that one stops, the turn goes on. Ctrl+C again then `a`: everything stops |
 | G8 | After the turn: `/agents`, then `/agents 1` | The agent types and this session's runs; then run 1's steps and report |
+| G9 | VS Code: send any task | Above the input: an animated ✻ with a word ("Considering…"), then "Running… Bash(…)" etc., the seconds ticking, "↓ N tokens", "Esc to interrupt" |
+| G10 | While it works, type another message and press Enter | It shows as "↳ …" above the input (× removes it); when the turn ends it is sent by itself. Esc instead: it comes back into the input |
 
 ## Tell me the result
 
