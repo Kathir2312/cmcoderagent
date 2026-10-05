@@ -318,7 +318,7 @@ footer .commands .description { opacity: 0.7; margin-left: 8px; }
   overflow: hidden;
 }
 .progress .spark {
-  color: var(--vscode-charts-orange, #d97757);
+  color: var(--vscode-progressBar-background, var(--vscode-textLink-foreground, #0078d4));
   display: inline-block;
   width: 1.4em;
   font-weight: 600;
@@ -328,7 +328,7 @@ footer .commands .description { opacity: 0.7; margin-left: 8px; }
 .progress .meta { margin-left: 0.4em; opacity: 0.55; flex-shrink: 0; }
 .progress.waiting .spark { color: var(--vscode-editorWarning-foreground); }
 .progress:not(.waiting) .verb {
-  background: linear-gradient(90deg, currentColor 40%, var(--vscode-charts-orange, #d97757) 50%, currentColor 60%);
+  background: linear-gradient(90deg, currentColor 40%, var(--vscode-progressBar-background, var(--vscode-textLink-foreground, #0078d4)) 50%, currentColor 60%);
   background-size: 300% 100%;
   -webkit-background-clip: text;
   background-clip: text;
