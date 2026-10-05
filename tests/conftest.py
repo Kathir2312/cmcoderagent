@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+from cmcoder.cli import symbols
 from cmcoder.providers.auth import ApiKeyAuth
 from cmcoder.providers.openai_compat import OpenAICompatProvider
 from cmcoder.providers.transport import TransportOptions, build_client
@@ -26,6 +27,11 @@ def _isolate_config(
         if var.startswith(("CMCODER_", "OPENAI_")) and var != "CMCODER_CONFIG_DIR":
             monkeypatch.delenv(var)
     monkeypatch.setenv("PYTHON_KEYRING_BACKEND", "keyring.backends.fail.Keyring")
+    # The full symbol set, as on most terminals (a Windows CI runner looks like
+    # the classic console, which gets the basic set); tests/test_symbols.py
+    # covers the choice itself.
+    monkeypatch.setenv("CMCODER_SYMBOLS", "unicode")
+    symbols.configure("unicode", {})
     # Most tests are about permission prompts; tests/test_sandbox.py and the
     # evals use the Bash sandbox.
     monkeypatch.setenv("CMCODER_SANDBOX", "off")
