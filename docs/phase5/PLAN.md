@@ -1,6 +1,6 @@
 # Phase 5 — Code search (RAG): plan
 
-**Status:** built (4 October 2026); the hands-on check on Windows and `STATUS.md` are next. Phase 4's WSL2 check is still to do.
+**Status:** ✅ complete (5 October 2026); see [STATUS.md](STATUS.md). Phase 4's WSL2 check is still to do.
 
 **Goal:** the model can find code **by meaning** ("where do we refresh the
 auth token?") in large repositories, not only by exact words (Grep), using an
@@ -209,4 +209,4 @@ or call-tree indexes. Later, if asked.
 - [x] 4. `CodeSearch` and automatic context
 - [x] 5. Commands, guided setup, front ends and settings
 - [x] 6. Tests, evals, security review and docs
-- [ ] Hands-on use on Windows, and `STATUS.md`
+- [x] Hands-on use on Windows, and [`STATUS.md`](STATUS.md) (5 Oct)
