@@ -27,6 +27,8 @@ export type FromWebview =
   | { kind: "permission"; requestId: string; allow: boolean; remember: boolean; feedback?: string }
   | { kind: "showDiff"; requestId: string }
   | { kind: "setMode"; mode: string }
+  /** The Critique checkbox: on or off, saved for every cmcoder. */
+  | { kind: "setCritique"; enabled: boolean }
   | { kind: "newConversation" }
   | { kind: "listSessions" }
   | { kind: "listCommands" }

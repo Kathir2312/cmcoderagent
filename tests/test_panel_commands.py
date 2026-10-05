@@ -50,9 +50,11 @@ async def test_panel_commands(mock_server: Any, project: Path) -> None:
             "critic",
             "help",
         ]
-        critique = (await command(agent, "/critic on"))[0]["text"]
-        assert critique.startswith("Critique is on")
-        assert (await command(agent, "/critic off"))[0]["text"].startswith("Critique is off")
+        changed, reply = await command(agent, "/critic on")
+        assert changed == {"type": "critique_changed", "enabled": True, "source": "you"}
+        assert reply["text"].startswith("Critique is on")
+        changed, reply = await command(agent, "/critic off")
+        assert not changed["enabled"] and reply["text"].startswith("Critique is off")
 
         help_text = (await command(agent, "/help"))[0]["text"]
         assert "/rewind" in help_text and "/model [name]" in help_text

@@ -25,7 +25,7 @@ from pydantic import ValidationError
 from ..config.settings import RagConfig, Settings, SettingsError, ignored_settings_message
 from ..core.agent import Agent, PermissionAnswer, PermissionRequest, parse_tool_arguments
 from ..core.commands import BUILT_IN, split_line
-from ..core.critic import critic_command
+from ..core.critic import critic_command, follow_saved
 from ..core.ide import IDE_TOOLS, format_ide_context
 from ..core.permissions import MODES, Decision, ModeNotAllowed
 from ..core.sessions import list_sessions
@@ -58,6 +58,7 @@ from .factory import (
 )
 
 IDE_TOOL_TIMEOUT = 30.0  # seconds
+CRITIQUE_POLL_SECONDS = 2.0  # how often the saved critique setting is checked while idle
 
 # Built-in commands that work in the VS Code panel: (argument hint, description).
 # The others (/clear, /resume, /mode, ...) are the panel's own controls.
@@ -150,6 +151,7 @@ class StdioServer:
             self.emit(ev.History(messages=history(self.agent)))
         if self.agent.ctx.todos:
             self.emit(ev.TodoUpdate(todos=self.agent.ctx.todos))
+        self._side(self._follow_critique())
         try:
             while True:
                 line = await self.inbox.get()
@@ -240,6 +242,14 @@ class StdioServer:
             self._side(self._rag_candidates())
         elif isinstance(message, msg.RagSetup):
             self._side(self._rag_setup(message))
+        elif isinstance(message, msg.SetCritique):
+            agent.critique = message.enabled
+            if message.save and agent.saved_critique is not None:
+                try:
+                    agent.saved_critique.save(message.enabled)
+                except OSError as e:
+                    self.emit(ev.Warning(message=f"Couldn't save the critique setting: {e}"))
+            self.emit(ev.CritiqueChanged(enabled=agent.critique))
         elif isinstance(message, msg.StopSubagent):
             if agent.stop_subagent(message.id) is None:
                 self.error("not_running", f"No running subagent {message.id!r}.")
@@ -375,7 +385,8 @@ class StdioServer:
         if name == "agents":
             return [reply("Agents", "\n".join(agents_command(agent, arguments)))]
         if name == "critic":
-            return [ev.AssistantMessage(text="\n\n".join(critic_command(agent, arguments)))]
+            text = "\n\n".join(critic_command(agent, arguments))
+            return [ev.CritiqueChanged(enabled=agent.critique), ev.AssistantMessage(text=text)]
         if name == "index":
             lines = await index_command(agent, self.settings, arguments, self._progress)
             self._side(self._index("status"))
@@ -396,6 +407,15 @@ class StdioServer:
 
     def _progress(self, p: Progress) -> None:
         self.emit(ev.IndexProgress(done=p.done, total=p.total, chunks=p.chunks))
+
+    async def _follow_critique(self) -> None:
+        """The checkbox in another window (or the terminal's saved setting)
+        switched critique: follow it while idle; a turn checks at its start."""
+        while True:
+            await asyncio.sleep(CRITIQUE_POLL_SECONDS)
+            agent = self.agent
+            if agent is not None and not self.busy and (switched := follow_saved(agent)):
+                self.emit(switched)
 
     async def _index_status(self) -> ev.IndexStatus:
         agent = self.agent

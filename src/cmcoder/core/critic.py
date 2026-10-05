@@ -8,11 +8,15 @@ call. Pass: the answer is shown. Fail: its findings go back to the main
 agent, which fixes the work and answers again, up to `critic.maxRounds`;
 after that the answer is shown marked "not validated". The critic runs like
 any subagent, so it shows in the agent map and navigator.
+
+The VS Code panel's checkbox saves the choice as `critic.enabled` in the
+user's settings; every running cmcoder follows that file (`SavedCritique`).
 """
 
 from __future__ import annotations
 
 import difflib
+import json
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -20,6 +24,7 @@ from typing import TYPE_CHECKING, ClassVar, Literal
 
 from pydantic import BaseModel, Field
 
+from ..config.settings import config_dir
 from ..protocol import events as ev
 from ..providers.messages import Message
 from ..sensitive import is_secret
@@ -289,6 +294,77 @@ async def review(
         summary=shown[result.verdict],
     )
     yield result
+
+
+class SavedCritique:
+    """`critic.enabled` in the user's settings file, as the panel's checkbox
+    saves it. Each running cmcoder keeps one and asks `changed()` (the
+    terminal and TUI at the start of a turn, VS Code every few seconds), so a
+    change made in one window reaches all of them. Only a change counts: what
+    the file said at startup was already applied by the settings (where a
+    project's settings, --critic or CMCODER_CRITIC may win)."""
+
+    def __init__(self, path: Path | None = None) -> None:
+        self.path = path or config_dir() / "settings.json"
+        self.stamp = self._stamp()
+
+    def _stamp(self) -> tuple[int, int] | None:
+        try:
+            st = self.path.stat()
+        except OSError:
+            return None
+        return (st.st_mtime_ns, st.st_size)
+
+    def changed(self) -> bool | None:
+        """The saved value, if the file changed since the last look and has one."""
+        stamp = self._stamp()
+        if stamp == self.stamp:
+            return None
+        self.stamp = stamp
+        try:
+            data = json.loads(self.path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None  # half written, or broken: the next change will tell
+        critic = data.get("critic") if isinstance(data, dict) else None
+        value = critic.get("enabled") if isinstance(critic, dict) else None
+        return value if isinstance(value, bool) else None
+
+    def save(self, enabled: bool) -> Path:
+        """Write `critic.enabled`, keeping the rest of the file."""
+        try:
+            data = json.loads(self.path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            data = {}
+        except ValueError as e:  # never overwrite a file we can't read
+            raise OSError(f"{self.path} isn't valid JSON ({e}); fix it first") from e
+        if not isinstance(data, dict):
+            raise OSError(f"{self.path} isn't a JSON object")
+        section = data.get("critic")
+        data["critic"] = {**(section if isinstance(section, dict) else {}), "enabled": enabled}
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+        self.stamp = self._stamp()  # our own write isn't news to us
+        return self.path
+
+
+def follow_saved(agent: Agent) -> ev.CritiqueChanged | None:
+    """Apply a change to the saved setting; the event when it switched."""
+    saved = agent.saved_critique
+    if saved is None or agent.is_subagent:
+        return None
+    value = saved.changed()
+    if value is None or value == agent.critique:
+        return None
+    agent.critique = value
+    return ev.CritiqueChanged(enabled=value, source="saved")
+
+
+def critique_note(event: ev.CritiqueChanged) -> str:
+    """For the terminal and TUI."""
+    state = "on" if event.enabled else "off"
+    if event.source == "saved":
+        return f"Critique is now {state} (switched in another window; saved in your settings)."
+    return f"Critique is now {state}."
 
 
 def critic_command(agent: Agent, arg: str) -> list[str]:

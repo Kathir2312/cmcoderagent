@@ -32,7 +32,7 @@ from .. import __version__, brand
 from ..config.settings import Settings, ignored_settings_message
 from ..core.agent import Agent, PermissionAnswer, PermissionRequest
 from ..core.commands import BUILT_IN, help_lines
-from ..core.critic import critic_command
+from ..core.critic import critic_command, critique_note
 from ..core.permissions import MODES, ModeNotAllowed
 from ..core.subagents import agent_run_details, agents_command
 from ..mcp_client import status_lines
@@ -518,6 +518,8 @@ class CmcoderApp(App[int]):
             self.write(
                 f"{S().error} {event.message}" + (f"\n  {event.hint}" if event.hint else ""), "err"
             )
+        elif isinstance(event, ev.CritiqueChanged):
+            self.write(critique_note(event), "dim")
         elif isinstance(event, ev.ReviewResult):
             for text, style in review_lines(event):
                 self.write(text, {"green": "tool", "yellow": "warn"}.get(style, "dim"))

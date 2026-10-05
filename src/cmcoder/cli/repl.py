@@ -30,7 +30,7 @@ from ..compat import InterruptHandler
 from ..config.settings import Settings, config_dir, ignored_settings_message
 from ..core.agent import Agent, PermissionAnswer, PermissionRequest
 from ..core.commands import BUILT_IN, help_lines
-from ..core.critic import critic_command
+from ..core.critic import critic_command, critique_note
 from ..core.permissions import MODES, ModeNotAllowed
 from ..core.sessions import SessionLog, age, list_sessions, load
 from ..core.subagents import agents_command
@@ -279,6 +279,10 @@ class Repl:
             c.print(Text(f"{S().tool} ", style="cyan") + Text(event.label, style="bold"))
             if event.input.get("subagent_type") == "critic":
                 self._start_status("Reviewing the answer…")
+        elif isinstance(event, ev.CritiqueChanged):
+            self._stop_status()
+            c.print(Text(critique_note(event), style="dim"))
+            self._start_status()
         elif isinstance(event, ev.ReviewResult):
             self._stop_status()
             for line, style in review_lines(event):

@@ -62,6 +62,7 @@ async function panel(product?: string): Promise<{ page: Page; send: (m: ToWebvie
     provider: "corp",
     tools: [],
     permission_mode: "default",
+    critique: false,
   });
   return { page, send, ev, sent };
 }
@@ -401,5 +402,28 @@ test("critique: the reviewer's findings while it fixes, then the verdict; the pr
   await ev({ type: "review_result", round: 2, max_rounds: 2, verdict: "fail", final: true, summary: "x", issues: [{ severity: "low", problem: "p", where: "", fix: "" }] });
   assert.match((await page.locator(".note.review").nth(2).textContent()) ?? "", /⚠ Not validated: after 2 reviews the reviewer still found 1 problem:\[low\] p/);
   await ev(result);
+  await page.close();
+});
+
+test("critique checkbox: shows the state, switches it for every window, follows other windows", async () => {
+  const { page, send, ev, sent } = await panel();
+  const box = page.locator("header .critique input");
+  assert.equal(await box.isChecked(), false);
+  assert.equal(await box.isEnabled(), true);
+  await box.check();
+  assert.deepEqual((await sent()).at(-1), { kind: "setCritique", enabled: true });
+  await ev({ type: "critique_changed", enabled: true, source: "you" });
+  assert.equal(await box.isChecked(), true);
+  assert.equal(await page.locator(".note").count(), 0, "your own click needs no note");
+  // Switched off in another window (or the terminal): the box follows, with a note.
+  await ev({ type: "critique_changed", enabled: false, source: "saved" });
+  assert.equal(await box.isChecked(), false);
+  assert.equal(await page.textContent(".note.info"), "Critique off (switched in another window).");
+  // cmcoder stopped: the box can't be used until it's back.
+  await send({ kind: "state", state: "exited", message: "stopped" });
+  assert.equal(await box.isDisabled(), true);
+  await ev({ type: "system_init", protocol_version: 1, session_id: "t", cwd: "/p", model: "m", provider: "corp", tools: [], permission_mode: "default", critique: true });
+  assert.equal(await box.isEnabled(), true);
+  assert.equal(await box.isChecked(), true);
   await page.close();
 });

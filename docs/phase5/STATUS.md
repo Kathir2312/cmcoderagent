@@ -1,7 +1,7 @@
 # Phase 5 — Code search (RAG): status
 
 **Status:** ✅ complete (5 October 2026). **Snapshot:** the code as of the
-commit that adds critique (`41e4ca1`) and its two CI fixes, recorded with
+commit that adds the critique checkbox, recorded with
 this file's last update.
 
 Phase 5's goal ([PLAN.md](PLAN.md)): *the model can find code by meaning in
@@ -64,7 +64,10 @@ Part of Phase 5, though not code search: they came from using cmcoder on a
   final answer against the files and the turn's diff before it is shown; on
   failure its findings go back to the agent ("the reviewer found 1 problem;
   fixing it"), up to `critic.maxRounds` (2), after which the answer is shown
-  "not validated". It uses the main model and shows in the agent map.
+  "not validated". It uses the main model and shows in the agent map. A
+  **Critique checkbox** at the top of the VS Code chat switches it for every
+  running cmcoder (saved as `critic.enabled` in your settings; other windows
+  follow within seconds, the terminal and TUI from their next message).
   Screenshots (a scripted run of the `critic-review` eval): terminal
   [reviewing](screenshots/critic-1-reviewing.png),
   [fixing](screenshots/critic-2-fixing.png),
@@ -73,7 +76,8 @@ Part of Phase 5, though not code search: they came from using cmcoder on a
   [fixing](screenshots/critic-vscode-fixing.png),
   [passed](screenshots/critic-vscode-passed.png),
   [not validated](screenshots/critic-vscode-not-validated.png); the
-  [TUI](screenshots/critic-tui.png).
+  [TUI](screenshots/critic-tui.png); the
+  [checkbox](screenshots/critic-checkbox.png).
 - **VS Code progress line**: an animated ✻ in the theme's blue with what the
   agent is doing, time, tokens and "Esc to interrupt"; messages typed while it
   works are **queued** and sent when the turn ends.
@@ -86,7 +90,7 @@ Part of Phase 5, though not code search: they came from using cmcoder on a
 
 | Where | Result |
 |---|---|
-| CI (Linux, macOS, Windows; 11 jobs) | 626 Python tests, 21 extension tests, real-VS Code test, 25 mock eval tasks, mock evals with `-p`/VS Code parity, real LiteLLM and Open WebUI jobs (embeddings included), a real Chroma 1.5 server, security job (Bandit, pip-audit with the extras, npm audit) |
+| CI (Linux, macOS, Windows; 11 jobs) | 629 Python tests, 22 extension tests, real-VS Code test, 25 mock eval tasks, mock evals with `-p`/VS Code parity, real LiteLLM and Open WebUI jobs (embeddings included), a real Chroma 1.5 server, security job (Bandit, pip-audit with the extras, npm audit) |
 | Security review ([SECURITY-REVIEW.md](SECURITY-REVIEW.md)) | Index folders made private (0700); chromadb's server advisories (no fix yet) named in CI, with how to run a Chroma server safely |
 | Your Windows machine, real gateway (Qwen3.5-35B-A3B, Qwen3.6-27B) | Phase 5 marked complete by you on 5 October after using it: VS Code on a .NET solution (subagents fanned out per project), the CLI in the classic console, an MCP server over your own codebase index (`codebase_code`). The fixes above came from that use |
 

@@ -23,6 +23,7 @@ from ..config.settings import (
 from ..core.agent import Agent, AskFn
 from ..core.commands import CommandSource
 from ..core.compaction import Summarizer
+from ..core.critic import SavedCritique
 from ..core.hooks import HookRunner
 from ..core.permissions import ModeNotAllowed, PermissionPolicy
 from ..core.prompt import (
@@ -313,6 +314,7 @@ async def build_agent(settings: Settings, opts: AgentOptions) -> Agent:
             ),
         ),
     )
+    agent.saved_critique = SavedCritique()  # the panel's checkbox, from any window
     if sandbox_warning:
         agent.startup_warnings.append(sandbox_warning)
     if index_warning:

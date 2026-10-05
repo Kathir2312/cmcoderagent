@@ -226,9 +226,19 @@ agent file. Protocol: a `review_result` event; `result.review`.
 
 Status (5 Oct): built. `core/critic.py`, the gate in `Agent._run`,
 `/critic` in the terminal, TUI and VS Code panel, `--critic`,
-`CMCODER_CRITIC`, VS Code setting `cmcoder.critique`. Tests:
+`CMCODER_CRITIC`. Tests:
 `tests/test_critic.py`; eval `evals/tasks/critic-review` (a half-done first
 answer the critic fails; 25/25 tasks pass with `-p`/VS Code parity).
+
+Added the same day, on request: a **Critique checkbox** in the VS Code chat's
+header that switches it on or off **everywhere** (decision: "Everywhere").
+It saves `critic.enabled` in the user's settings (protocol message
+`set_critique`); every running cmcoder follows a change to that file
+(`SavedCritique`): VS Code windows within 2 seconds while idle (their
+checkboxes too, event `critique_changed`), the terminal and TUI at the start
+of their next turn, with a note. A project's settings, `--critic` or
+`CMCODER_CRITIC` still decide at startup. It replaces the VS Code setting
+`cmcoder.critique`, which only applied to new conversations.
 
 ## Not in Phase 5
 

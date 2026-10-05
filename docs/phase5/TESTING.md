@@ -107,8 +107,9 @@ then in the terminal:
 | G11 | During G1: click **Map** in the Subagents box (or "cmcoder: Open Agent Navigator") | An editor tab beside the chat: main agent → subagents (coloured by state, links moving while they run) → their last 3 tool calls; click one: its steps and report on the right; Stop works from the node |
 | G12 | Terminal during G1 (a wide window) | Under the spinner, a mind map: main agent → subagents (state, steps, tools, tokens, time) → each one's last 3 tool calls, the current one coloured. After the turn: `/agents map` shows it again |
 | G13 | `cmcoder --tui` during G1 | The same map above the input; Ctrl+G: the navigator (arrow keys through the tree, details on the right, S stops the selected subagent, Esc back) |
-| G14 | `cmcoder --critic` (or `/critic on`), then ask for a small fix | "● Review(the answer, round 1/2)" and "Reviewing the answer…" before the answer; the answer only after "✓ Reviewed: …". In VS Code: `/critic on` in the panel, or the `cmcoder.critique` setting for new conversations |
+| G14 | `cmcoder --critic` (or `/critic on`), then ask for a small fix | "● Review(the answer, round 1/2)" and "Reviewing the answer…" before the answer; the answer only after "✓ Reviewed: …". In VS Code: tick **Critique** at the top of the chat |
 | G15 | With critique on, ask for something with two parts | If the reviewer finds a part missing: "The reviewer found 1 problem; fixing it", the fix, a second review, then the answer. `/critic off` turns it off |
+| G16 | Two VS Code windows and a terminal (`cmcoder`) open; tick **Critique** in one window | The other window's box ticks itself within a few seconds, with "Critique on (switched in another window)"; the terminal says "Critique is now on (switched in another window …)" with its next message; `~/.cmcoder/settings.json` has `"critic": {"enabled": true}`. Untick: all follow |
 
 ## Tell me the result
 

@@ -154,6 +154,16 @@ class StopSubagent(_Message):
     id: str
 
 
+class SetCritique(_Message):
+    """Switch critique on or off (the panel's checkbox). `save`: also save it
+    as `critic.enabled` in the user's settings, which every running cmcoder
+    follows (the terminal, the TUI, other VS Code windows)."""
+
+    type: Literal["set_critique"] = "set_critique"
+    enabled: bool
+    save: bool = True
+
+
 class Shutdown(_Message):
     """Stop the running turn, save the session and exit (EOF does the same)."""
 
@@ -175,6 +185,7 @@ ClientMessage = Annotated[
     | RagCandidates
     | RagSetup
     | StopSubagent
+    | SetCritique
     | Shutdown,
     Field(discriminator="type"),
 ]

@@ -264,6 +264,8 @@ class Agent:
         # before it's shown; failed reviews send the agent back to work.
         self.critique = critique
         self.critique_rounds = max(1, critique_rounds)
+        # The checkbox's saved choice, followed between turns (set by the factory).
+        self.saved_critique: critic.SavedCritique | None = None
         self.on_rule_saved = on_rule_saved
         # Where the conversation is saved (None: not saved).
         self.session = session
@@ -329,6 +331,7 @@ class Agent:
             provider=self.provider.name,
             tools=list(self.tools),
             permission_mode=self.policy.mode,
+            critique=self.critique,
         )
 
     def _new_checkpoints(self) -> Checkpoints:
@@ -751,6 +754,8 @@ class Agent:
         for message in self.startup_warnings:
             yield ev.Warning(message=message)
         self.startup_warnings = []
+        if switched := critic.follow_saved(self):  # switched in another window
+            yield switched
         async for warning in self._start_mcp():
             yield warning
         if self.hooks is not None and not self.is_subagent:

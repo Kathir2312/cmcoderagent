@@ -28,6 +28,7 @@ class SystemInit(_Event):
     provider: str
     tools: list[str]
     permission_mode: str
+    critique: bool = False  # the critic reviews answers (see critique_changed)
 
 
 class AssistantDelta(_Event):
@@ -323,6 +324,17 @@ class SubagentStatus(_Event):
     activity: str = ""  # what it's doing: a tool call's label, "" while the model works
 
 
+class CritiqueChanged(_Event):
+    """Critique was switched on or off: by `set_critique`, `/critic`, or the
+    saved setting (`critic.enabled` in the user's settings) changed in
+    another window or the terminal."""
+
+    type: Literal["critique_changed"] = "critique_changed"
+    enabled: bool
+    # "you": this client asked for it; "saved": the saved setting changed elsewhere.
+    source: Literal["you", "saved"] = "you"
+
+
 class ReviewIssue(BaseModel):
     severity: Literal["high", "medium", "low"] = "medium"
     problem: str
@@ -386,6 +398,7 @@ Event = Annotated[
     | RagCandidatesList
     | SubagentStatus
     | ReviewResult
+    | CritiqueChanged
     | RagSetupResult
     | Result,
     Field(discriminator="type"),

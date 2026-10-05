@@ -247,11 +247,6 @@
           "type": "boolean",
           "default": true,
           "description": "Send the active file, the selection and its problems with each message (you can turn it off per message in the chat)."
-        },
-        "cmcoder.critique": {
-          "type": "boolean",
-          "default": false,
-          "description": "A critic agent reviews each answer before you see it; if it finds problems, cmcoder fixes them first (also /critic on|off in the chat). Applies to new conversations."
         }
       }
     }

@@ -68,6 +68,7 @@ export interface SystemInit {
   provider: string;
   tools: string[];
   permission_mode: string;
+  critique: boolean;
 }
 
 export interface AssistantDelta {
@@ -298,6 +299,17 @@ export interface ReviewResult {
   issues: ReviewIssue[];
 }
 
+/**
+ * Critique was switched on or off: by `set_critique`, `/critic`, or the
+ * saved setting (`critic.enabled` in the user's settings) changed in
+ * another window or the terminal.
+ */
+export interface CritiqueChanged {
+  type: "critique_changed";
+  enabled: boolean;
+  source: "you" | "saved";
+}
+
 export interface RagSetupResult {
   type: "rag_setup_result";
   ok: boolean;
@@ -345,6 +357,7 @@ export type AgentEvent =
   | RagCandidatesList
   | SubagentStatus
   | ReviewResult
+  | CritiqueChanged
   | RagSetupResult
   | Result;
 
@@ -483,6 +496,17 @@ export interface StopSubagent {
   id: string;
 }
 
+/**
+ * Switch critique on or off (the panel's checkbox). `save`: also save it
+ * as `critic.enabled` in the user's settings, which every running cmcoder
+ * follows (the terminal, the TUI, other VS Code windows).
+ */
+export interface SetCritique {
+  type: "set_critique";
+  enabled: boolean;
+  save?: boolean;
+}
+
 /** Stop the running turn, save the session and exit (EOF does the same). */
 export interface Shutdown {
   type: "shutdown";
@@ -503,4 +527,5 @@ export type ClientMessage =
   | RagCandidates
   | RagSetup
   | StopSubagent
+  | SetCritique
   | Shutdown;

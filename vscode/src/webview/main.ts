@@ -87,6 +87,9 @@ const app = document.getElementById("app")!;
 app.innerHTML = `
   <header>
     <span class="model" title="Model"></span>
+    <label class="critique" title="A critic agent reviews each answer before you see it; if it finds problems, the answer is fixed first. Saved in your cmcoder settings: applies to the terminal, the TUI and every VS Code window.">
+      <input type="checkbox" disabled> Critique
+    </label>
     <button class="history secondary" title="Past conversations in this project">History</button>
     <select class="mode" title="Permission mode (Shift+Tab in the CLI)"></select>
   </header>
@@ -119,6 +122,7 @@ input.placeholder = `Ask ${PRODUCT}… (Enter to send, Shift+Enter for a new lin
 const sendButton = $<HTMLButtonElement>(".send");
 const stopButton = $<HTMLButtonElement>(".stop");
 const modeSelect = $<HTMLSelectElement>(".mode");
+const critiqueBox = $<HTMLLabelElement>(".critique").querySelector("input") as HTMLInputElement;
 const modelLabel = $<HTMLElement>(".model");
 const usageLabel = $<HTMLElement>(".usage");
 const statusLine = $<HTMLElement>(".status");
@@ -443,6 +447,12 @@ function onEvent(ev: AgentEvent): void {
       modelLabel.textContent = ev.model;
       modelLabel.title = `${ev.model} (${ev.provider}) · ${ev.cwd}`;
       modeSelect.value = ev.permission_mode;
+      critiqueBox.checked = ev.critique ?? false;
+      critiqueBox.disabled = false;
+      break;
+    case "critique_changed":
+      critiqueBox.checked = ev.enabled;
+      if (ev.source === "saved") note(`Critique ${ev.enabled ? "on" : "off"} (switched in another window).`, "info");
       break;
     case "assistant_delta":
       if (progress.activity || progress.detail) setActivity();
@@ -831,6 +841,7 @@ historyButton.onclick = () => {
   else if (!busy) post({ kind: "listSessions" });
 };
 modeSelect.onchange = () => post({ kind: "setMode", mode: modeSelect.value });
+critiqueBox.onchange = () => post({ kind: "setCritique", enabled: critiqueBox.checked });
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && busy) post({ kind: "interrupt" });
 });
@@ -853,6 +864,7 @@ window.addEventListener("message", (e: MessageEvent<ToWebview>) => {
       break;
     case "state":
       ready = m.state === "ready";
+      if (m.state !== "ready") critiqueBox.disabled = true; // until the next system_init
       if (m.state === "starting") showStatus(`Starting ${PRODUCT}…`);
       else if (m.state === "ready") showStatus();
       else {

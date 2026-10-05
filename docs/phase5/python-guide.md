@@ -178,7 +178,7 @@ is shown catches much of that.
 
 ### The idea
 
-With critique on (`/critic on`, `--critic`, `critic.enabled`), the turn's
+With critique on (the VS Code checkbox, `/critic on`, `--critic`, `critic.enabled`), the turn's
 final reply is **held**. A read-only **critic** subagent gets the request,
 the draft, what the agent did and the turn's diff; it checks them against the
 files and calls `Verdict(pass|fail, summary, issues)`. Pass: the answer is
@@ -205,6 +205,14 @@ continues, up to `critic.maxRounds`; after that the answer is shown marked
   (your agents folder) replaces its prompt; its tools stay read-only.
 - **Never lose the answer**: a critic that errors or gives no verdict yields
   `Review("none")`, and the answer is shown "not reviewed".
+- **One checkbox for every window** (`SavedCritique`): the checkbox saves
+  `critic.enabled` in `~/.cmcoder/settings.json`. Each running cmcoder
+  remembers the file's `(mtime, size)` and, when it changes, reads the value:
+  the VS Code server every 2 seconds while idle (an `asyncio` task beside the
+  conversation), every front end at the start of a turn. Only a *change*
+  counts, so a `--critic` given at startup isn't overridden by an old value;
+  its own write updates the stamp, so it isn't news to itself. A file it can't
+  parse is never overwritten.
 
 ### New Python ideas
 

@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
-from cmcoder.core.critic import CRITIC_PROMPT, critic_command, turn_diff
+import pytest
+
+from cmcoder.core.critic import CRITIC_PROMPT, SavedCritique, critic_command, turn_diff
 from cmcoder.protocol import events as ev
 
 from .test_subagents_parallel import Scripted, make_agent, run
@@ -325,3 +328,70 @@ def test_print_mode_with_the_critic(mock_server: Any, project: Path) -> None:
     assert names == {"Read", "Glob", "Grep", "Verdict"}
     r = cli(["-p", "question", "--output-format", "json"], project, mock_server([{"content": "x"}]))
     assert json.loads(r.stdout)["review"] is None
+
+
+def test_the_saved_setting_counts_only_when_it_changes(tmp_path: Path) -> None:
+    path = tmp_path / "settings.json"
+    path.write_text('{"critic": {"enabled": false}}')
+    saved = SavedCritique(path)
+    assert saved.changed() is None  # what it said at startup was already applied
+    path.write_text('{"model": "m", "critic": {"enabled": true}}')
+    assert saved.changed() is True
+    assert saved.changed() is None
+    saved.save(False)  # our own write isn't news...
+    assert saved.changed() is None
+    assert json.loads(path.read_text()) == {"model": "m", "critic": {"enabled": False}}
+    path.write_text("{broken")  # ...and a half-written file is ignored
+    assert saved.changed() is None
+    with pytest.raises(OSError, match="isn't valid JSON"):  # and never overwritten
+        saved.save(True)
+    assert path.read_text() == "{broken"
+
+
+async def test_a_turn_follows_a_change_made_in_another_window(
+    project: Path, tmp_path: Path
+) -> None:
+    provider = Scripted(
+        {"go": [{"content": "The answer."}], REVIEW: [verdict("pass", "Fine."), {"content": "ok"}]}
+    )
+    agent = make_agent(provider, project)
+    path = tmp_path / "settings.json"
+    agent.saved_critique = SavedCritique(path)
+    path.write_text('{"critic": {"enabled": true}}')  # the checkbox, ticked elsewhere
+    events = await run(agent, "go")
+    changed = [e for e in events if isinstance(e, ev.CritiqueChanged)]
+    assert [(c.enabled, c.source) for c in changed] == [(True, "saved")]
+    assert [r.verdict for r in reviews(events)] == ["pass"]
+
+
+async def test_the_checkbox_saves_it_for_every_window(mock_server: Any, project: Path) -> None:
+    from cmcoder.config.settings import config_dir
+
+    from .test_stdio import Agent as Panel
+
+    server = mock_server([])
+    other = await Panel.start(project, server)  # another VS Code window
+    this = await Panel.start(project, server)
+    try:
+        assert (await other.next())["critique"] is False  # system_init
+        assert (await this.next())["critique"] is False
+        await this.send(type="set_critique", enabled=True)
+        assert await this.until("critique_changed") == {
+            "type": "critique_changed",
+            "enabled": True,
+            "source": "you",
+        }
+        saved = json.loads((config_dir() / "settings.json").read_text())
+        assert saved["critic"] == {"enabled": True}
+        # The other window follows within a few seconds, without a turn.
+        followed = await other.until("critique_changed")
+        assert (followed["enabled"], followed["source"]) == (True, "saved")
+        # A window opened now starts with it on.
+        new = await Panel.start(project, server)
+        try:
+            assert (await new.next())["critique"] is True
+        finally:
+            await new.close()
+    finally:
+        await this.close()
+        await other.close()
