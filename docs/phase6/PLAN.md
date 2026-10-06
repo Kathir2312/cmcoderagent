@@ -41,6 +41,7 @@ notes. Three rules follow, used in every item:
 | Which IDEs | **All three**: JetBrains (one plugin for IntelliJ-based IDEs), **Visual Studio 2022**, **Eclipse**. |
 | How developers get them | **Files only.** CI builds the files; developers install them from disk. Updates are a new file. No plugin repository or update server. |
 | Rollout | **Everyone at once.** The build that passes the release gate goes to all developers. Hence the strictness above, and a "Copy diagnostics" command in every IDE so a problem report needs no back-and-forth. |
+| NetBeans (added 6 Oct) | **Yes**, for the latest four releases, with the shared chat page in a bundled JavaFX WebView (item 11). |
 | Python on developers' PCs | **None.** Every file carries the standalone `cmcoder` program (Phase 4's PyInstaller build). No plugin ever falls back to Python, `uv` or `pip`. |
 
 Carried over: JetBrains' servers are blocked by this cloud environment's
@@ -538,6 +539,52 @@ Findings fixed with a test that fails on the earlier code, as before.
   how LangGraph apps are usually wrapped instead).
 - `STATUS.md` at the end, with the gate report of the final build.
 
+### 11. Apache NetBeans plugin (added 6 October 2026)
+
+**Status: in progress.** Decided with the user: the **same shared chat page**
+in a bundled **JavaFX WebView** (NetBeans has no built-in browser), for the
+**latest four NetBeans releases** (28 to 31 today; tested on the oldest and
+newest).
+
+- `netbeans/` (Maven, `nbm-maven-plugin`; Java 17 like the JVM core, compiled
+  against NetBeans 28's APIs from Maven Central): **one `.nbm` per platform**
+  (`cmcoder-netbeans-<platform>.nbm`: win32-x64, linux-x64, darwin-arm64),
+  holding the module, the JVM core, OpenJFX 21 LTS for that platform (runs on
+  JDK 17 and newer; about 30 MB) and the standalone `cmcoder`. The module
+  declares its OS (`org.openide.modules.os.*`), so the wrong file can't be
+  enabled. Installs with Tools → Plugins → Downloaded → *Add Plugins…*.
+- The chat: a `TopComponent` (right side) with a `JFXPanel` and a `WebView`
+  (`Platform.setImplicitExit(false)`, or closing it would end JavaFX for good).
+  The page from the plugin's files (`file:`, a new nonce per start, the
+  panel's CSP), `data-host="function"`; `window.cmcoderHostPost` added by the
+  plugin through `JSObject` (the panel already queues messages until it
+  appears); messages to the page with `executeScript`. Navigation reverted,
+  pop-ups refused, context menu off (H18, H19).
+- With NetBeans' APIs: the Diff API (`DiffController`) in an editor tab with
+  Accept / Accept Always / Reject (H9, H10); the editor context from
+  `EditorRegistry` (H7); `openFile` through `DataObject`/`LineCookie`;
+  `getDiagnostics` for Java files through the Java Source API (compiler
+  errors and warnings as NetBeans shows them; other file types have none, H8);
+  the Agent Navigator as an editor tab (H15); code search in the chat's
+  toolbar with the set-up as dialogs (H16); an Options panel (H17, H21: "Use
+  the project's own .cmcoder settings", off); actions, the editor menu entry
+  and shortcuts (H14); the log in the Output window and Copy Diagnostics
+  (H22); `--client netbeans` (H23); the brand's name and icon (H24). The
+  project is the main project, else the one of the selected file.
+- Every call into the shared host runs on one background thread; the Swing
+  and JavaFX threads never wait for cmcoder (the Visual Studio deadlock).
+- **Gate:** as for Visual Studio, a self-test compiled only into a test build
+  (`-Pgate`) and run when NetBeans starts with `-J-Dcmcoder.gate=<report>`:
+  the NetBeans zip from archive.apache.org, the `.nbm` installed with
+  `netbeans --modules --install`, a fresh user folder, the mock model server,
+  no Python on the search path, Xvfb on Linux. The same steps as the other
+  gates (page loads, cmcoder from the plugin starts, context, diagnostics,
+  a change accepted and one rejected in the diff tab, the navigator, blocked
+  navigation, Ask About Selection, Copy Diagnostics without the key, closing
+  stops cmcoder). CI: Linux (oldest, newest); the release build: every
+  platform with its own `cmcoder`.
+- Not carried over: the "extra arguments" setting (see item 6).
+
 ## Risks and how the plan handles them
 
 | Risk | Handling |
@@ -564,3 +611,4 @@ Findings fixed with a test that fails on the earlier code, as before.
 - [ ] 8. Release workflow, bundle, gate report
 - [ ] 9. Security review
 - [ ] 10. Docs for developers and admins; guides; STATUS
+- [ ] 11. Apache NetBeans plugin (JavaFX WebView; gate on NetBeans 28 and 31)
