@@ -15,6 +15,7 @@ on:
       - "packaging/**"
       - "branding/**"
       - "vscode/**"
+      - "clients/**"
       - "pyproject.toml"
       - "uv.lock"
       - ".github/workflows/release.yml"
@@ -51,6 +52,18 @@ jobs:
         run: |
           exe=dist/cmcoder/cmcoder; [ "$RUNNER_OS" = Windows ] && exe=dist/cmcoder/cmcoder.exe
           CMCODER_TEST_BINARY=$exe CMCODER_TEST_NO_PYTHON=1 uv run pytest -q tests/test_standalone.py
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: The IDE core for JetBrains/Eclipse with this cmcoder (no Python in reach)
+        shell: bash
+        run: |
+          exe=$PWD/dist/cmcoder/cmcoder; [ "$RUNNER_OS" = Windows ] && exe=$PWD/dist/cmcoder/cmcoder.exe
+          mvn=mvn; [ "$RUNNER_OS" = Windows ] && mvn=mvn.cmd
+          export CMCODER_TEST_PYTHON="$(uv run python -c 'import sys; print(sys.executable)')"
+          CMCODER_TEST_BINARY=$exe uv run python packaging/no_python.py run -- $mvn -B -f clients/jvm-core/pom.xml verify
       - name: The terminal package (install, update, run, uninstall; no Python in reach)
         shell: bash
         run: |

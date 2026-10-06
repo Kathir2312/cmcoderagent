@@ -307,6 +307,10 @@ in `README-FIRST.txt`.
   `cmcoder protocol-schema` (CI fails when the protocol changes and a host
   doesn't follow).
 - `protocol_version` checked at start (H6).
+- Status (6 Oct), Java/Kotlin: built, as `Protocol` in the JVM core (item
+  4). The fields read and every message built are checked against the
+  schema from `cmcoder protocol-schema`, recursively (`ProtocolSchemaTest`).
+  C# comes with the Visual Studio extension (item 7), checked the same way.
 
 ### 4. The JVM core (shared by JetBrains and Eclipse)
 
@@ -319,6 +323,31 @@ in `README-FIRST.txt`.
   macOS's quarantine flag.
 - Tests with JUnit against the **real standalone program** and the mock model
   server: the same cases as `agentProcess.test.ts`.
+- Status (6 Oct): built, `clients/jvm-core/` (Maven, no run-time
+  dependencies; its own small JSON reader/writer instead of a shaded
+  library). **Added to the plan**: `Host`, the host logic itself (relaying,
+  permissions and diffs, IDE tools, rewind, history and resume, links, the
+  navigator's replay), ported from the VS Code extension, behind an `Ide`
+  interface each plugin implements; the JetBrains and Eclipse plugins then
+  only add what needs their IDE's APIs, and that logic is tested once.
+  - Rules carried over and tested: a program planted in the project is never
+    started; the setting must be a full path; batch files are never started
+    (cmd.exe's argument rules); only `^[A-Za-z0-9][A-Za-z0-9-]{0,63}$` session
+    ids become arguments; only `http(s)` links open; unknown modes are
+    dropped; the executable bit is restored and macOS quarantine cleared.
+  - 28 tests: JSON (escapes for JavaScript, deep nesting refused), editor
+    context, program lookup, the schema check, the process (permission
+    allowed then denied, non-ASCII text intact, a missing program, a crash,
+    **stopping ends a running shell command too**, non-event output to the
+    log), and the host with a fake IDE through whole turns (the IDE tool,
+    the editor context reaching the model, a diff accepted in the IDE, the
+    navigator's replay, what the page can't make the IDE do, a protocol
+    mismatch). Breaking the planted-program rule or the session-id rule
+    fails a test (checked by hand).
+  - CI: on Linux, macOS and Windows with Java 17; the release workflow runs
+    them with the standalone program and no Python in reach, with Java 21.
+  - The mock model server got `--record FILE` (each chat request, for tests
+    in another process).
 
 ### 5. JetBrains plugin
 
@@ -442,8 +471,8 @@ Findings fixed with a test that fails on the earlier code, as before.
 
 - [x] 1. No Python anywhere: terminal package, no-Python test environment, `--client`, Git Bash check
 - [x] 2. One chat panel for every IDE (shared package, bridge, test bridge; VS Code on it)
-- [ ] 3. Protocol classes for Java/Kotlin/C# checked against the schema
-- [ ] 4. JVM core (program lookup, process, JSON lines, executable bit)
+- [x] 3. Protocol classes for Java/Kotlin checked against the schema (C# with item 7)
+- [x] 4. JVM core (program lookup, process, JSON lines, executable bit, and the host logic)
 - [ ] 5. JetBrains plugin (H1–H24, gate in IntelliJ IDEA and Rider, Plugin Verifier)
 - [ ] 6. Eclipse plugin (H1–H24, gate on 2024-06 and newest)
 - [ ] 7. Visual Studio 2022 extension (H1–H24, gate in Visual Studio)

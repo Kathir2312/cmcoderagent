@@ -79,6 +79,9 @@ class MockState:
         self.think_tags = think_tags
         self.requests: list[dict[str, Any]] = []
         self.summary_requests: list[dict[str, Any]] = []
+        # Standalone (--record FILE): each chat request also goes to this file,
+        # one JSON line each, for tests in another process (the IDE plugins').
+        self.record: str | None = None
         self.lock = threading.Lock()
 
     def window(self, model: str) -> int:
@@ -352,6 +355,9 @@ def make_handler(state: MockState) -> type[BaseHTTPRequestHandler]:
                 return
             body = json.loads(raw or b"{}")
             state.requests.append(body)
+            if state.record:
+                with state.lock, open(state.record, "a", encoding="utf-8") as f:
+                    f.write(json.dumps(body) + "\n")
             model = body.get("model", "mock")
             # Realistic usage (~3.5 chars per token), so context handling is exercised.
             prompt_tokens = int(
@@ -498,10 +504,13 @@ def main() -> None:
     ap.add_argument("--script", required=True, help="JSON file with the list of replies")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--api-key", default=None)
+    ap.add_argument("--record", default=None, help="append each chat request here (JSON lines)")
     args = ap.parse_args()
     with open(args.script, encoding="utf-8") as f:
         script = json.load(f)
-    server = MockServer(MockState(script, api_key=args.api_key), port=args.port)
+    state = MockState(script, api_key=args.api_key)
+    state.record = args.record
+    server = MockServer(state, port=args.port)
     print(f"mock server on {server.base_url}", flush=True)
     server.httpd.serve_forever()
 
