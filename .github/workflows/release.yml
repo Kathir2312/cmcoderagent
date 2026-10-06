@@ -19,6 +19,7 @@ on:
       - "vscode/**"
       - "clients/**"
       - "eclipse/**"
+      - "visualstudio/**"
       - "pyproject.toml"
       - "uv.lock"
       - ".github/workflows/release.yml"
@@ -67,6 +68,16 @@ jobs:
           mvn=mvn; [ "$RUNNER_OS" = Windows ] && mvn=mvn.cmd
           export CMCODER_TEST_PYTHON="$(uv run python -c 'import sys; print(sys.executable)')"
           CMCODER_TEST_BINARY=$exe uv run python packaging/no_python.py run -- $mvn -B -f clients/jvm-core/pom.xml verify
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: The Visual Studio core with this cmcoder (no Python in reach)
+        shell: bash
+        run: |
+          exe=$PWD/dist/cmcoder/cmcoder; [ "$RUNNER_OS" = Windows ] && exe=$PWD/dist/cmcoder/cmcoder.exe
+          export CMCODER_TEST_PYTHON="$(uv run python -c 'import sys; print(sys.executable)')"
+          dotnet build visualstudio/test/Cmcoder.Core.Tests -c Release
+          CMCODER_TEST_BINARY=$exe uv run python packaging/no_python.py run -- dotnet test visualstudio/test/Cmcoder.Core.Tests -c Release --no-build
       - name: The Eclipse plugin in a real Eclipse, with this cmcoder inside (no Python in reach)
         shell: bash
         run: |

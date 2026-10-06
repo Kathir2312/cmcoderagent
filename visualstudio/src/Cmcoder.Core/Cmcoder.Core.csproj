@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The IDE side of cmcoder for Visual Studio, without Visual Studio: the
+       same rules as the JVM core (clients/jvm-core), tested on its own against
+       the real cmcoder. netstandard2.0 runs inside Visual Studio (.NET
+       Framework 4.8); net8.0 is for the tests on any OS. -->
+  <PropertyGroup>
+    <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <RootNamespace>Cmcoder.Core</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Cmcoder.Core.Tests" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Visual Studio 2022 itself ships Newtonsoft.Json 13 (assembly version 13.0.0.0). -->
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+</Project>

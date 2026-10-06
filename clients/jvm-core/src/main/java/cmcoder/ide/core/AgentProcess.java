@@ -212,8 +212,14 @@ public final class AgentProcess {
                     }
                     if (line.trim().isEmpty()) continue;
                     Protocol.Event event = Protocol.Event.parse(line);
-                    if (event == null) listener.onLog("[stdout] " + line);
-                    else listener.onEvent(event);
+                    try {
+                        if (event == null) listener.onLog("[stdout] " + line);
+                        else listener.onEvent(event);
+                    } catch (RuntimeException e) {
+                        // Keep reading: a failure here would otherwise end this thread
+                        // and every later event from cmcoder would be lost.
+                        listener.onLog("Handling " + (event == null ? "a line" : event.type) + " failed: " + e);
+                    }
                 }
             } catch (IOException e) {
                 // the stream closed with the process
