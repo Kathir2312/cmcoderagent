@@ -464,7 +464,16 @@ and macOS, the release build on Windows, macOS and Linux.**
   reference assemblies; built and packed by CI on Windows.
 - The gate: a self-test compiled only into a test build (`Gate.cs`), run
   in Visual Studio's experimental instance by `gate/run-gate.ps1` in the
-  release build (the in-IDE test framework isn't on nuget.org).
+  release build (the in-IDE test framework isn't on nuget.org). **Passes**
+  (6 Oct 2026, Release build #51, Visual Studio 18.10 on GitHub's Windows
+  runner, no Python in reach): the bundled cmcoder, the editor context,
+  diagnostics, the Error List, a change accepted and one rejected in the diff
+  window, the navigator, blocked navigation, Ask About Selection, closing the
+  folder stopping cmcoder. Found on the way: the virtual host needs DenyCors
+  (Deny blocked the page's own scripts); a deadlock when the UI thread read
+  the host's state while the session thread waited for the UI (state, running
+  and send are now lock-free in both cores); a panel queried before its
+  WebView2 started.
 - Not carried over: the "extra arguments" setting (see item 6).
 
 
@@ -551,7 +560,7 @@ Findings fixed with a test that fails on the earlier code, as before.
 - [x] 4. JVM core (program lookup, process, JSON lines, executable bit, and the host logic)
 - [ ] 5. JetBrains plugin (H1–H24, gate in IntelliJ IDEA and Rider, Plugin Verifier)
 - [ ] 6. Eclipse plugin (H1–H24, gate on 2024-06 and newest)
-- [ ] 7. Visual Studio 2022 extension (H1–H24, gate in Visual Studio)
+- [x] 7. Visual Studio 2022 extension (H1–H24, gate in Visual Studio)
 - [ ] 8. Release workflow, bundle, gate report
 - [ ] 9. Security review
 - [ ] 10. Docs for developers and admins; guides; STATUS
