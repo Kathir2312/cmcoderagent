@@ -158,7 +158,9 @@ public class GateTest {
         // H15: the navigator, opened now, shows the turn.
         NavigatorView nav = ui(() -> (NavigatorView) page().showView(Session.NAVIGATOR_VIEW));
         until("the navigator's turn", () -> String.valueOf(evaluate(nav.panel(),
-                "return document.body.innerText")).contains("create new.py"));
+                "return document.body.textContent")).contains("create new.py"),
+                () -> "navigator page: " + evaluate(nav.panel(), "return document.URL + ' ' + document.readyState + ' '"
+                        + " + typeof window.cmcoderHostPost + ' ' + document.body.textContent.slice(0, 300)"));
 
         // H19: the page can't navigate away or open windows.
         String url = ui(() -> chat.browser().getUrl());
@@ -251,11 +253,16 @@ public class GateTest {
     }
 
     static void until(String what, BooleanSupplier check) throws InterruptedException {
+        until(what, check, () -> "");
+    }
+
+    /** {@code more}: what to add to the failure (the state of a page). */
+    static void until(String what, BooleanSupplier check, java.util.function.Supplier<String> more) throws InterruptedException {
         long end = System.currentTimeMillis() + 90_000;
         while (!check.getAsBoolean()) {
             if (System.currentTimeMillis() > end) {
                 throw new AssertionError("timed out waiting for " + what + "; state " + Session.get().state() + " " + Session.get().lastState()
-                        + "; log:\n" + String.join("\n", Activator.get().recentLog()));
+                        + "; " + more.get() + "; log:\n" + String.join("\n", Activator.get().recentLog()));
             }
             // Let the UI thread run (this is the test thread, not the UI thread).
             Thread.sleep(100);

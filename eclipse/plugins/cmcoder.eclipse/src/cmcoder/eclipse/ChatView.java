@@ -12,7 +12,10 @@ public final class ChatView extends ViewPart {
         setPartName(Brand.product());
         Session session = Session.get();
         panel = Panel.create(parent, "chat", json -> session.run(h -> h.onPanelMessage(json)));
-        if (panel != null) session.chatOpened(panel, getSite().getWorkbenchWindow());
+        if (panel != null) {
+            session.chatOpened(panel, getSite().getWorkbenchWindow());
+            panel.load();
+        }
     }
 
     /** For tests: the page in this view, or null if no browser could start. */

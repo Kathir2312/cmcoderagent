@@ -57,7 +57,7 @@ public final class Panel {
      * The page ("chat" or "navigator") in {@code parent}; its messages go to
      * {@code onMessage} on the UI thread. If the browser can't start (no
      * WebView2 on Windows, no WebKitGTK on Linux), a label says what's
-     * missing and null is returned.
+     * missing and null is returned. Call {@link #load} once it's registered.
      */
     public static Panel create(Composite parent, String page, Consumer<String> onMessage) {
         parent.setLayout(new FillLayout());
@@ -83,8 +83,16 @@ public final class Panel {
         }
         Panel panel = new Panel(browser, html.toUri().toString(), onMessage);
         panel.wire();
-        browser.setUrl(panel.pageUrl);
         return panel;
+    }
+
+    /**
+     * Loads the page. Separate from {@link #create}: the caller registers the
+     * panel first, because the page's "ready" can arrive at once (SWT's Edge
+     * runs the event loop while it starts) and its answer must find the panel.
+     */
+    public void load() {
+        browser.setUrl(pageUrl);
     }
 
     private static void message(Composite parent, String text) {

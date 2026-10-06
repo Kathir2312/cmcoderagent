@@ -12,7 +12,10 @@ public final class NavigatorView extends ViewPart {
         setPartName(Brand.product() + ": Agent Navigator");
         Session session = Session.get();
         panel = Panel.create(parent, "navigator", json -> session.run(h -> h.onNavigatorMessage(json)));
-        if (panel != null) session.navigatorOpened(panel);
+        if (panel != null) {
+            session.navigatorOpened(panel);
+            panel.load();
+        }
     }
 
     public Panel panel() {
