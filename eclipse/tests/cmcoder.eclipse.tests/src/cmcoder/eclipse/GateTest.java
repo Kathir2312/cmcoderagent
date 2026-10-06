@@ -120,6 +120,9 @@ public class GateTest {
         until("cmcoder ready", () -> "ready".equals(session.state()) && session.running());
         until("the page's test driver", () -> !"null".equals(String.valueOf(run(chat, "count", "textarea", null))));
 
+        // H16: code search's state in the chat view's toolbar (not set up here).
+        until("the code search item", () -> "Code search: off".equals(ui(view::codeSearchText)));
+
         // H7: the open file, the selection and its problem are the context.
         until("the context label", () -> String.valueOf(run(chat, "text", ".context span", null)).contains("app.py:1 · 1 problem"));
 

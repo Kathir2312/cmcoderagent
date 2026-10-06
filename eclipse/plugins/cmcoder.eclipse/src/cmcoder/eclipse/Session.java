@@ -21,6 +21,7 @@ import org.eclipse.ui.IWorkbenchWindow;
 import org.eclipse.ui.PartInitException;
 import org.eclipse.ui.PlatformUI;
 
+import cmcoder.ide.core.CodeSearch;
 import cmcoder.ide.core.Host;
 import cmcoder.ide.core.Ide;
 import cmcoder.ide.core.Protocol;
@@ -47,10 +48,25 @@ public final class Session {
     private ScheduledFuture<?> pendingContext;
     private final List<Runnable> unhook = new ArrayList<>();
 
+    private final CodeSearch codeSearch;
+    private final List<Runnable> codeSearchViews = new java.util.concurrent.CopyOnWriteArrayList<>();
+
     private Session() {
         config.client = "eclipse";
         config.product = Brand.product();
         host = new Host(new EclipseIde(), config);
+        codeSearch = new CodeSearch(host, cs -> codeSearchViews.forEach(Runnable::run));
+    }
+
+    /** Code search (H16): its state and requests. */
+    public CodeSearch codeSearch() {
+        return codeSearch;
+    }
+
+    /** {@code changed} runs (any thread) when code search's state changes; the returned action stops it. */
+    Runnable onCodeSearchChange(Runnable changed) {
+        codeSearchViews.add(changed);
+        return () -> codeSearchViews.remove(changed);
     }
 
     /** The session (made on first use). */

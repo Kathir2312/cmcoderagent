@@ -425,9 +425,21 @@ and macOS, the release build on Windows, macOS and Linux.**
   build runs the gate on Windows, macOS and Linux with that platform's
   standalone cmcoder in the fragment and no Python on PATH, then builds the
   update site with all three and checks each fragment holds its program.
-- **Still to do for item 6:** code search status and set-up (H16); the
-  navigator is a view, not an editor tab (H15: works the same, decide if it
-  matters); rewind in the gate; Windows passing in the release build.
+- Code search (H16): `CodeSearch` in the JVM core (the status, the
+  requests behind the menu and the set-up; shared with JetBrains; a test
+  against the real cmcoder sets it up, indexes and clears); in Eclipse a
+  status item in the chat view's toolbar, its menu (update, rebuild, set up
+  again, delete) and the 4-step set-up as dialogs (the API key in a hidden
+  field, passed to cmcoder only, which keeps it in the OS keychain). The gate
+  checks the status item; the dialogs themselves aren't driven by a test.
+- Found on Windows (release build) and fixed: SWT's Edge runs the event loop
+  while it starts, so a page's first message could come before the view had
+  registered it; and it sometimes left `cmcoderHostPost` out of the second
+  browser (the navigator rendered but never got the turn). Views register
+  before loading; the panel checks the function after loading and adds it
+  again if it's missing.
+- **Still to do for item 6:** the navigator is a view, not an editor tab
+  (H15: works the same, decide if it matters); rewind in the gate.
 - H17's "extra arguments" is not carried over: in VS Code it exists to run
   cmcoder through `uv run`, which D16 (no Python) rules out for developers.
 - The gate also rejects a change in the compare editor: nothing is written,

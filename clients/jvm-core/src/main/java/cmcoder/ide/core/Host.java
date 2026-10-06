@@ -54,6 +54,16 @@ public final class Host {
     private String state = "exited";
     private final Set<String> openDiffs = new HashSet<>();
 
+    private final List<java.util.function.Consumer<Protocol.Event>> listeners = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+    /**
+     * Every event from cmcoder, after the panel has it (e.g. {@link CodeSearch}).
+     * Called on cmcoder's reader thread with this host locked: don't wait there.
+     */
+    public void addListener(java.util.function.Consumer<Protocol.Event> listener) {
+        listeners.add(listener);
+    }
+
     public Host(Ide ide, Config config) {
         this.ide = ide;
         this.config = config;
@@ -157,6 +167,13 @@ public final class Host {
         // The panel sees every event first and in order; side effects come after.
         ide.toPanel("{\"kind\":\"event\",\"event\":" + event.raw + "}");
         navigator.event(event);
+        for (java.util.function.Consumer<Protocol.Event> l : listeners) {
+            try {
+                l.accept(event);
+            } catch (RuntimeException e) {
+                ide.log("A listener failed on " + event.type + ": " + e);
+            }
+        }
         switch (event.type) {
             case "system_init": {
                 long version = Json.number(event.fields, "protocol_version", -1);

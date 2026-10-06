@@ -46,7 +46,22 @@ public final class Protocol {
             new Read("ide_tool_request", "name", "string"),
             new Read("ide_tool_request", "input", "object"),
             new Read("result", "subtype", "string"),
-            new Read("rewind_points", "points", "array")));
+            new Read("rewind_points", "points", "array"),
+            new Read("index_status", "set_up", "boolean"),
+            new Read("index_status", "active", "boolean"),
+            new Read("index_status", "files", "integer"),
+            new Read("index_status", "chunks", "integer"),
+            new Read("index_status", "updating", "boolean"),
+            new Read("index_status", "read_only", "boolean"),
+            new Read("index_status", "lines", "array"),
+            new Read("index_progress", "done", "integer"),
+            new Read("index_progress", "total", "integer"),
+            new Read("index_progress", "chunks", "integer"),
+            new Read("rag_candidates", "likely", "array"),
+            new Read("rag_candidates", "other", "array"),
+            new Read("rag_candidates", "errors", "object"),
+            new Read("rag_setup_result", "ok", "boolean"),
+            new Read("rag_setup_result", "message", "string")));
 
     // -- events -----------------------------------------------------------------
 
@@ -211,7 +226,30 @@ public final class Protocol {
         return Json.write(m);
     }
 
-    /** Code search: "status", "update" or "rebuild". */
+    /** Code search: the gateways' models, to pick an embedding model (answer: rag_candidates). */
+    public static String ragCandidates() {
+        return Json.write(message("rag_candidates"));
+    }
+
+    /**
+     * Code search set-up, as {@code cmcoder rag setup} (answer: rag_setup_result).
+     * store: "local", "chroma" or "chroma-server"; scope: "user" or "project".
+     * The API key goes to cmcoder only, which keeps it in the OS keychain.
+     */
+    public static String ragSetup(String model, String store, String url, String apiKey, String scope,
+            boolean readOnly, boolean indexNow) {
+        Map<String, Object> m = message("rag_setup");
+        m.put("embedding_model", model);
+        m.put("store", store);
+        m.put("url", url);
+        m.put("api_key", apiKey == null || apiKey.isEmpty() ? null : apiKey);
+        m.put("scope", scope);
+        m.put("read_only", readOnly);
+        m.put("index_now", indexNow);
+        return Json.write(m);
+    }
+
+    /** Code search: "status", "update", "rebuild" or "clear". */
     public static String index(String action) {
         Map<String, Object> m = message("index");
         m.put("action", action);
@@ -237,6 +275,9 @@ public final class Protocol {
                 listSessions(),
                 listCommands(),
                 rewind(2, true, true, false),
-                index("update"));
+                index("update"),
+                ragCandidates(),
+                ragSetup("corp:bge-m3", "chroma-server", "https://chroma.example:8000", "k", "user", true, false),
+                ragSetup("corp:bge-m3", "local", null, null, "project", false, true));
     }
 }
