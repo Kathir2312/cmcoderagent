@@ -37,6 +37,7 @@ case "$(uname -s)" in
   *) windows=0; launcher="$netbeans/bin/netbeans" ;;
 esac
 native() { if [ "$windows" = 1 ]; then cygpath -w "$1"; else printf '%s' "$1"; fi; }
+nbm="$(cd "$(dirname "$nbm")" && pwd)/$(basename "$nbm")"  # absolute: unpacking runs elsewhere
 echo "NetBeans: $netbeans ($(grep -o 'netbeans-[0-9][0-9]*' "$netbeans/nb/.lastModified" 2>/dev/null || ls "$netbeans"/nb/core/*.jar 2>/dev/null | head -1))"
 
 work=$(mktemp -d "${TMPDIR:-/tmp}/cmcoder-nb-gate-XXXXXX")
@@ -52,7 +53,7 @@ if [ "$windows" = 0 ] && command -v unzip >/dev/null; then
   unzip -q "$nbm" 'netbeans/*' -d "$work/nbm"
 else
   jar="${jdk:-$JAVA_HOME}/bin/jar"; [ "$windows" = 1 ] && jar="$(cygpath -u "$jar").exe"
-  (cd "$work/nbm" && "$jar" xf "$(native "$(cd "$(dirname "$nbm")" && pwd)/$(basename "$nbm")")")
+  (cd "$work/nbm" && "$jar" xf "$(native "$nbm")")
 fi
 cp -R "$work/nbm/netbeans/." "$work/userdir/"
 if [ ! -f "$work/userdir/config/Modules/cmcoder-netbeans.xml" ]; then
