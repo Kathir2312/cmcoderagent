@@ -262,7 +262,7 @@ in `README-FIRST.txt`.
   built with esbuild into two `.js` files and two `.css` files). The panel
   talks only to a **bridge**: `post(message)`, `onMessage(handler)`, and the
   theme as CSS variables `--cm-*` (the VS Code bridge maps `--vscode-*` to
-  them). Messages stay the ones in `webviewMessages.ts`.
+  them). Messages stay the ones in `webviewMessages.ts` (now `src/messages.ts`).
 - A **test bridge** that the gate uses in every IDE: lets a test read what
   the panel shows and click its buttons through the embedded browser's
   JavaScript call (`executeJavaScript` in JCEF, `Browser.evaluate` in SWT,
@@ -272,6 +272,31 @@ in `README-FIRST.txt`.
 - VS Code keeps working unchanged (its tests and the release build prove it).
 - **Done when**: VS Code uses the shared panel, all its tests pass, and the
   panel runs in a plain browser with the test bridge.
+- Status (6 Oct): built. `clients/web-panel/` (its own `package.json`; the
+  VS Code extension's `npm ci` installs it, so building VS Code is unchanged):
+  - `src/bridge.ts`: VS Code's API, WebView2's `chrome.webview`, or a function
+    the IDE adds (`window.cmcoderHostPost`, JCEF and SWT); messages wait in
+    the page until that function exists, so the first ("ready") isn't lost.
+    To the page, every IDE runs `window.postMessage(...)`.
+  - The icon comes from the IDE (`data-icon`), not a path in VS Code's folder.
+  - `theme.json`: the 32 colours and fonts the pages use, with what each is for
+    and dark/light defaults. **Changed from the plan**: they keep VS Code's
+    variable names instead of new `--cm-*` names (VS Code sets them itself and
+    its styles stay as they were); the other IDEs set the same names.
+  - `src/test-driver.ts` (tests only): `__cmcoderTest.run(action, selector)`
+    answering in JSON, for JCEF, SWT and WebView2 tests.
+  - `README.md`: the contract for an IDE (page HTML, policy, messages, theme,
+    security rules, the test driver).
+  - Tests: the chat and navigator tests now run once per connection type
+    (VS Code, WebView2, a late-added function): 54; plus the bridge's queue,
+    the icon (an address that could break out of the CSS is refused), the test
+    driver, and `theme.json` against the pages (and readable defaults): 59.
+  - `src/protocol.ts` moved here; the existing check that it's regenerated
+    when the protocol changes (`tests/test_protocol_ts.py`) follows it.
+  - The real-VS Code test now also waits for the Agent Navigator's script to
+    report "ready" (an empty tab would have passed before).
+  - Old compiled tests are cleared before each test build (a moved test kept
+    running from `dist-test/`).
 
 ### 3. Protocol for Java, Kotlin and C#
 
@@ -416,7 +441,7 @@ Findings fixed with a test that fails on the earlier code, as before.
 ## Checklist
 
 - [x] 1. No Python anywhere: terminal package, no-Python test environment, `--client`, Git Bash check
-- [ ] 2. One chat panel for every IDE (shared package, bridge, test bridge; VS Code on it)
+- [x] 2. One chat panel for every IDE (shared package, bridge, test bridge; VS Code on it)
 - [ ] 3. Protocol classes for Java/Kotlin/C# checked against the schema
 - [ ] 4. JVM core (program lookup, process, JSON lines, executable bit)
 - [ ] 5. JetBrains plugin (H1–H24, gate in IntelliJ IDEA and Rider, Plugin Verifier)

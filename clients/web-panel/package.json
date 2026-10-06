@@ -1,0 +1,21 @@
+{
+  "name": "cmcoder-web-panel",
+  "private": true,
+  "description": "cmcoder's chat panel and Agent Navigator, shown by every IDE (VS Code, JetBrains, Visual Studio, Eclipse).",
+  "license": "UNLICENSED",
+  "scripts": {
+    "generate": "cd ../.. && uv run cmcoder protocol-schema --typescript > clients/web-panel/src/protocol.ts",
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node build.mjs && node build.mjs --tests && node --test --test-reporter=spec \"dist-test/**/*.test.js\""
+  },
+  "dependencies": {
+    "marked": "15.0.12"
+  },
+  "devDependencies": {
+    "@types/node": "20.19.43",
+    "esbuild": "0.25.12",
+    "playwright": "1.56.1",
+    "typescript": "5.8.3"
+  }
+}

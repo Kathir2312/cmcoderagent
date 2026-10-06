@@ -252,7 +252,8 @@
     }
   },
   "scripts": {
-    "generate": "cd .. && uv run cmcoder protocol-schema --typescript > vscode/src/protocol.ts",
+    "postinstall": "npm ci --prefix ../clients/web-panel --no-audit --no-fund",
+    "generate": "npm run generate --prefix ../clients/web-panel",
     "build": "node esbuild.mjs",
     "watch": "node esbuild.mjs --watch",
     "typecheck": "tsc --noEmit",
@@ -267,8 +268,6 @@
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^4.0.0",
     "esbuild": "^0.25.0",
-    "marked": "^15.0.0",
-    "playwright": "1.56.1",
     "typescript": "~5.8.0"
   }
 }

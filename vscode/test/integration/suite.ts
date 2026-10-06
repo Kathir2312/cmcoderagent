@@ -86,9 +86,14 @@ export async function run(): Promise<void> {
   assert.equal((await event("result", mark)).result, "Checked the problems.");
   problems.dispose();
 
-  // 3. The Agent Navigator opens as an editor tab.
+  // 3. The Agent Navigator opens as an editor tab, and its page runs: its script
+  // reports "ready" (a tab alone can be empty, as when navigator.js wasn't packaged).
+  let navigatorReady = false;
+  const readyListener = api.onNavigatorReady(() => (navigatorReady = true));
   await vscode.commands.executeCommand("cmcoder.openNavigator");
   await until("the Agent Navigator tab", () =>
     vscode.window.tabGroups.all.some((g) => g.tabs.some((t) => t.label.endsWith("Agent Navigator"))),
   );
+  await until("the Agent Navigator's script", () => navigatorReady);
+  readyListener.dispose();
 }

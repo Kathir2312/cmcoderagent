@@ -76,7 +76,7 @@ select { padding: 2px 4px; }
   content: "";
   width: 64px;
   height: 64px;
-  background: url("icon.png") center / contain no-repeat;
+  background: var(--cmcoder-icon, none) center / contain no-repeat;
 }
 .log:empty::after {
   content: attr(data-product);
@@ -96,7 +96,7 @@ select { padding: 2px 4px; }
   top: 2px;
   width: 16px;
   height: 16px;
-  background: url("icon.png") center / contain no-repeat;
+  background: var(--cmcoder-icon, none) center / contain no-repeat;
 }
 .msg > :first-child { margin-top: 0; }
 .msg > :last-child { margin-bottom: 0; }

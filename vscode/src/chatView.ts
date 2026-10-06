@@ -317,8 +317,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
   private html(webview: vscode.Webview): string {
     const nonce = randomBytes(16).toString("hex");
-    const script = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, "dist", "webview.js"));
-    const style = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, "media", "chat.css"));
+    // The shared panel (clients/web-panel), as in every IDE; the icon is passed in.
+    const script = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, "dist", "chat.js"));
+    const style = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, "dist", "chat.css"));
+    const icon = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, "media", "icon.png"));
     // No inline scripts, no remote content: model output can't run code here.
     const csp = [
       "default-src 'none'",
@@ -335,7 +337,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   <link href="${style}" rel="stylesheet">
   <title>${escapeHtml(productName())}</title>
 </head>
-<body data-product="${escapeHtml(productName())}">
+<body data-product="${escapeHtml(productName())}" data-icon="${escapeHtml(icon.toString())}">
   <div id="app"></div>
   <script nonce="${nonce}" src="${script}"></script>
 </body>

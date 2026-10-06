@@ -1,11 +1,17 @@
-// Bundles the extension (Node) and the chat webview (browser) into dist/.
+// Bundles the extension (Node) into dist/, with the chat panel and the Agent
+// Navigator built from the shared package (clients/web-panel: chat.js, chat.css,
+// navigator.js, navigator.css), the same files the other IDEs show.
 // --tests bundles test/*.test.ts into dist-test/ for `node --test`
-// (run `npm run build` first: the webview test loads dist/webview.js).
+// (the chat panel's own tests live in clients/web-panel).
 // --integration bundles the real-VS Code tests into dist-integration/.
 import * as esbuild from "esbuild";
-import { readdirSync } from "node:fs";
+import { readdirSync, rmSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { buildPanel } from "../clients/web-panel/build.mjs";
 
 const args = new Set(process.argv.slice(2));
+// Compiled tests from earlier builds (e.g. ones that moved) would run too.
+if (args.has("--tests")) rmSync("dist-test", { recursive: true, force: true });
 const production = args.has("--production");
 const common = { bundle: true, sourcemap: !production, minify: production, logLevel: "info" };
 
@@ -46,26 +52,14 @@ const builds = args.has("--integration")
         target: "node20",
         external: ["vscode"],
       },
-      {
-        ...common,
-        entryPoints: ["src/webview/main.ts"],
-        outfile: "dist/webview.js",
-        platform: "browser",
-        format: "iife",
-        target: "es2022",
-      },
-      {
-        ...common,
-        entryPoints: ["src/navigator/main.ts"],
-        outfile: "dist/navigator.js",
-        platform: "browser",
-        format: "iife",
-        target: "es2022",
-      },
     ];
+const panel = !args.has("--integration") && !args.has("--tests");
 
 if (args.has("--watch")) {
   for (const b of builds) await (await esbuild.context(b)).watch();
 } else {
-  await Promise.all(builds.map((b) => esbuild.build(b)));
+  await Promise.all([
+    ...builds.map((b) => esbuild.build(b)),
+    ...(panel ? [buildPanel(fileURLToPath(new URL("./dist", import.meta.url)), { production })] : []),
+  ]);
 }

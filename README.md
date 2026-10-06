@@ -462,8 +462,9 @@ uv run python evals/run.py --mock      # eval harness with scripted replies (20 
 LITELLM_BIN=/path/to/litellm uv run pytest tests/test_litellm_integration.py  # through a real LiteLLM proxy
 uv run python evals/run.py             # evals against your real endpoint/model
 uv run cmcoder protocol-schema         # Agent Protocol JSON Schema (for the VS Code extension)
-uv run cmcoder protocol-schema --typescript > vscode/src/protocol.ts   # after changing the protocol
+uv run cmcoder protocol-schema --typescript > clients/web-panel/src/protocol.ts   # after changing the protocol
 cd vscode && npm ci && npm run typecheck && uv run --project .. npm test   # the extension's tests
+cd clients/web-panel && npm run typecheck && npm test   # the shared chat panel (after the npm ci above)
 #   (on Windows: uv run --project .. npm.cmd test, or set CMCODER_TEST_PYTHON to cmcoder's python.exe)
 ```
 

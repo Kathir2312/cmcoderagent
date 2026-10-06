@@ -20,6 +20,9 @@ export class AgentNavigator {
   private prompt = "";
   private model = "";
   private busy = false;
+  private readonly readyEvents = new vscode.EventEmitter<void>();
+  /** The navigator's page loaded and its script runs (used by the integration tests). */
+  readonly onReady = this.readyEvents.event;
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -70,7 +73,10 @@ export class AgentNavigator {
     );
     panel.webview.html = this.html(panel.webview);
     panel.webview.onDidReceiveMessage((m: FromNavigator) => {
-      if (m.kind === "ready") this.replay();
+      if (m.kind === "ready") {
+        this.replay();
+        this.readyEvents.fire();
+      }
       else if (m.kind === "stopSubagent") this.stopSubagent(m.id);
       else if (m.kind === "openChat") this.openChat();
     });
@@ -94,7 +100,7 @@ export class AgentNavigator {
   private html(webview: vscode.Webview): string {
     const nonce = randomBytes(16).toString("hex");
     const script = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, "dist", "navigator.js"));
-    const style = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, "media", "navigator.css"));
+    const style = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, "dist", "navigator.css"));
     const csp = ["default-src 'none'", `style-src ${webview.cspSource}`, `script-src 'nonce-${nonce}'`].join("; ");
     return `<!DOCTYPE html>
 <html lang="en">

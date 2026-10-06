@@ -1,4 +1,5 @@
-"""The extension's TypeScript protocol types must match the Python models."""
+"""The TypeScript protocol types (in the shared chat panel, used by every IDE)
+must match the Python models."""
 
 from __future__ import annotations
 
@@ -6,13 +7,14 @@ from pathlib import Path
 
 from cmcoder.protocol.typescript import generate_typescript, ts_type
 
-GENERATED = Path(__file__).parent.parent / "vscode" / "src" / "protocol.ts"
+GENERATED = Path(__file__).parent.parent / "clients" / "web-panel" / "src" / "protocol.ts"
 
 
 def test_protocol_ts_is_up_to_date() -> None:
     assert GENERATED.read_text(encoding="utf-8") == generate_typescript(), (
-        "vscode/src/protocol.ts is out of date. Run: "
-        "uv run cmcoder protocol-schema --typescript > vscode/src/protocol.ts"
+        "clients/web-panel/src/protocol.ts is out of date. Run `npm run generate` "
+        "in clients/web-panel (or: uv run cmcoder protocol-schema --typescript > "
+        "clients/web-panel/src/protocol.ts)"
     )
 
 

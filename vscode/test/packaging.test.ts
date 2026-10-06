@@ -25,7 +25,7 @@ test("the .vsix contains every script and style the extension loads", () => {
     const source = readFileSync(join(root, "src", file), "utf8");
     for (const m of source.matchAll(/joinPath\(this\.extensionUri, "(dist|media)", "([^"]+)"\)/g)) needed.add(`${m[1]}/${m[2]}`);
   }
-  assert.ok(needed.has("dist/navigator.js") && needed.has("dist/webview.js"), [...needed].join(", "));
+  assert.ok(needed.has("dist/navigator.js") && needed.has("dist/chat.js") && needed.has("dist/chat.css"), [...needed].join(", "));
   const missing = [...needed].filter((f) => !listed.includes(f));
   assert.deepEqual(missing, [], `left out of the .vsix (see .vscodeignore): ${missing.join(", ")}`);
 });

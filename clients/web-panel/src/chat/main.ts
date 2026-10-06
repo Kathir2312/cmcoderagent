@@ -1,5 +1,6 @@
-// The chat panel (runs in the webview, a sandboxed browser page).
-// Plain DOM code: it receives protocol events from the extension and renders them.
+// The chat panel, the same in every IDE (VS Code, JetBrains, Visual Studio, Eclipse):
+// a sandboxed browser page. Plain DOM code: it receives protocol events from the
+// IDE side and renders them; it talks to the IDE only through ../bridge.
 
 import { marked } from "marked";
 import type {
@@ -12,11 +13,11 @@ import type {
   ToolResult,
   ToolUse,
 } from "../protocol";
-import type { FromWebview, ToWebview } from "../webviewMessages";
+import { bridge, hostSettings } from "../bridge";
+import type { FromWebview, ToWebview } from "../messages";
 
-declare function acquireVsCodeApi(): { postMessage(message: FromWebview): void };
-const vscode = acquireVsCodeApi();
-const post = (m: FromWebview) => vscode.postMessage(m);
+const host = bridge<FromWebview>();
+const post = (m: FromWebview) => host.post(m);
 
 const MODES = ["default", "acceptEdits", "plan", "bypassPermissions"];
 const MARKS: Record<string, string> = { pending: "☐", in_progress: "►", completed: "☑" };
@@ -81,7 +82,7 @@ function setMarkdown(target: HTMLElement, markdown: string): void {
 // --- layout ------------------------------------------------------------------
 
 // The product name (from the extension's displayName; see brand.ts).
-const PRODUCT = document.body.dataset.product || "cmcoder";
+const PRODUCT = hostSettings().product;
 
 const app = document.getElementById("app")!;
 app.innerHTML = `

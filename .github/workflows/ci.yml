@@ -104,18 +104,27 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: vscode/package-lock.json
+          cache-dependency-path: |
+            vscode/package-lock.json
+            clients/web-panel/package-lock.json
       - uses: astral-sh/setup-uv@v6
         with:
           python-version: "3.12"
       - run: uv sync --project ..
-      - run: npm ci
+      - run: npm ci  # also installs the shared panel's packages (postinstall)
       - name: Type check
+        run: npm run typecheck
+      - name: Type check the shared panel (clients/web-panel)
+        working-directory: clients/web-panel
         run: npm run typecheck
       - name: Build
         run: npm run build
       - name: Browser for the chat panel tests
+        working-directory: clients/web-panel
         run: npx playwright install ${{ runner.os == 'Linux' && '--with-deps' || '' }} chromium
+      - name: The shared panel, as each IDE connects to it (VS Code, WebView2, JCEF/SWT)
+        working-directory: clients/web-panel
+        run: npm test
       # The tests start cmcoder with this Python. (`uv run npm ...` can't start
       # npm on Windows, where it is npm.cmd.)
       - name: cmcoder's Python for the tests
@@ -159,8 +168,9 @@ jobs:
           uvx pip-audit -r /tmp/requirements.txt --no-deps --disable-pip --strict \
             --ignore-vuln PYSEC-2026-311 --ignore-vuln PYSEC-2026-3813 \
             --ignore-vuln PYSEC-2026-3814 --ignore-vuln PYSEC-2026-3815
-      - name: npm audit (extension dependencies; fails on high or critical)
+      - name: npm audit (extension and shared panel dependencies; fails on high or critical)
         working-directory: vscode
         run: |
           npm ci
           npm audit --audit-level=high
+          cd ../clients/web-panel && npm audit --audit-level=high

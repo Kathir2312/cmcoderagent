@@ -4,11 +4,12 @@
 // its steps and report; Stop a running subagent from its node.
 
 import type { AgentEvent, SubagentStatus } from "../protocol";
-import type { FromNavigator, ToNavigator } from "../webviewMessages";
+import { bridge, hostSettings } from "../bridge";
+import type { FromNavigator, ToNavigator } from "../messages";
 
-declare function acquireVsCodeApi(): { postMessage(message: FromNavigator): void };
-const vscode = acquireVsCodeApi();
-const post = (m: FromNavigator) => vscode.postMessage(m);
+const host = bridge<FromNavigator>();
+const post = (m: FromNavigator) => host.post(m);
+hostSettings();
 
 // --- layout (pixels) -------------------------------------------------------------
 

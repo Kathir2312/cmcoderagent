@@ -1,7 +1,9 @@
 **
 !dist/extension.js
-!dist/webview.js
+!dist/chat.js
+!dist/chat.css
 !dist/navigator.js
+!dist/navigator.css
 !media/**
 !package.json
 !README.md

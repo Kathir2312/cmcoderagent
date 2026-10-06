@@ -1,8 +1,9 @@
-"""Generate the TypeScript protocol types (`vscode/src/protocol.ts`) from the
-pydantic models, so the extension and the agent can't disagree.
+"""Generate the TypeScript protocol types (`clients/web-panel/src/protocol.ts`,
+the shared chat panel's, which the VS Code extension uses too) from the
+pydantic models, so the IDEs and the agent can't disagree.
 
-Run `cmcoder protocol-schema --typescript > vscode/src/protocol.ts`; a test
-fails when the file is out of date.
+Run `npm run generate` in clients/web-panel (it runs `cmcoder protocol-schema
+--typescript`); a test fails when the file is out of date.
 
 The schema is simple (strings, numbers, booleans, lists, open objects,
 literals, optional values), so a small generator is enough.
