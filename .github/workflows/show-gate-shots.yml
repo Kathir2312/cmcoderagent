@@ -1,24 +1,27 @@
-# One-off: prints the Visual Studio gate screenshots of release build #63 into the
-# log (base64), for viewers that can read logs but not artifact storage. Removed
-# after use.
-name: Show gate screenshots
+# One-off: copies the Visual Studio gate screenshots of release build #63 into
+# docs/guides/screenshots/ on this branch (artifact storage is out of reach from
+# the cloud session; git isn't). Removed after use.
+name: Gate screenshots into the docs
 on:
   push:
     paths: [".github/workflows/show-gate-shots.yml"]
 permissions:
   actions: read
+  contents: write
 jobs:
-  show:
+  copy:
     runs-on: ubuntu-latest
     steps:
-      - name: The screenshots as base64
+      - uses: actions/checkout@v4
+      - name: Commit the screenshots
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh run download 37505269839 -R "$GITHUB_REPOSITORY" -n gate-screenshots-win32-x64 -D shots
-          ls -la shots
-          for f in shots/visualstudio-*.png; do
-            echo "=== BEGIN $(basename "$f")"
-            base64 -w 76 "$f"
-            echo "=== END $(basename "$f")"
-          done
+          gh run download 37505269839 -R "$GITHUB_REPOSITORY" -n gate-screenshots-win32-x64 -D "$RUNNER_TEMP/shots"
+          ls -la "$RUNNER_TEMP/shots"
+          cp "$RUNNER_TEMP"/shots/visualstudio-*.png docs/guides/screenshots/
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/guides/screenshots/visualstudio-*.png
+          git commit -m "Visual Studio gate screenshots (release build #63)"
+          git push origin "HEAD:$GITHUB_REF_NAME"
