@@ -31,10 +31,18 @@ header {
 }
 
 header .model {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   opacity: 0.8;
+}
+
+/* A narrow panel (NetBeans, Eclipse side views): the model on its own row. */
+@media (max-width: 420px) {
+  header { flex-wrap: wrap; justify-content: flex-end; row-gap: 4px; }
+  header .model { flex-basis: 100%; }
 }
 
 select, input, textarea {
