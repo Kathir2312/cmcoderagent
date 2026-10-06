@@ -1,7 +1,9 @@
 // Runs inside VS Code's extension host (see runTest.ts).
 
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { mkdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import * as vscode from "vscode";
 import type { CmcoderApi } from "../../src/extension";
 import type { AgentEvent } from "../../src/protocol";
@@ -25,6 +27,16 @@ function diffTabs(): vscode.Tab[] {
   return vscode.window.tabGroups.all
     .flatMap((g) => g.tabs)
     .filter((t) => t.input instanceof vscode.TabInputTextDiff && t.input.modified.scheme === "cmcoder-diff");
+}
+
+/** A screenshot of the screen, if CMCODER_GATE_SHOTS names a folder (the release build keeps them for the guides). Never fails the test. */
+async function shot(name: string): Promise<void> {
+  const folder = process.env.CMCODER_GATE_SHOTS;
+  if (!folder) return;
+  await new Promise((r) => setTimeout(r, 1500)); // the page and the window settle
+  mkdirSync(folder, { recursive: true });
+  const r = spawnSync("import", ["-window", "root", join(folder, `vscode-${name}.png`)]);
+  if (r.status !== 0) console.warn(`screenshot ${name} failed: ${r.error ?? r.stderr}`);
 }
 
 export async function run(): Promise<void> {
@@ -64,6 +76,7 @@ export async function run(): Promise<void> {
   assert.equal(ask.name, "Edit");
   assert.deepEqual([ask.change?.before, ask.change?.after], ["x = 1\n", "x = 2\n"]);
   await until("the diff editor", () => diffTabs().length === 1);
+  await shot("2-diff");
   await vscode.commands.executeCommand("cmcoder.acceptChange");
   const edited = await until("the Edit result", () =>
     events.slice(mark).find((e) => e.type === "tool_result" && e.name === "Edit"),
@@ -84,6 +97,7 @@ export async function run(): Promise<void> {
   );
   assert.match((tool as Extract<AgentEvent, { type: "tool_result" }>).content, /app\.py:1:1 warning: x is never used/);
   assert.equal((await event("result", mark)).result, "Checked the problems.");
+  await shot("1-chat");
   problems.dispose();
 
   // 3. The Agent Navigator opens as an editor tab, and its page runs: its script
@@ -95,5 +109,6 @@ export async function run(): Promise<void> {
     vscode.window.tabGroups.all.some((g) => g.tabs.some((t) => t.label.endsWith("Agent Navigator"))),
   );
   await until("the Agent Navigator's script", () => navigatorReady);
+  await shot("3-navigator");
   readyListener.dispose();
 }

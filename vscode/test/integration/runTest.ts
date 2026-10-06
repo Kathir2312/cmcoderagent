@@ -70,6 +70,7 @@ async function main(): Promise<void> {
         CMCODER_CONFIG_DIR: join(dir, "config"),
         PYTHON_KEYRING_BACKEND: "keyring.backends.fail.Keyring",
         NO_PROXY: "127.0.0.1,localhost",
+        ...(process.env.CMCODER_GATE_SHOTS ? { CMCODER_GATE_SHOTS: process.env.CMCODER_GATE_SHOTS } : {}),
       },
     });
   } finally {

@@ -204,7 +204,15 @@ jobs:
           CMCODER_TEST_BUNDLED: "1"
         run: |
           export CMCODER_TEST_PYTHON="$(uv run python -c 'import sys; print(sys.executable)')"
-          xvfb-run -a npm run test:integration
+          command -v import >/dev/null || sudo apt-get install -y -q imagemagick  # screenshots for the guides
+          CMCODER_GATE_SHOTS="$RUNNER_TEMP/vscode-shots" xvfb-run -a -s "-screen 0 1280x800x24" npm run test:integration
+      - name: Screenshots from VS Code (chat, a diff, the navigator)
+        if: always() && runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate-screenshots-vscode
+          path: ${{ runner.temp }}/vscode-shots
+          if-no-files-found: ignore
       - name: What this platform's gates checked (all passed, or the job failed)
         shell: bash
         run: |
