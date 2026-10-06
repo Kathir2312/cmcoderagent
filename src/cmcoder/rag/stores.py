@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import os
 import sqlite3
+import sys
 import threading
 from dataclasses import dataclass
 from pathlib import Path
@@ -320,16 +321,30 @@ class ChromaServerStore:
 # --- Chroma on this machine ----------------------------------------------------
 
 
+def chroma_missing() -> str:
+    """Why Chroma on this machine can't be used, and what to do instead.
+
+    The standalone program (what developers install, with no Python) never
+    includes Chroma, so it must not suggest pip or uv, which they don't have.
+    """
+    if getattr(sys, "frozen", False):
+        return (
+            "Chroma on this machine isn't part of this installation. Choose the built-in "
+            'index on this machine ("store": {"type": "local"}) or a Chroma server.'
+        )
+    return (
+        "Chroma on this machine needs the chromadb package: "
+        "`uv tool install --force --reinstall cmcoder[chroma]` (or `pip install chromadb`), "
+        'or use the built-in store ("store": {"type": "local"}) or a Chroma server.'
+    )
+
+
 class ChromaLocalStore:
     def __init__(self, folder: Path, collection: str, metadata: dict[str, Any] | None = None):
         try:
             import chromadb  # type: ignore[import-not-found]
         except ImportError as e:
-            raise StoreError(
-                "Chroma on this machine needs the chromadb package: "
-                "`uv tool install --force --reinstall cmcoder[chroma]` (or `pip install chromadb`), "
-                'or use the built-in store ("store": {"type": "local"}) or a Chroma server.'
-            ) from e
+            raise StoreError(chroma_missing()) from e
         private_folder(folder)
         self.folder = folder
         self.collection_name = collection

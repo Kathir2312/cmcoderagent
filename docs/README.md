@@ -1,5 +1,8 @@
 # cmcoder documentation
 
+**Installing and using cmcoder** (terminal, VS Code, Eclipse; no Python
+needed): [guides/](guides/README.md).
+
 The code lives in one place (`src/cmcoder/`) and grows phase by phase. Each
 finished phase is frozen as a git snapshot, and its documents are frozen in
 its own folder. The current phase's documents are updated as features land.

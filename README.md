@@ -10,7 +10,8 @@ LangChain/LangGraph developers).
 
 > Status: **Phases 0–5 complete** (Windows, macOS and Linux): the terminal and TUI, VS Code, extensibility (MCP,
 > hooks, skills, subagents), hardening (sandbox, standalone build, both gateways) and code search.
-> **Phase 6 (JetBrains, Visual Studio, Eclipse) is planned**: [docs/phase6/PLAN.md](docs/phase6/PLAN.md).
+> **Install and use** (terminal, VS Code, Eclipse; no Python needed on the PC): [docs/guides/](docs/guides/README.md).
+> **Phase 6 (JetBrains, Visual Studio, Eclipse) is in progress**: [docs/phase6/PLAN.md](docs/phase6/PLAN.md).
 
 ## Install
 
@@ -22,7 +23,7 @@ for Windows on Windows (below):
   (macOS, Linux). It installs for you only (no administrator rights) and adds `cmcoder` to your PATH; open a new
   terminal and run `cmcoder doctor`. `uninstall.cmd` / `uninstall.sh` remove it (settings and keys are kept).
 - **VS Code:** `cmcoder-<platform>.vsix` → Extensions → ⋯ → *Install from VSIX…*.
-- JetBrains, Visual Studio and Eclipse: Phase 6 ([plan](docs/phase6/PLAN.md)).
+- Eclipse: done ([guide](docs/guides/eclipse.md)); JetBrains and Visual Studio: Phase 6 ([plan](docs/phase6/PLAN.md)).
 
 **From source** (contributors). Works on **Windows, macOS and Linux**. Requires Python 3.11+ and bash:
 

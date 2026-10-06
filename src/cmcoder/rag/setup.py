@@ -27,7 +27,7 @@ from ..providers.auth import store_api_key
 from ..providers.openai_compat import OpenAICompatProvider, ProviderError
 from .embed import Embedder
 from .index import CodeIndex
-from .stores import ChromaServerStore, StoreError, chroma_key_name
+from .stores import ChromaServerStore, StoreError, chroma_key_name, chroma_missing
 
 StoreKind = Literal["local", "chroma", "chroma-server"]
 Scope = Literal["user", "project"]
@@ -104,11 +104,7 @@ async def check_store(choice: SetupChoice) -> str:
         try:
             import chromadb  # type: ignore[import-not-found]  # noqa: F401
         except ImportError as e:
-            raise StoreError(
-                "Chroma on this machine needs the chromadb package: "
-                "`uv tool install --force --reinstall cmcoder[chroma]`. Or choose the built-in "
-                "index or a Chroma server."
-            ) from e
+            raise StoreError(chroma_missing()) from e
         return "Chroma on this machine"
     if not choice.url:
         raise StoreError(

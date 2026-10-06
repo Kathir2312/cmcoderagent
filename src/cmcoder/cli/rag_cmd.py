@@ -255,7 +255,7 @@ async def _setup(
                     "Store",
                     [
                         "On this machine, built in (nothing to install)",
-                        "Chroma on this machine (needs cmcoder[chroma])",
+                        "Chroma on this machine (not in the standalone program)",
                         "A Chroma server (can be shared by a team)",
                     ],
                 )
