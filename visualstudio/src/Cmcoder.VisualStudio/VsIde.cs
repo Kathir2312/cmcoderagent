@@ -55,7 +55,11 @@ namespace Cmcoder.VisualStudio
             return Package.GetGlobalService(typeof(DTE)) as DTE2;
         }
 
-        public void ToPanel(string json) => session.Chat?.Post(json);
+        public void ToPanel(string json)
+        {
+            if (json.StartsWith("{\"kind\":\"state\"", StringComparison.Ordinal)) session.LastState = json;
+            session.Chat?.Post(json);
+        }
 
         public void ToNavigator(string json) => session.Navigator?.Post(json);
 

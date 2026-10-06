@@ -439,6 +439,7 @@ namespace Cmcoder.Core
         private void SetState(string s, string? message)
         {
             state = s;
+            if (message != null) ide.Log(config.Product + ": " + message);
             ide.ToPanel(StateMessage(s, message));
         }
 

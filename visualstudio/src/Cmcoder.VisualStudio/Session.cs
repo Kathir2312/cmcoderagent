@@ -74,6 +74,9 @@ namespace Cmcoder.VisualStudio
         public OutputLog Log { get; }
         internal VsIde Ide { get; }
         internal volatile Panel? Chat;
+
+        /// <summary>The last state sent to the chat, with its message (diagnostics).</summary>
+        internal volatile string LastState = "";
         internal volatile Panel? Navigator;
 
         /// <summary>Runs on the session's thread, after reading the settings cmcoder starts with again.</summary>
@@ -198,7 +201,7 @@ namespace Cmcoder.VisualStudio
                 s.Append("Version: ").Append(Output(found.Program, project, "--version").Trim()).Append('\n');
                 s.Append("\ncmcoder doctor --no-probe:\n").Append(Output(found.Program, project, "doctor", "--no-probe")).Append('\n');
             }
-            s.Append("State: ").Append(Host.State).Append('\n');
+            s.Append("State: ").Append(Host.State).Append(' ').Append(LastState).Append('\n');
             s.Append("\nRecent log:\n");
             foreach (var line in Log.Recent()) s.Append(line).Append('\n');
             return s.ToString();

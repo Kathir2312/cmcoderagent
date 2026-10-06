@@ -369,6 +369,7 @@ public final class Host {
 
     private void setState(String s, String message) {
         state = s;
+        if (message != null) ide.log(config.product + ": " + message);
         toPanel(stateMessage(s, message));
     }
 

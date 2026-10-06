@@ -28,7 +28,8 @@ Write-Host "Visual Studio: $vs ($(& $vswhere -latest -products * -property catal
 $work = Join-Path $env:RUNNER_TEMP ('cmcoder-vs-gate-' + [guid]::NewGuid().ToString('N'))
 $project = Join-Path $work 'project'
 New-Item -ItemType Directory -Force -Path (Join-Path $project '.git') | Out-Null
-[IO.File]::WriteAllText((Join-Path $project 'app.py'), "x = 1`n")
+# No .py files: Visual Studio's own Python tooling would start Python for them.
+[IO.File]::WriteAllText((Join-Path $project 'app.cs'), "class App { }`n")
 $result = Join-Path $work 'result.json'
 $config = Join-Path $work 'config'
 New-Item -ItemType Directory -Force -Path $config | Out-Null
@@ -36,7 +37,7 @@ New-Item -ItemType Directory -Force -Path $config | Out-Null
 # The model's replies, in order: a getDiagnostics call, a reply, a Write
 # accepted, a reply, a Write rejected (the turn stops there).
 $script = Join-Path $work 'script.json'
-[IO.File]::WriteAllText($script, '[{"tool_calls":[{"name":"getDiagnostics","arguments":{}}]},{"content":"Checked the problems."},{"tool_calls":[{"name":"Write","arguments":{"file_path":"new.py","content":"x = 2\n"}}]},{"content":"Wrote new.py."},{"tool_calls":[{"name":"Write","arguments":{"file_path":"other.py","content":"y = 3\n"}}]}]')
+[IO.File]::WriteAllText($script, '[{"tool_calls":[{"name":"getDiagnostics","arguments":{}}]},{"content":"Checked the problems."},{"tool_calls":[{"name":"Write","arguments":{"file_path":"new.txt","content":"x = 2\n"}}]},{"content":"Wrote new.py."},{"tool_calls":[{"name":"Write","arguments":{"file_path":"other.txt","content":"y = 3\n"}}]}]')
 $apiKey = 'sk-gate-' + [guid]::NewGuid().ToString('N')
 
 $mockInfo = New-Object System.Diagnostics.ProcessStartInfo
@@ -88,6 +89,7 @@ try {
     $report = Get-Content $result -Raw | ConvertFrom-Json
     Write-Host 'Steps:'
     $report.steps | ForEach-Object { Write-Host "  $_" }
+    Write-Host "State: $($report.state)"
     if (-not $report.ok) {
         Write-Host 'Log:'
         $report.log | ForEach-Object { Write-Host "  $_" }

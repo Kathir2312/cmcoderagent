@@ -40,6 +40,18 @@ namespace Cmcoder.VisualStudio
                 catch (Exception e)
                 {
                     failure = e.ToString();
+                    try
+                    {
+                        // What the chat page was doing, for the report.
+                        await package.JoinableTaskFactory.SwitchToMainThreadAsync();
+                        var chat = Session.Get().Chat;
+                        failure += "\nchat page: " + (chat == null ? "not open" : await chat.EvaluateAsync(
+                            "document.URL + ' ' + document.readyState + ' webview=' + typeof (window.chrome && window.chrome.webview) + ' text=' + document.body.textContent.slice(0, 300)"));
+                    }
+                    catch (Exception probe)
+                    {
+                        failure += "\n(no page probe: " + probe.Message + ")";
+                    }
                 }
                 await package.JoinableTaskFactory.SwitchToMainThreadAsync();
                 var report = new JObject
@@ -47,7 +59,7 @@ namespace Cmcoder.VisualStudio
                     ["ok"] = failure == null,
                     ["failure"] = failure,
                     ["steps"] = new JArray(Steps),
-                    ["state"] = Session.Get().Host.State,
+                    ["state"] = Session.Get().Host.State + " " + Session.Get().LastState,
                     ["log"] = new JArray(Session.Get().Log.Recent()),
                 };
                 File.WriteAllText(result, report.ToString(Formatting.Indented));
@@ -95,12 +107,12 @@ namespace Cmcoder.VisualStudio
             // The folder Visual Studio was started with (Open Folder).
             string? folder = null;
             await UntilAsync("the folder is open", () => (folder = Session.SolutionFolder()) != null);
-            var app = Path.Combine(folder!, "app.py");
+            var app = Path.Combine(folder!, "app.cs");
 
             // H7: an open file with a selection.
             VsShellUtilities.OpenDocument(package, app, Guid.Empty, out _, out _, out var appFrame, out _);
             appFrame.Show();
-            await UntilAsync("app.py is the active document", () => string.Equals(dte.ActiveDocument?.FullName, app, StringComparison.OrdinalIgnoreCase));
+            await UntilAsync("app.cs is the active document", () => string.Equals(dte.ActiveDocument?.FullName, app, StringComparison.OrdinalIgnoreCase));
             ((TextSelection)dte.ActiveDocument.Selection).SelectLine();
 
             // H1, H2, H5: the chat opens, cmcoder (the bundled one) starts.
@@ -108,7 +120,7 @@ namespace Cmcoder.VisualStudio
             var chat = window.Panel;
             await UntilAsync("cmcoder ready", () => session.Host.State == "ready" && session.Host.Running, 180);
             await UntilAsync("the page's test driver", async () => await DriverAsync(chat, "count", "textarea") == "1");
-            await UntilAsync("the context label", async () => (await DriverAsync(chat, "text", ".context span")).Contains("app.py:1"));
+            await UntilAsync("the context label", async () => (await DriverAsync(chat, "text", ".context span")).Contains("app.cs:1"));
             await UntilAsync("code search's status item", () => window.CodeSearchText == "Code search: off");
             var diagnosticsText = session.Diagnostics(folder, dte.Version, true);
             if (!diagnosticsText.Contains("bin\\cmcoder\\cmcoder.exe")) throw new Exception("cmcoder didn't come from the extension:\n" + diagnosticsText);
@@ -122,26 +134,26 @@ namespace Cmcoder.VisualStudio
             await UntilAsync("the first reply", async () => (await DriverAsync(chat, "texts", ".msg.assistant")).Contains("Checked the problems."));
 
             // H9, H10: a change in the diff window, accepted there.
-            await SendAsync(chat, "create new.py");
+            await SendAsync(chat, "create new.txt");
             await UntilAsync("the diff window", () => session.Ide.Diffs.OpenRequests.Count == 1);
             session.Ide.Diffs.Click(session.Ide.Diffs.OpenRequests.First(), DiffReview.Accept);
-            await UntilAsync("new.py written", () => File.Exists(Path.Combine(folder!, "new.py")));
+            await UntilAsync("new.txt written", () => File.Exists(Path.Combine(folder!, "new.txt")));
             await UntilAsync("the diff closed", () => session.Ide.Diffs.OpenRequests.Count == 0);
             await UntilAsync("the chat says Allowed", async () => (await DriverAsync(chat, "texts", ".permission .answer")).Contains("Allowed"));
-            if (File.ReadAllText(Path.Combine(folder!, "new.py")) != "x = 2\n") throw new Exception("new.py has the wrong text");
+            if (File.ReadAllText(Path.Combine(folder!, "new.txt")) != "x = 2\n") throw new Exception("new.txt has the wrong text");
 
             // Rejected there: nothing written.
-            await SendAsync(chat, "create other.py");
+            await SendAsync(chat, "create other.txt");
             await UntilAsync("the second diff window", () => session.Ide.Diffs.OpenRequests.Count == 1);
             session.Ide.Diffs.Click(session.Ide.Diffs.OpenRequests.First(), DiffReview.Reject);
             await UntilAsync("the chat says Denied", async () => (await DriverAsync(chat, "texts", ".permission .answer")).Contains("Denied"));
             await UntilAsync("the second diff closed", () => session.Ide.Diffs.OpenRequests.Count == 0);
-            if (File.Exists(Path.Combine(folder!, "other.py"))) throw new Exception("other.py was written after Reject");
+            if (File.Exists(Path.Combine(folder!, "other.txt"))) throw new Exception("other.txt was written after Reject");
 
             // H15: the navigator, opened now, shows the turn.
             var navigator = (NavigatorWindow)(await package.ShowToolWindowAsync(typeof(NavigatorWindow), 0, true, package.DisposalToken))!;
             await UntilAsync("the navigator's turn", async () =>
-                (await navigator.Panel.EvaluateAsync("document.body.textContent")).Contains("create other.py"));
+                (await navigator.Panel.EvaluateAsync("document.body.textContent")).Contains("create other.txt"));
 
             // H19: the page can't navigate away.
             var url = chat.View.Source?.ToString();
