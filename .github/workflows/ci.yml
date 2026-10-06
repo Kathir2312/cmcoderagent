@@ -4,6 +4,11 @@ on:
   push:
   pull_request:
 
+# A newer push to the same branch replaces a run still going (tags each have their own).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     name: test (${{ matrix.os }}, py${{ matrix.python-version }})
@@ -328,8 +333,11 @@ jobs:
           nb="$RUNNER_TEMP/netbeans-${{ matrix.netbeans }}"
           [ -x "$nb/netbeans/bin/netbeans" ] && exit 0
           mkdir -p "$nb" && cd "$nb"
-          base=https://archive.apache.org/dist/netbeans/netbeans/${{ matrix.netbeans }}
-          curl -fsSL -O $base/netbeans-${{ matrix.netbeans }}-bin.zip -O $base/netbeans-${{ matrix.netbeans }}-bin.zip.sha512
+          # downloads.apache.org is fast but holds only the newest release; the archive has all, slowly.
+          v=${{ matrix.netbeans }}
+          for base in https://downloads.apache.org/netbeans/netbeans/$v https://archive.apache.org/dist/netbeans/netbeans/$v; do
+            curl -fsSL --retry 3 -O $base/netbeans-$v-bin.zip && curl -fsSL -O $base/netbeans-$v-bin.zip.sha512 && break
+          done
           [ "$(cut -d' ' -f1 netbeans-*-bin.zip.sha512)" = "$(sha512sum netbeans-*-bin.zip | cut -d' ' -f1)" ]
           unzip -q netbeans-*-bin.zip && rm netbeans-*-bin.zip
       - name: The shared chat panel

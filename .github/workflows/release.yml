@@ -33,6 +33,11 @@ on:
       - "uv.lock"
       - ".github/workflows/release.yml"
 
+# A newer push to the same branch replaces a run still going (tags each have their own).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     name: build (${{ matrix.target }})
@@ -119,8 +124,10 @@ jobs:
           nb="$RUNNER_TEMP/netbeans-31"
           if [ ! -x "$nb/netbeans/bin/netbeans" ]; then
             mkdir -p "$nb" && cd "$nb"
-            curl -fsSL -O https://archive.apache.org/dist/netbeans/netbeans/31/netbeans-31-bin.zip
-            curl -fsSL -O https://archive.apache.org/dist/netbeans/netbeans/31/netbeans-31-bin.zip.sha512
+            # downloads.apache.org is fast but holds only the newest release; the archive has all, slowly.
+            for base in https://downloads.apache.org/netbeans/netbeans/31 https://archive.apache.org/dist/netbeans/netbeans/31; do
+              curl -fsSL --retry 3 -O $base/netbeans-31-bin.zip && curl -fsSL -O $base/netbeans-31-bin.zip.sha512 && break
+            done
             [ "$(cut -d' ' -f1 netbeans-31-bin.zip.sha512)" = "$( (sha512sum netbeans-31-bin.zip 2>/dev/null || shasum -a 512 netbeans-31-bin.zip) | cut -d' ' -f1)" ]
             if [ "$RUNNER_OS" = Windows ]; then 7z x -bd -y netbeans-31-bin.zip > /dev/null; else unzip -q netbeans-31-bin.zip; fi
             rm netbeans-31-bin.zip
