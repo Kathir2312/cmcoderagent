@@ -24,7 +24,12 @@ import brand  # noqa: E402
 
 
 def main() -> None:
-    import PyInstaller.__main__
+    try:
+        import PyInstaller.__main__
+    except ImportError:
+        sys.exit(
+            "PyInstaller is needed for the build: uv run --with pyinstaller python packaging/build.py"
+        )
 
     try:
         brand.generate()

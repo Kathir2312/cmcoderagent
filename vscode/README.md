@@ -19,7 +19,7 @@ User guide: [docs/guides/vscode.md](../docs/guides/vscode.md).
 code --install-extension cmcoder-win32-x64.vsix
 ```
 
-For maintainers: `uv run python packaging/build.py` then
+For maintainers: `uv run --with pyinstaller python packaging/build.py` then
 `uv run python packaging/vsix.py` builds `cmcoder-<platform>.vsix` with the
 program inside. `npm ci && npm run package` here (Node.js 22+) builds a
 development `.vsix` without it, which needs `cmcoder` on PATH.
