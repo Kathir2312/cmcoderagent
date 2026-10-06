@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE filesystem PUBLIC "-//NetBeans//DTD Filesystem 1.2//EN" "http://www.netbeans.org/dtds/filesystem-1_2.dtd">
+<!-- The Tools → cmcoder submenu's place (the actions in it are registered by annotations). -->
+<filesystem>
+    <folder name="Menu">
+        <folder name="Tools">
+            <folder name="cmcoder">
+                <attr name="position" intvalue="1350"/>
+            </folder>
+        </folder>
+    </folder>
+</filesystem>

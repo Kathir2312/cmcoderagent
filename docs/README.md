@@ -1,6 +1,6 @@
 # cmcoder documentation
 
-**Installing and using cmcoder** (terminal, VS Code, Eclipse; no Python
+**Installing and using cmcoder** (terminal, VS Code, Eclipse, NetBeans; no Python
 needed): [guides/](guides/README.md).
 
 The code lives in one place (`src/cmcoder/`) and grows phase by phase. Each

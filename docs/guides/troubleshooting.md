@@ -7,7 +7,7 @@ is never shown in it.
 
 ## PCs without Python
 
-Nothing in the terminal package, the VS Code extension or the Eclipse plugin
+Nothing in the terminal package or the VS Code, Eclipse and NetBeans plugins
 needs Python, and cmcoder never tries to install it. If something asks for
 `python`, `pip`, `uv` or `npx`, it comes from your own configuration:
 
@@ -19,6 +19,7 @@ needs Python, and cmcoder never tries to install it. If something asks for
 | "Can't reach the Chroma server http://localhost:…" | Chroma isn't running on this PC | start it ([code-search.md](code-search.md)) |
 | VS Code: "cmcoder couldn't start" mentioning `uv` | `cmcoder.executable` / `executableArgs` were set | remove both settings: the extension then uses its own copy |
 | Eclipse: the program can't start | **cmcoder program** preference set | empty it (Preferences → cmcoder) |
+| NetBeans: the program can't start | **cmcoder program** option set | empty it (Tools → Options → Miscellaneous → cmcoder) |
 
 ## Common problems
 
@@ -34,6 +35,8 @@ needs Python, and cmcoder never tries to install it. If something asks for
 | Eclipse: the chat is blank (Windows) | install the Microsoft Edge WebView2 Runtime |
 | Eclipse: the chat is blank (Linux) | install WebKitGTK: `sudo apt install libwebkit2gtk-4.1-0` (or your distribution's package) |
 | Eclipse: plugin won't install | Eclipse older than 2024-06, or not on Java 21 |
+| NetBeans: "cannot be installed" / missing modules | NetBeans older than 28, or the `.nbm` of another platform: take the one for your OS |
+| NetBeans: the chat says it couldn't start (JavaFX) | Linux: install GTK 3 (`sudo apt install libgtk-3-0`); then **Copy cmcoder Diagnostics** for support |
 | The project's `.cmcoder` settings are ignored | the project isn't trusted: `cmcoder trust`, VS Code's workspace trust, or Eclipse's preference |
 | Corporate antivirus blocks `cmcoder.exe` | ask IT to allow it (the signed build, once your company signs it) |
 
@@ -43,6 +46,7 @@ needs Python, and cmcoder never tries to install it. If something asks for
 |---|---|
 | VS Code | **cmcoder: Show Log** |
 | Eclipse | Ctrl+3 → **cmcoder: Show Log** (Console view) |
+| NetBeans | **Tools → cmcoder → Show cmcoder Log** (Output window) |
 | Terminal / all | `~/.cmcoder/logs/` (MCP servers: `mcp-<name>.log`) |
 
 When asking for help, send the **diagnostics** text and the log, not

@@ -1,0 +1,3 @@
+# Build output; bin/cmcoder/ is copied in by the release build.
+target/
+bin/

@@ -15,6 +15,7 @@ runs on your PC.
 | A terminal (PowerShell, cmd, Terminal, bash) | the terminal package | [terminal.md](terminal.md) |
 | VS Code | the VS Code extension | [vscode.md](vscode.md) |
 | Eclipse | the Eclipse plugin | [eclipse.md](eclipse.md) |
+| NetBeans | the NetBeans plugin | [netbeans.md](netbeans.md) |
 
 You can use several: they share your settings, your API key, your permission
 answers and your saved conversations. Each IDE extension contains its own copy
@@ -35,7 +36,9 @@ download.
 | **Git for Windows** | cmcoder runs shell commands with Git Bash (as Claude Code does) | Windows only; most developers have it. macOS and Linux have bash already |
 | **Microsoft Edge WebView2 Runtime** | the chat panel in Eclipse (VS Code has its own) | Windows; part of Windows 11 and of Microsoft Edge |
 | **Java 21** | runs Eclipse itself | Eclipse users (Eclipse 2024-06 or newer) |
+| **JDK 17 or newer** | runs NetBeans itself | NetBeans users (NetBeans 28 or newer) |
 | **WebKitGTK** (`libwebkit2gtk-4.1-0`) | the chat panel in Eclipse | Eclipse on Linux |
+| **GTK 3** (`libgtk-3-0`) | the chat panel in NetBeans (its browser is inside the plugin) | NetBeans on Linux; desktop Linux has it |
 | Network access to your AI gateway | the model | everyone (often: the VPN) |
 
 ## Where the files come from
@@ -49,5 +52,6 @@ green run → Artifacts). Pick your platform: `win32-x64` (Windows),
 | `cmcoder-terminal-<platform>.zip` | the terminal package (install scripts inside) |
 | `cmcoder-<platform>.vsix` | the VS Code extension (cmcoder inside) |
 | `cmcoder-eclipse` (a `.zip`) | the Eclipse plugin, every platform in one file |
+| `cmcoder-netbeans-<platform>.nbm` | the NetBeans plugin (cmcoder and its chat browser inside) |
 
 Updates are new files: install the new one over the old one.

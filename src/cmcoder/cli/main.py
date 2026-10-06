@@ -53,7 +53,7 @@ sub_app = typer.Typer(
 
 
 # The IDEs that run cmcoder over the protocol (--client), as telemetry labels them.
-CLIENTS = ("vscode", "jetbrains", "eclipse", "visualstudio")
+CLIENTS = ("vscode", "jetbrains", "eclipse", "visualstudio", "netbeans")
 
 
 def _load(cwd: Path | None = None, trust_project: bool = False) -> Settings:
@@ -190,7 +190,7 @@ def main(
         typer.Option(
             "--client",
             help="With --protocol: which IDE runs cmcoder (vscode, jetbrains, eclipse, "
-            "visualstudio), for usage counts when telemetry is on.",
+            "visualstudio, netbeans), for usage counts when telemetry is on.",
         ),
     ] = None,
     version: Annotated[bool, typer.Option("--version", help="Print the version and exit.")] = False,

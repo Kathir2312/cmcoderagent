@@ -541,7 +541,16 @@ Findings fixed with a test that fails on the earlier code, as before.
 
 ### 11. Apache NetBeans plugin (added 6 October 2026)
 
-**Status: in progress.** Decided with the user: the **same shared chat page**
+**Status: in progress. The gate passes here in a real NetBeans 31 on JDK 21
+and on JDK 25 (Linux, the bundled cmcoder, no Python on PATH); CI runs it on
+NetBeans 28 and 31, the release build on every platform.** Found by the gate
+and fixed: a script's navigation away from the page made JavaFX report the
+other address (messages are now trusted by a secret per page load, not by
+the address, and the chat page is loaded again if needed); the chat brought
+forward by Ask About Selection opened a second chat window; closing the chat
+reloaded its page, which started cmcoder again.
+
+Decided with the user: the **same shared chat page**
 in a bundled **JavaFX WebView** (NetBeans has no built-in browser), for the
 **latest four NetBeans releases** (28 to 31 today; tested on the oldest and
 newest).
@@ -563,8 +572,9 @@ newest).
 - With NetBeans' APIs: the Diff API (`DiffController`) in an editor tab with
   Accept / Accept Always / Reject (H9, H10); the editor context from
   `EditorRegistry` (H7); `openFile` through `DataObject`/`LineCookie`;
-  `getDiagnostics` for Java files through the Java Source API (compiler
-  errors and warnings as NetBeans shows them; other file types have none, H8);
+  `getDiagnostics` and the context's problems from the error providers
+  NetBeans registers per file type (`ErrorProvider`, the ones its language
+  server uses: Java and others; with no file named, the open files, H8);
   the Agent Navigator as an editor tab (H15); code search in the chat's
   toolbar with the set-up as dialogs (H16); an Options panel (H17, H21: "Use
   the project's own .cmcoder settings", off); actions, the editor menu entry
@@ -575,8 +585,9 @@ newest).
   and JavaFX threads never wait for cmcoder (the Visual Studio deadlock).
 - **Gate:** as for Visual Studio, a self-test compiled only into a test build
   (`-Pgate`) and run when NetBeans starts with `-J-Dcmcoder.gate=<report>`:
-  the NetBeans zip from archive.apache.org, the `.nbm` installed with
-  `netbeans --modules --install`, a fresh user folder, the mock model server,
+  the NetBeans zip from archive.apache.org, the `.nbm`'s files put into a
+  fresh user folder as NetBeans' installer lays them out (`--modules
+  --install` first refreshes the update catalog, which closed networks refuse), the mock model server,
   no Python on the search path, Xvfb on Linux. The same steps as the other
   gates (page loads, cmcoder from the plugin starts, context, diagnostics,
   a change accepted and one rejected in the diff tab, the navigator, blocked

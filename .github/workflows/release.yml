@@ -5,10 +5,11 @@ name: Release build
 # plugin. Each build is tested as users run it, with no Python in reach
 # (packaging/no_python.py: developers' PCs have none); on Linux the extension
 # is also run in a real VS Code with the bundled cmcoder, and the Eclipse plugin
-# runs in a real Eclipse on every platform with its bundled cmcoder. Artifacts:
-# cmcoder-<target> (the program folder), cmcoder-terminal-<target> (the zip
-# with install scripts), cmcoder-<target>.vsix and cmcoder-eclipse (the update
-# site archive, every platform in one).
+# runs in a real Eclipse on every platform with its bundled cmcoder, as does
+# the NetBeans plugin in a real NetBeans. Artifacts: cmcoder-<target> (the
+# program folder), cmcoder-terminal-<target> (the zip with install scripts),
+# cmcoder-<target>.vsix, cmcoder-netbeans-<target>.nbm and cmcoder-eclipse
+# (the update site archive, every platform in one).
 on:
   workflow_dispatch:
   push:
@@ -20,6 +21,7 @@ on:
       - "clients/**"
       - "eclipse/**"
       - "visualstudio/**"
+      - "netbeans/**"
       - "pyproject.toml"
       - "uv.lock"
       - ".github/workflows/release.yml"
@@ -94,6 +96,41 @@ jobs:
           cd eclipse
           CMCODER_TEST_BUNDLED=1 $x uv run python ../packaging/no_python.py run -- $mvn -B verify
           rm -rf fragments/cmcoder.eclipse.$frag/bin/cmcoder
+      - name: NetBeans (the newest release; cached)
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/netbeans-31
+          key: netbeans-31-bin
+      - name: The NetBeans plugin in a real NetBeans, with this cmcoder inside (no Python in reach)
+        shell: bash
+        run: |
+          case "$RUNNER_OS" in
+            Linux) plat=linux ;;
+            Windows) plat=win ;;
+            macOS) plat=mac-aarch64 ;;
+          esac
+          nb="$RUNNER_TEMP/netbeans-31"
+          if [ ! -x "$nb/netbeans/bin/netbeans" ]; then
+            mkdir -p "$nb" && cd "$nb"
+            curl -fsSL -O https://archive.apache.org/dist/netbeans/netbeans/31/netbeans-31-bin.zip
+            curl -fsSL -O https://archive.apache.org/dist/netbeans/netbeans/31/netbeans-31-bin.zip.sha512
+            [ "$(cut -d' ' -f1 netbeans-31-bin.zip.sha512)" = "$( (sha512sum netbeans-31-bin.zip 2>/dev/null || shasum -a 512 netbeans-31-bin.zip) | cut -d' ' -f1)" ]
+            if [ "$RUNNER_OS" = Windows ]; then 7z x -bd -y netbeans-31-bin.zip > /dev/null; else unzip -q netbeans-31-bin.zip; fi
+            rm netbeans-31-bin.zip
+            cd "$GITHUB_WORKSPACE"
+          fi
+          rm -rf netbeans/bin && mkdir -p netbeans/bin && cp -RL dist/cmcoder netbeans/bin/cmcoder  # links as files
+          mvn=mvn; [ "$RUNNER_OS" = Windows ] && mvn=mvn.cmd
+          (cd netbeans && $mvn -B -q package -Dplatform=$plat -Pgate && mv target/cmcoder-netbeans-${{ matrix.target }}.nbm ../gate.nbm)
+          (cd netbeans && $mvn -B -q package -Dplatform=$plat && cp target/cmcoder-netbeans-${{ matrix.target }}.nbm ../dist/)
+          py="$(uv run python -c 'import sys; print(sys.executable)')"
+          x=(); [ "$RUNNER_OS" = Linux ] && x=(xvfb-run -a -s "-screen 0 1600x1000x24")
+          "${x[@]}" uv run python packaging/no_python.py run -- bash netbeans/gate/run-gate.sh \
+            --nbm gate.nbm --netbeans "$nb/netbeans" --python "$py" --jdk "$JAVA_HOME"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cmcoder-netbeans-${{ matrix.target }}.nbm
+          path: dist/cmcoder-netbeans-${{ matrix.target }}.nbm
       - name: The Visual Studio extension, with this cmcoder inside (Windows)
         if: runner.os == 'Windows'
         shell: pwsh

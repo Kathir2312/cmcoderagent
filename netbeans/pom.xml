@@ -1,0 +1,249 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  cmcoder for Apache NetBeans (Phase 6 item 11): one .nbm per platform with the
+  module, the JVM core (clients/jvm-core, compiled in), OpenJFX for that
+  platform (the chat page in a JavaFX WebView: NetBeans has no browser of its
+  own) and the standalone cmcoder (bin/cmcoder/, copied in by the release
+  build).
+
+    (cd ../clients/web-panel && npm ci && npm run build)
+    mvn -B package -Dplatform=linux            # or win, mac-aarch64
+    mvn -B package -Dplatform=linux -Pgate     # the test build (never shipped)
+
+  Output: target/cmcoder-netbeans-<platform>.nbm
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>cmcoder.netbeans</groupId>
+  <artifactId>cmcoder-netbeans</artifactId>
+  <version>0.1.0</version>
+  <packaging>nbm</packaging>
+  <name>cmcoder</name>
+  <description>The cmcoder coding assistant in NetBeans: chat, proposed changes in the diff viewer, code search.</description>
+
+  <properties>
+    <!-- Java 17, like the JVM core: NetBeans 28 runs on JDK 17 and newer. -->
+    <maven.compiler.release>17</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <!-- The oldest supported NetBeans: compiled against its APIs, so nothing newer is used. -->
+    <netbeans.version>RELEASE280</netbeans.version>
+    <!-- OpenJFX 21 LTS: runs on JDK 17 and newer (later JavaFX needs a newer JDK). -->
+    <javafx.version>21.0.12</javafx.version>
+    <!-- win, linux or mac-aarch64 (OpenJFX's names). -->
+    <platform>linux</platform>
+    <os.token>org.openide.modules.os.Linux</os.token>
+    <gate>false</gate>
+  </properties>
+
+  <profiles>
+    <profile>
+      <id>win</id>
+      <activation><property><name>platform</name><value>win</value></property></activation>
+      <properties><os.token>org.openide.modules.os.Windows</os.token><target.name>win32-x64</target.name></properties>
+    </profile>
+    <profile>
+      <id>linux</id>
+      <activation><property><name>platform</name><value>linux</value></property></activation>
+      <properties><os.token>org.openide.modules.os.Linux</os.token><target.name>linux-x64</target.name></properties>
+    </profile>
+    <profile>
+      <id>mac</id>
+      <activation><property><name>platform</name><value>mac-aarch64</value></property></activation>
+      <properties><os.token>org.openide.modules.os.MacOSX</os.token><target.name>darwin-arm64</target.name></properties>
+    </profile>
+    <profile>
+      <!-- The release gate's self-test (src/gate: Gate.java) and the panel's test
+           driver are in the module only here. -->
+      <id>gate</id>
+      <properties><gate>true</gate></properties>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>build-helper-maven-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>gate-source</id>
+                <phase>generate-sources</phase>
+                <goals><goal>add-source</goal></goals>
+                <configuration><sources><source>${project.basedir}/src/gate/java</source></sources></configuration>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-antrun-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>gate-driver</id>
+                <phase>process-resources</phase>
+                <goals><goal>run</goal></goals>
+                <configuration>
+                  <target>
+                    <copy todir="${project.build.directory}/cluster-files/cmcoder-netbeans/panel"
+                          file="${project.basedir}/../clients/web-panel/dist/test-driver.js"/>
+                  </target>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
+
+  <dependencies>
+    <dependency><groupId>org.netbeans.api</groupId><artifactId>org-openide-util</artifactId><version>${netbeans.version}</version></dependency>
+    <dependency><groupId>org.netbeans.api</groupId><artifactId>org-openide-util-lookup</artifactId><version>${netbeans.version}</version></dependency>
+    <dependency><groupId>org.netbeans.api</groupId><artifactId>org-openide-util-ui</artifactId><version>${netbeans.version}</version></dependency>
+    <dependency><groupId>org.netbeans.api</groupId><artifactId>org-openide-windows</artifactId><version>${netbeans.version}</version></dependency>
+    <dependency><groupId>org.netbeans.api</groupId><artifactId>org-openide-awt</artifactId><version>${netbeans.version}</version></dependency>
+    <dependency><groupId>org.netbeans.api</groupId><artifactId>org-openide-dialogs</artifactId><version>${netbeans.version}</version></dependency>
+    <dependency><groupId>org.netbeans.api</groupId><artifactId>org-openide-modules</artifactId><version>${netbeans.version}</version></dependency>
+    <dependency><groupId>org.netbeans.api</groupId><artifactId>org-openide-filesystems</artifactId><version>${netbeans.version}</version></dependency>
+    <dependency><groupId>org.netbeans.api</groupId><artifactId>org-openide-loaders</artifactId><version>${netbeans.version}</version></dependency>
+    <dependency><groupId>org.netbeans.api</groupId><artifactId>org-openide-nodes</artifactId><version>${netbeans.version}</version></dependency>
+    <dependency><groupId>org.netbeans.api</groupId><artifactId>org-openide-text</artifactId><version>${netbeans.version}</version></dependency>
+    <dependency><groupId>org.netbeans.api</groupId><artifactId>org-openide-io</artifactId><version>${netbeans.version}</version></dependency>
+    <dependency><groupId>org.netbeans.api</groupId><artifactId>org-netbeans-modules-diff</artifactId><version>${netbeans.version}</version></dependency>
+    <dependency><groupId>org.netbeans.api</groupId><artifactId>org-netbeans-api-lsp</artifactId><version>${netbeans.version}</version></dependency>
+    <dependency><groupId>org.netbeans.api</groupId><artifactId>org-netbeans-modules-editor-lib2</artifactId><version>${netbeans.version}</version></dependency>
+    <dependency><groupId>org.netbeans.api</groupId><artifactId>org-netbeans-modules-editor-mimelookup</artifactId><version>${netbeans.version}</version></dependency>
+    <dependency><groupId>org.netbeans.api</groupId><artifactId>org-netbeans-modules-projectapi</artifactId><version>${netbeans.version}</version></dependency>
+    <dependency><groupId>org.netbeans.api</groupId><artifactId>org-netbeans-modules-projectuiapi</artifactId><version>${netbeans.version}</version></dependency>
+    <dependency><groupId>org.netbeans.api</groupId><artifactId>org-netbeans-modules-options-api</artifactId><version>${netbeans.version}</version></dependency>
+    <dependency><groupId>org.netbeans.api</groupId><artifactId>org-netbeans-api-annotations-common</artifactId><version>${netbeans.version}</version></dependency>
+    <dependency><groupId>org.netbeans.api</groupId><artifactId>org-netbeans-api-progress</artifactId><version>${netbeans.version}</version></dependency>
+
+    <!-- OpenJFX for this platform (put into the .nbm's ext folder by nbm-maven-plugin). -->
+    <dependency><groupId>org.openjfx</groupId><artifactId>javafx-base</artifactId><version>${javafx.version}</version><classifier>${platform}</classifier></dependency>
+    <dependency><groupId>org.openjfx</groupId><artifactId>javafx-graphics</artifactId><version>${javafx.version}</version><classifier>${platform}</classifier></dependency>
+    <dependency><groupId>org.openjfx</groupId><artifactId>javafx-controls</artifactId><version>${javafx.version}</version><classifier>${platform}</classifier></dependency>
+    <dependency><groupId>org.openjfx</groupId><artifactId>javafx-media</artifactId><version>${javafx.version}</version><classifier>${platform}</classifier></dependency>
+    <dependency><groupId>org.openjfx</groupId><artifactId>javafx-web</artifactId><version>${javafx.version}</version><classifier>${platform}</classifier></dependency>
+    <dependency><groupId>org.openjfx</groupId><artifactId>javafx-swing</artifactId><version>${javafx.version}</version><classifier>${platform}</classifier></dependency>
+  </dependencies>
+
+  <build>
+    <finalName>cmcoder-netbeans-${target.name}</finalName>
+    <resources>
+      <!-- The module's manifest: its OS (the wrong platform's file can't be enabled). -->
+      <resource>
+        <directory>src/main/nbm</directory>
+        <filtering>true</filtering>
+        <targetPath>${project.build.directory}/nbm-manifest</targetPath>
+      </resource>
+      <resource>
+        <directory>src/main/resources</directory>
+      </resource>
+    </resources>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.netbeans.utilities</groupId>
+        <artifactId>nbm-maven-plugin</artifactId>
+        <version>14.5</version>
+        <extensions>true</extensions>
+        <configuration>
+          <codeNameBase>cmcoder.netbeans</codeNameBase>
+          <cluster>cmcoder</cluster>
+          <sourceManifestFile>${project.build.directory}/nbm-manifest/manifest.mf</sourceManifestFile>
+          <author>cmcoder</author>
+          <licenseName>For use inside the company only</licenseName>
+          <licenseFile>${project.basedir}/LICENSE.txt</licenseFile>
+          <requiresRestart>true</requiresRestart>
+          <!-- Files next to the module in NetBeans' folder: the chat page's files and
+               cmcoder itself (file: URLs and a program need real files). -->
+          <nbmResources>
+            <nbmResource>
+              <directory>${project.build.directory}/cluster-files</directory>
+            </nbmResource>
+          </nbmResources>
+          <verifyRuntime>skip</verifyRuntime>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>3.4.2</version>
+        <configuration>
+          <archive>
+            <manifestFile>${project.build.outputDirectory}/META-INF/MANIFEST.MF</manifestFile>
+          </archive>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.13.0</version>
+        <configuration>
+          <compilerArgs><arg>-Xlint:all,-processing,-serial,-classfile,-options</arg></compilerArgs>
+        </configuration>
+      </plugin>
+      <!-- The JVM core, compiled into the module (as in Eclipse). -->
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>build-helper-maven-plugin</artifactId>
+        <version>3.6.0</version>
+        <executions>
+          <execution>
+            <id>jvm-core</id>
+            <phase>generate-sources</phase>
+            <goals><goal>add-source</goal></goals>
+            <configuration>
+              <sources><source>${project.basedir}/../clients/jvm-core/src/main/java</source></sources>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-antrun-plugin</artifactId>
+        <version>3.1.0</version>
+        <executions>
+          <execution>
+            <id>panel-built</id>
+            <phase>validate</phase>
+            <goals><goal>run</goal></goals>
+            <configuration>
+              <target>
+                <fail message="Build the shared chat panel first: cd clients/web-panel and run npm ci, then npm run build.">
+                  <condition>
+                    <not>
+                      <and>
+                        <available file="${project.basedir}/../clients/web-panel/dist/chat.js"/>
+                        <available file="${project.basedir}/../clients/web-panel/dist/navigator.js"/>
+                      </and>
+                    </not>
+                  </condition>
+                </fail>
+              </target>
+            </configuration>
+          </execution>
+          <execution>
+            <!-- The panel's files, the brand, and cmcoder (if bin/cmcoder is there:
+                 the release build copies it in) into the module's folder. -->
+            <id>cluster-files</id>
+            <phase>process-resources</phase>
+            <goals><goal>run</goal></goals>
+            <configuration>
+              <target>
+                <delete dir="${project.build.directory}/cluster-files"/>
+                <copy todir="${project.build.directory}/cluster-files/cmcoder-netbeans/panel">
+                  <fileset dir="${project.basedir}/../clients/web-panel/dist" includes="chat.js,chat.css,navigator.js,navigator.css"/>
+                  <fileset dir="${project.basedir}/../clients/web-panel" includes="theme.json"/>
+                  <fileset dir="${project.basedir}/../branding" includes="icon.png,brand.json"/>
+                </copy>
+                <copy todir="${project.build.directory}/cluster-files/cmcoder-netbeans/bin/cmcoder" failonerror="false">
+                  <fileset dir="${project.basedir}/bin/cmcoder" erroronmissingdir="false"/>
+                </copy>
+              </target>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

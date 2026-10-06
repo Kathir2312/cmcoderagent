@@ -288,3 +288,58 @@ jobs:
           npm ci
           npm audit --audit-level=high
           cd ../clients/web-panel && npm audit --audit-level=high
+
+  netbeans:
+    # The NetBeans plugin (netbeans/) in a real NetBeans, oldest and newest
+    # supported, with its real chat page in JavaFX, the standalone cmcoder
+    # inside the .nbm, the mock model server and no Python in reach. The Release
+    # build runs it again on every platform.
+    name: NetBeans plugin (NetBeans ${{ matrix.netbeans }}, JDK ${{ matrix.jdk }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { netbeans: "28", jdk: "21" }
+          - { netbeans: "31", jdk: "25" }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.jdk }}
+          cache: maven
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: uv sync
+      - name: NetBeans ${{ matrix.netbeans }} (cached)
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/netbeans-${{ matrix.netbeans }}
+          key: netbeans-${{ matrix.netbeans }}-bin
+      - name: Get NetBeans ${{ matrix.netbeans }}
+        run: |
+          nb="$RUNNER_TEMP/netbeans-${{ matrix.netbeans }}"
+          [ -x "$nb/netbeans/bin/netbeans" ] && exit 0
+          mkdir -p "$nb" && cd "$nb"
+          base=https://archive.apache.org/dist/netbeans/netbeans/${{ matrix.netbeans }}
+          curl -fsSL -O $base/netbeans-${{ matrix.netbeans }}-bin.zip -O $base/netbeans-${{ matrix.netbeans }}-bin.zip.sha512
+          [ "$(cut -d' ' -f1 netbeans-*-bin.zip.sha512)" = "$(sha512sum netbeans-*-bin.zip | cut -d' ' -f1)" ]
+          unzip -q netbeans-*-bin.zip && rm netbeans-*-bin.zip
+      - name: The shared chat panel
+        working-directory: clients/web-panel
+        run: npm ci && npm run build
+      - name: The standalone cmcoder
+        run: uv run --with pyinstaller python packaging/build.py
+      - name: Build the gate .nbm with cmcoder inside, and run the gate
+        run: |
+          mkdir -p netbeans/bin && cp -RL dist/cmcoder netbeans/bin/cmcoder
+          (cd netbeans && mvn -B package -Dplatform=linux -Pgate)
+          py="$(uv run python -c 'import sys; print(sys.executable)')"
+          xvfb-run -a -s "-screen 0 1600x1000x24" uv run python packaging/no_python.py run -- bash netbeans/gate/run-gate.sh \
+            --nbm netbeans/target/cmcoder-netbeans-linux-x64.nbm --netbeans "$RUNNER_TEMP/netbeans-${{ matrix.netbeans }}/netbeans" \
+            --python "$py" --jdk "$JAVA_HOME"
