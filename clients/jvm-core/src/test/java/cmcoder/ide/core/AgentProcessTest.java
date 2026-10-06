@@ -162,10 +162,23 @@ class AgentProcessTest {
     }
 
     @Test
+    void leftoversAreEndedAfterAGrace() throws Exception {
+        // A process that outlives cmcoder (what stop() cleans up), and one that ended by itself.
+        List<String> command = ProgramLocator.windows() ? List.of("ping", "-n", "60", "127.0.0.1") : List.of("sleep", "60");
+        Process lingering = new ProcessBuilder(command).start();
+        Process finished = new ProcessBuilder(ProgramLocator.windows() ? List.of("cmd", "/c", "exit") : List.of("true")).start();
+        finished.waitFor(10, TimeUnit.SECONDS);
+        long started = System.currentTimeMillis();
+        AgentProcess.endLeftovers(List.of(lingering.toHandle(), finished.toHandle()), 300);
+        assertTrue(lingering.waitFor(10, TimeUnit.SECONDS), "the leftover process was ended");
+        assertTrue(System.currentTimeMillis() - started >= 300, "it got its grace first");
+    }
+
+    @Test
     void linesThatArentEventsGoToTheLog() throws Exception {
         org.junit.jupiter.api.Assumptions.assumeFalse(ProgramLocator.windows(), "uses a shell script as the program");
         Path fake = Fixtures.project().resolve("fake-cmcoder");
-        Files.writeString(fake, "#!/bin/sh\necho 'not json'\necho '[1]'\necho '{\"type\":\"warning\",\"message\":\"w\"}'\necho oops >&2\nexit 0\n",
+        Files.writeString(fake, "#!/bin/sh\necho 'not json'\necho '[1]'\necho '{\"type\":\"warning\",\"message\":\"w\"}'\necho oops >&2\nprintf '\\033[1m--bold\\033[0m\\n' >&2\nexit 0\n",
                 StandardCharsets.UTF_8);
         assertTrue(fake.toFile().setExecutable(true));
         Recorder r = new Recorder();
@@ -173,6 +186,7 @@ class AgentProcessTest {
         assertTrue(agent.awaitExit(10_000));
         assertEquals("warning", r.next("warning").type);
         assertTrue(r.log.contains("[stdout] not json") && r.log.contains("[stdout] [1]") && r.log.contains("oops"), r.log.toString());
+        assertTrue(r.log.contains("--bold"), "terminal formatting is removed for the IDE's log: " + r.log);
         assertEquals(Boolean.FALSE, r.expected); // it ended by itself
     }
 }

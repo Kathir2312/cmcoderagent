@@ -13,6 +13,8 @@ import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * One {@code cmcoder --protocol stdio} process: one conversation (host duties
@@ -52,6 +54,8 @@ public final class AgentProcess {
     private final AtomicBoolean exited = new AtomicBoolean();
     private final CountDownLatch done = new CountDownLatch(1);
     private final Object writeLock = new Object();
+    /** Terminal formatting (colours, bold): an IDE's log shows it as garbage. */
+    private static final Pattern ANSI = Pattern.compile("\u001B\\[[0-?]*[ -/]*[@-~]");
 
     private AgentProcess(Process process, Listener listener) {
         this.process = process;
@@ -131,10 +135,17 @@ public final class AgentProcess {
         }
     }
 
-    /** Asks cmcoder to finish (it saves the session), then makes sure it's gone. */
+    /**
+     * Asks cmcoder to finish (it saves the session), then makes sure it's gone,
+     * and with it everything it had started (a shell command still running, a
+     * console host on Windows): closing a project leaves nothing behind.
+     */
     public void stop(long timeoutMillis) {
         if (exited.get()) return;
         stopping.set(true);
+        // Its processes, taken now: once it has exited they can no longer be
+        // found through it.
+        List<ProcessHandle> started = process.descendants().collect(Collectors.toList());
         send(Protocol.shutdown());
         synchronized (writeLock) {
             try {
@@ -157,6 +168,28 @@ public final class AgentProcess {
             Thread.currentThread().interrupt();
             process.destroyForcibly();
         }
+        endLeftovers(started, 2000);
+    }
+
+    /**
+     * Ends what is still running of {@code processes} after a short grace (they
+     * normally end with cmcoder). ProcessHandle checks a process's start time,
+     * so a process number reused by something else is never touched.
+     */
+    static void endLeftovers(List<ProcessHandle> processes, long graceMillis) {
+        long end = System.currentTimeMillis() + graceMillis;
+        try {
+            while (System.currentTimeMillis() < end && processes.stream().anyMatch(ProcessHandle::isAlive)) {
+                Thread.sleep(100);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        for (ProcessHandle h : processes) {
+            if (!h.isAlive()) continue;
+            h.descendants().forEach(ProcessHandle::destroyForcibly);
+            h.destroyForcibly();
+        }
     }
 
     public void stop() {
@@ -174,7 +207,7 @@ public final class AgentProcess {
                 String line;
                 while ((line = r.readLine()) != null) {
                     if (!stdout) {
-                        listener.onLog(line);
+                        listener.onLog(ANSI.matcher(line).replaceAll(""));
                         continue;
                     }
                     if (line.trim().isEmpty()) continue;

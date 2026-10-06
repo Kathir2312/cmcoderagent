@@ -335,11 +335,12 @@ in `README-FIRST.txt`.
     (cmd.exe's argument rules); only `^[A-Za-z0-9][A-Za-z0-9-]{0,63}$` session
     ids become arguments; only `http(s)` links open; unknown modes are
     dropped; the executable bit is restored and macOS quarantine cleared.
-  - 28 tests: JSON (escapes for JavaScript, deep nesting refused), editor
+  - 29 tests: JSON (escapes for JavaScript, deep nesting refused), editor
     context, program lookup, the schema check, the process (permission
     allowed then denied, non-ASCII text intact, a missing program, a crash,
-    **stopping ends a running shell command too**, non-event output to the
-    log), and the host with a fake IDE through whole turns (the IDE tool,
+    **stopping ends a running shell command too**, and anything cmcoder
+    started that outlives it (seen on Windows CI: a console host stayed),
+    non-event output to the log without terminal formatting), and the host with a fake IDE through whole turns (the IDE tool,
     the editor context reaching the model, a diff accepted in the IDE, the
     navigator's replay, what the page can't make the IDE do, a protocol
     mismatch). Breaking the planted-program rule or the session-id rule
