@@ -47,7 +47,8 @@ Carried over: JetBrains' servers are blocked by this cloud environment's
 network policy, so the JetBrains plugin is built and tested in GitHub CI
 (which has internet access). Adding `plugins.jetbrains.com`,
 `cache-redirector.jetbrains.com`, `download.jetbrains.com`,
-`download-cdn.jetbrains.com` and `www.jetbrains.com` to the environment's
+`download-cdn.jetbrains.com`, `www.jetbrains.com` and `packages.jetbrains.team`
+(the build tool's libraries) to the environment's
 allowed domains would let it build here too. Eclipse (download.eclipse.org,
 Maven Central) and NuGet are reachable.
 
