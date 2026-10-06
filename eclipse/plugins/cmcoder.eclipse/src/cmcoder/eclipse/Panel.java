@@ -46,6 +46,7 @@ public final class Panel {
     private final Consumer<String> onMessage;
     private final IPropertyChangeListener themeListener = e -> Display.getDefault().asyncExec(this::applyTheme);
     private boolean loaded;
+    private BrowserFunction bridge;
 
     private Panel(Browser browser, String pageUrl, Consumer<String> onMessage) {
         this.browser = browser;
@@ -93,6 +94,9 @@ public final class Panel {
      */
     public void load() {
         browser.setUrl(pageUrl);
+        // Also later, in case the browser reports the load before the page's
+        // script ran, or not at all.
+        for (int ms : new int[] {1000, 3000, 8000}) browser.getDisplay().timerExec(ms, this::ensureBridge);
     }
 
     private static void message(Composite parent, String text) {
@@ -101,9 +105,9 @@ public final class Panel {
         parent.layout();
     }
 
-    private void wire() {
-        // Messages from the page: only from our page (H19).
-        new BrowserFunction(browser, "cmcoderHostPost") {
+    /** Messages from the page: only from our page (H19). */
+    private BrowserFunction newBridge() {
+        return new BrowserFunction(browser, "cmcoderHostPost") {
             @Override
             public Object function(Object[] arguments) {
                 if (arguments.length != 1 || !(arguments[0] instanceof String)) return null;
@@ -120,6 +124,30 @@ public final class Panel {
                 return null;
             }
         };
+    }
+
+    /**
+     * Makes sure the page has cmcoderHostPost. SWT's Edge sometimes doesn't add
+     * a function to a second browser's page (seen on Windows: the navigator
+     * rendered, but its messages waited forever); a function created again is
+     * added to the page that's open, and the page's queued messages then go.
+     */
+    private void ensureBridge() {
+        if (browser.isDisposed()) return;
+        Object present;
+        try {
+            present = browser.evaluate("return typeof window.cmcoderHostPost === 'function'");
+        } catch (RuntimeException e) {
+            return; // not loaded yet: checked again later
+        }
+        if (Boolean.TRUE.equals(present)) return;
+        Activator.get().log(Brand.product() + ": the " + pageUrl.replaceAll(".*/", "") + " page had no bridge; adding it again");
+        if (bridge != null && !bridge.isDisposed()) bridge.dispose();
+        bridge = newBridge();
+    }
+
+    private void wire() {
+        bridge = newBridge();
         // Never leave the page; links go through openLink (H18).
         browser.addLocationListener(new LocationAdapter() {
             @Override
@@ -133,6 +161,7 @@ public final class Panel {
             @Override
             public void completed(ProgressEvent event) {
                 loaded = true;
+                ensureBridge();
                 applyTheme();
             }
         });
