@@ -221,3 +221,39 @@ def test_turn_time_is_measured_with_a_fine_clock(monkeypatch: pytest.MonkeyPatch
     )
     [ms] = [v for (name, _), v in telemetry.sums.items() if name == "cmcoder.turn.duration"]
     assert ms > 0
+
+
+@pytest.mark.parametrize(
+    ("args", "label"), [((), "vscode"), (("--client", "jetbrains"), "jetbrains")]
+)
+async def test_an_ide_session_is_counted_under_its_ide(
+    collector: Collector,
+    mock_server: Any,
+    project: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    args: tuple[str, ...],
+    label: str,
+) -> None:
+    from .test_stdio import Agent as Panel
+
+    monkeypatch.setenv("CMCODER_TELEMETRY", "1")
+    monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", collector.url)
+    panel = await Panel.start(project, mock_server([]), *args)
+    try:
+        assert (await panel.next())["type"] == "system_init"
+    finally:
+        assert await panel.close() == 0  # the session's counts are exported as it ends
+    assert collector.metrics()["cmcoder.session.count"][0]["frontend"] == label
+
+
+@pytest.mark.parametrize(
+    "args", [("--client", "jetbrains"), ("--protocol", "stdio", "--client", "notepad")]
+)
+def test_client_goes_with_the_protocol_and_a_known_ide(
+    args: tuple[str, ...], project: Path, mock_server: Any
+) -> None:
+    from .test_cli import cli
+
+    result = cli(list(args), project, mock_server([]))
+    assert result.returncode == 2
+    assert "--client goes with --protocol stdio" in result.stderr

@@ -1,0 +1,5 @@
+# Scripts that ship to developers keep their platform's line endings,
+# whichever OS checks them out or builds the package.
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+*.sh text eol=lf

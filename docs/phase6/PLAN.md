@@ -221,6 +221,35 @@ in `README-FIRST.txt`.
   bundle; its "not found" message stops suggesting `uv tool install`.
 - **Done when**: the standalone tests and the VS Code `.vsix` pass in the
   no-Python environment on Windows, macOS and Linux.
+- Status (6 Oct): built.
+  - `packaging/no_python.py`: a "trap" folder first on PATH with `python`,
+    `python3`, `py`, `pip`, `uv`, `uvx`, ... (shell scripts; on Windows real
+    `.exe` files compiled with the C# compiler that comes with Windows, since
+    Windows finds a bare `python` only as `python.exe`), Python's variables
+    removed; anything that starts one is recorded and fails. Taking Python
+    off PATH instead isn't possible everywhere (`/usr/bin` on Linux, the `py`
+    launcher in `C:\Windows`). `tests/test_no_python.py` proves the trap
+    works; `tests/test_standalone.py` runs in it with
+    `CMCODER_TEST_NO_PYTHON=1` (the release workflow does).
+  - Terminal package: `packaging/terminal.py` → `cmcoder-<platform>.zip`
+    with `install.cmd`/`install.ps1` (Windows: `%LOCALAPPDATA%\Programs\cmcoder`,
+    the user's PATH; the `.cmd` runs the script past PowerShell's execution
+    policy for that one run), `install.sh` (`~/.local/share/cmcoder`, a link
+    in `~/.local/bin`, `~/.profile`/`~/.zprofile` only if needed; macOS
+    quarantine cleared), uninstall scripts that undo exactly that, and a
+    README. `tests/test_terminal_package.py`: install, update, run from a new
+    login shell, `doctor`, uninstall (the profile file back byte for byte);
+    on Windows, under a path with a space and `ä`, in CI only (it changes the
+    user's PATH, restored afterwards). `.gitattributes` pins CRLF for
+    `.cmd`/`.ps1` and LF for `.sh`.
+  - `--client vscode|jetbrains|eclipse|visualstudio` with `--protocol stdio`
+    (telemetry counts sessions per IDE; the default stays `vscode`).
+  - No Git Bash: a standalone test hides it; cmcoder answers and the shell
+    command says to install Git for Windows.
+  - VS Code's "not found" message points to the per-platform `.vsix`
+    instead of `uv tool install`.
+  - No hidden use of Python was found: as a standalone program, cmcoder
+    starts itself (the sandbox bridge, the terminal profile), never Python.
 
 ### 2. One chat panel for every IDE
 
@@ -381,7 +410,7 @@ Findings fixed with a test that fails on the earlier code, as before.
 
 ## Checklist
 
-- [ ] 1. No Python anywhere: terminal package, no-Python test environment, `--client`, Git Bash check
+- [x] 1. No Python anywhere: terminal package, no-Python test environment, `--client`, Git Bash check
 - [ ] 2. One chat panel for every IDE (shared package, bridge, test bridge; VS Code on it)
 - [ ] 3. Protocol classes for Java/Kotlin/C# checked against the schema
 - [ ] 4. JVM core (program lookup, process, JSON lines, executable bit)

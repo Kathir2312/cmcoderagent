@@ -1,10 +1,12 @@
 name: Release build
 
-# The standalone cmcoder (PyInstaller, no Python needed) and a VS Code
-# extension per platform with it inside. Each build is tested as users run it
-# (tests/test_standalone.py); on Linux the extension is also run in a real VS
+# The standalone cmcoder (PyInstaller, no Python needed), the terminal
+# package and a VS Code extension per platform with it inside. Each build is
+# tested as users run it, with no Python in reach (packaging/no_python.py:
+# developers' PCs have none); on Linux the extension is also run in a real VS
 # Code with the bundled cmcoder. Artifacts: cmcoder-<target> (the program
-# folder) and cmcoder-<target>.vsix.
+# folder), cmcoder-terminal-<target> (the zip with install scripts) and
+# cmcoder-<target>.vsix.
 on:
   workflow_dispatch:
   push:
@@ -44,11 +46,17 @@ jobs:
       - run: uv sync
       - name: Build the standalone cmcoder
         run: uv run --with pyinstaller python packaging/build.py
-      - name: Test it as users run it
+      - name: Test it as users run it (no Python in reach)
         shell: bash
         run: |
           exe=dist/cmcoder/cmcoder; [ "$RUNNER_OS" = Windows ] && exe=dist/cmcoder/cmcoder.exe
-          CMCODER_TEST_BINARY=$exe uv run pytest -q tests/test_standalone.py
+          CMCODER_TEST_BINARY=$exe CMCODER_TEST_NO_PYTHON=1 uv run pytest -q tests/test_standalone.py
+      - name: The terminal package (install, update, run, uninstall; no Python in reach)
+        shell: bash
+        run: |
+          uv run python packaging/terminal.py
+          exe=dist/cmcoder/cmcoder; [ "$RUNNER_OS" = Windows ] && exe=dist/cmcoder/cmcoder.exe
+          CMCODER_TEST_BINARY=$exe uv run pytest -q tests/test_terminal_package.py
       - name: Package the extension with it
         working-directory: vscode
         run: npm ci
@@ -57,7 +65,7 @@ jobs:
         shell: bash
         run: |
           exe=vscode/bin/cmcoder/cmcoder; [ "$RUNNER_OS" = Windows ] && exe=vscode/bin/cmcoder/cmcoder.exe
-          CMCODER_TEST_BINARY=$exe uv run pytest -q tests/test_standalone.py
+          CMCODER_TEST_BINARY=$exe CMCODER_TEST_NO_PYTHON=1 uv run pytest -q tests/test_standalone.py
       - name: The extension in a real VS Code, using the bundled cmcoder (Linux)
         if: runner.os == 'Linux'
         working-directory: vscode
@@ -70,6 +78,10 @@ jobs:
         with:
           name: cmcoder-${{ matrix.target }}
           path: dist/cmcoder
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cmcoder-terminal-${{ matrix.target }}
+          path: dist/terminal/cmcoder-${{ matrix.target }}.zip
       - uses: actions/upload-artifact@v4
         with:
           name: cmcoder-${{ matrix.target }}.vsix

@@ -184,7 +184,7 @@ class AgentOptions:
     persist_rules: bool = True
     continue_session: bool = False  # --continue: the latest session in this project
     resume: str | None = None  # --resume ID (or a unique prefix of it)
-    frontend: str = "cli"  # "cli", "tui", "print" (-p) or "vscode", for telemetry
+    frontend: str = "cli"  # "cli", "tui", "print" (-p), or the IDE (--client), for telemetry
 
 
 async def resolve_model_profile(

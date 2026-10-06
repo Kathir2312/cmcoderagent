@@ -136,8 +136,8 @@ function lines(stream: NodeJS.ReadableStream, onLine: (line: string) => void): v
 export function describeSpawnError(command: string, err: NodeJS.ErrnoException): string {
   if (err.code === "ENOENT") {
     return (
-      `Couldn't start "${command}": not found on PATH. Install cmcoder ` +
-      "(`uv tool install ...`) or set `cmcoder.executable` to its full path."
+      `Couldn't start "${command}": not found. Install the cmcoder extension file for your platform ` +
+      "(cmcoder-win32-x64.vsix and so on: it includes cmcoder), or set `cmcoder.executable` to its full path."
     );
   }
   if (err.code === "EINVAL" && /\.(cmd|bat)$/i.test(command)) {

@@ -14,7 +14,17 @@ LangChain/LangGraph developers).
 
 ## Install
 
-Works on **Windows, macOS and Linux**. Requires Python 3.11+ and bash:
+**Developers without Python** (the usual case): use the files from the "Release build" workflow (GitHub →
+Actions → the latest green run → Artifacts). Each contains its own `cmcoder`; nothing else is needed except Git
+for Windows on Windows (below):
+
+- **Terminal:** `cmcoder-terminal-<platform>` → unzip → double-click `install.cmd` (Windows) or `sh install.sh`
+  (macOS, Linux). It installs for you only (no administrator rights) and adds `cmcoder` to your PATH; open a new
+  terminal and run `cmcoder doctor`. `uninstall.cmd` / `uninstall.sh` remove it (settings and keys are kept).
+- **VS Code:** `cmcoder-<platform>.vsix` → Extensions → ⋯ → *Install from VSIX…*.
+- JetBrains, Visual Studio and Eclipse: Phase 6 ([plan](docs/phase6/PLAN.md)).
+
+**From source** (contributors). Works on **Windows, macOS and Linux**. Requires Python 3.11+ and bash:
 
 - **Windows:** install [Git for Windows](https://git-scm.com/download/win), which includes Git Bash. cmcoder
   finds it automatically (like Claude Code, it runs shell commands with Git Bash). If it's somewhere unusual,
@@ -32,11 +42,10 @@ uv tool install git+https://github.com/Kathir2312/cmcoderagent   # or: pipx inst
 
 For development: `uv sync`, then run it with `uv run cmcoder`.
 
-**Without Python:** the "Release build" workflow (GitHub → Actions) builds a standalone `cmcoder` for Windows x64,
-Linux x64 and macOS arm64 (`cmcoder-<platform>`: a folder with the program; put it on PATH) and a VS Code extension
-per platform with that `cmcoder` inside (`cmcoder-<platform>.vsix`): install it and the extension needs nothing
-else. It uses the bundled `cmcoder` unless you set `cmcoder.executable`. Build them yourself with
-`uv run --with pyinstaller python packaging/build.py`, then `uv run python packaging/vsix.py` (Node.js 22).
+**Building the Python-free files yourself:** `uv run --with pyinstaller python packaging/build.py` (the standalone
+`cmcoder` in `dist/cmcoder/`), then `uv run python packaging/terminal.py` (the terminal zip) and
+`uv run python packaging/vsix.py` (the VS Code extension with it inside; Node.js 22+). The release workflow
+tests each of them with no Python in reach (`packaging/no_python.py`), as on developers' PCs.
 
 **Your company's icon and name:** replace the files in `branding/` before building (icon, side-bar icon, name,
 VS Code publisher, colour, text logo); `cmcoder terminal-profile` adds a Windows Terminal profile with them. See

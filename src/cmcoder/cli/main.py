@@ -52,6 +52,10 @@ sub_app = typer.Typer(
 )
 
 
+# The IDEs that run cmcoder over the protocol (--client), as telemetry labels them.
+CLIENTS = ("vscode", "jetbrains", "eclipse", "visualstudio")
+
+
 def _load(cwd: Path | None = None, trust_project: bool = False) -> Settings:
     try:
         settings = load_settings(cwd, trust_project=trust_project)
@@ -181,6 +185,14 @@ def main(
             help="Run as a long-lived agent speaking the Agent Protocol (stdio), for IDEs.",
         ),
     ] = None,
+    client: Annotated[
+        str | None,
+        typer.Option(
+            "--client",
+            help="With --protocol: which IDE runs cmcoder (vscode, jetbrains, eclipse, "
+            "visualstudio), for usage counts when telemetry is on.",
+        ),
+    ] = None,
     version: Annotated[bool, typer.Option("--version", help="Print the version and exit.")] = False,
 ) -> None:
     from .factory import AgentOptions
@@ -193,6 +205,11 @@ def main(
         raise typer.Exit(2)
     if protocol not in (None, "stdio"):
         err_console.print("[red]error:[/red] --protocol must be stdio")
+        raise typer.Exit(2)
+    if client is not None and (not protocol or client not in CLIENTS):
+        err_console.print(
+            f"[red]error:[/red] --client goes with --protocol stdio and is one of {', '.join(CLIENTS)}"
+        )
         raise typer.Exit(2)
     if protocol and (print_mode or prompt):
         err_console.print(
@@ -226,6 +243,7 @@ def main(
         if protocol:
             from .stdio import run_stdio
 
+            opts.frontend = client or "vscode"
             code = asyncio.run(run_stdio(settings, opts))
         elif print_mode:
             from .headless import run_headless
