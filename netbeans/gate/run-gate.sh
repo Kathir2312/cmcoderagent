@@ -13,6 +13,7 @@
 # under xvfb-run. Works in Git Bash on Windows. CMCODER_GATE_SHOTS=<folder>
 # keeps screenshots of the chat, a diff and the navigator.
 set -euo pipefail
+trap 'echo "run-gate.sh: line $LINENO failed (exit $?): $BASH_COMMAND" >&2' ERR
 
 timeout_s=900
 while [ $# -gt 0 ]; do
