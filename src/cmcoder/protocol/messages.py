@@ -138,7 +138,8 @@ class RagSetup(_Message):
 
     type: Literal["rag_setup"] = "rag_setup"
     embedding_model: str
-    store: Literal["local", "chroma", "chroma-server"] = "local"
+    # "chroma-server": Chroma at `url` (on this PC or a server).
+    store: Literal["local", "chroma-server"] = "local"
     url: str | None = None
     api_key: str | None = None  # a Chroma server's; goes to the keychain
     scope: Literal["user", "project"] = "user"

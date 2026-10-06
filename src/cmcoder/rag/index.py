@@ -27,12 +27,12 @@ from .chunker import Chunk, chunk_file
 from .embed import Embedder
 from .files import FileSelector, FileState
 from .stores import (
-    ChromaLocalStore,
     ChromaServerStore,
     Hit,
     LocalStore,
     StoreError,
     VectorStore,
+    chroma_needs_url,
     private_folder,
 )
 
@@ -389,23 +389,22 @@ class CodeIndex:
 def open_store(cfg: RagConfig, root: Path, model: str, folder: Path) -> VectorStore:
     store = cfg.store
     meta: dict[str, Any] = {"cmcoder": 1, "embedding_model": model}
-    if store.type == "local" or not store.url:
-        private_folder(folder)
     if store.type == "local":
+        private_folder(folder)
         return LocalStore(folder / "local")
+    if not store.url:
+        raise StoreError(chroma_needs_url())
     name = store.collection or collection_name(root, model)
-    if store.url:
-        try:
-            return ChromaServerStore(
-                store.url,
-                name,
-                headers=store.headers,
-                ca_cert_path=store.ca_cert_path,
-                metadata=meta,
-            )
-        except ValueError as e:  # a ${VAR} in the headers isn't set
-            raise StoreError(f"rag.store.headers: {e}") from e
-    return ChromaLocalStore(folder / "chroma", name, metadata=meta)
+    try:
+        return ChromaServerStore(
+            store.url,
+            name,
+            headers=store.headers,
+            ca_cert_path=store.ca_cert_path,
+            metadata=meta,
+        )
+    except ValueError as e:  # a ${VAR} in the headers isn't set
+        raise StoreError(f"rag.store.headers: {e}") from e
 
 
 def open_index(

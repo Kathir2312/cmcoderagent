@@ -143,10 +143,11 @@ class TelemetryConfig(_Model):
 class RagStoreConfig(_Model):
     """Where the code index lives (cmcoder/rag/stores.py)."""
 
-    # "local": built in, under ~/.cmcoder/index/. "chroma": Chroma, on this
-    # machine (no `url`; needs `pip install cmcoder[chroma]`) or a Chroma server.
+    # "local": built in, under ~/.cmcoder/index/. "chroma": a Chroma server at
+    # `url`, running on this PC (http://localhost:8000) or elsewhere. (Chroma
+    # inside cmcoder, without a url, isn't offered for now.)
     type: Literal["local", "chroma"] = "local"
-    url: str | None = None  # a Chroma server, e.g. https://chroma.example.com:8000
+    url: str | None = None  # e.g. http://localhost:8000 or https://chroma.example.com:8000
     # Values may use ${VAR}; the API key saved by `cmcoder rag setup` is sent
     # as `Authorization: Bearer` unless headers set one.
     headers: dict[str, str] = Field(default_factory=dict)

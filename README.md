@@ -386,8 +386,8 @@ cmcoder index            # bring it up to date (changed files only); --status, -
 ```
 
 Inside a session: `/index` and `/index status`. VS Code: "cmcoder: Set Up Code Search", and the status bar item. The
-index stays current by itself; secret files are never indexed. The index can live on this machine (built in), in
-Chroma on this machine, or on a shared Chroma server. See [docs/phase5/code-search.md](docs/phase5/code-search.md).
+index stays current by itself; secret files are never indexed. The index can live on this machine (built in) or in
+Chroma, by its URL: running on this PC or a shared server. See [docs/phase5/code-search.md](docs/phase5/code-search.md).
 
 ### Usage metrics (OpenTelemetry)
 

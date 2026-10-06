@@ -177,9 +177,12 @@ def setup_command(
     ] = None,
     store: Annotated[
         str | None,
-        typer.Option(help="local (built in), chroma (on this machine) or chroma-server."),
+        typer.Option(help="local (built in) or chroma-server (Chroma at --url)."),
     ] = None,
-    url: Annotated[str | None, typer.Option(help="The Chroma server's address.")] = None,
+    url: Annotated[
+        str | None,
+        typer.Option(help="Chroma's URL: http://localhost:8000 on this PC, or a server's."),
+    ] = None,
     scope: Annotated[
         str | None, typer.Option(help="user (your settings) or project (shared with the team).")
     ] = None,
@@ -246,7 +249,7 @@ async def _setup(
         raise typer.Exit(1) from e
     console.print(f"[green]{sym().ok}[/green] {ref} answers ({dim} dimensions).")
     # 2. Where the index lives.
-    kinds = ["local", "chroma", "chroma-server"]
+    kinds = ["local", "chroma-server"]
     if store is None:
         if interactive:
             console.print("\n[bold]2. Where the index lives[/bold]")
@@ -255,8 +258,7 @@ async def _setup(
                     "Store",
                     [
                         "On this machine, built in (nothing to install)",
-                        "Chroma on this machine (not in the standalone program)",
-                        "A Chroma server (can be shared by a team)",
+                        "Chroma, by its URL (running on this PC, or a server a team shares)",
                     ],
                 )
             ]
@@ -267,8 +269,11 @@ async def _setup(
         raise typer.Exit(2)
     api_key = os.environ.get("CMCODER_CHROMA_API_KEY")
     if store == "chroma-server":
-        if url is None:
-            url = typer.prompt("Chroma server address (e.g. https://chroma.example.com:8000)")
+        if url is None and interactive:
+            url = typer.prompt(
+                "Chroma's URL (http://localhost:8000 on this PC, or e.g. "
+                "https://chroma.example.com:8000)"
+            )
         if interactive and not api_key:
             api_key = (
                 typer.prompt(

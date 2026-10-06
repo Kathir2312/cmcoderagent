@@ -15,7 +15,8 @@ needs Python, and cmcoder never tries to install it. If something asks for
 |---|---|---|
 | An MCP server shows "failed" in `/mcp` (`'npx'`/`'uvx'`/`'python'` not found) | the server is started with Node.js or Python | use the server's URL instead: `cmcoder mcp add NAME --url https://…`, or ask your team for a hosted one |
 | A hook fails with "command not found" | the hook is a Python script | write it for Git Bash (Windows) / sh, or remove it |
-| "Chroma on this machine isn't part of this installation" | code search set to a local Chroma | `cmcoder rag setup` → **built-in index on this machine** or **a Chroma server** |
+| "Chroma needs its URL" | `"store": {"type": "chroma"}` without a `url` | `cmcoder rag setup` → **built-in** or **Chroma, by its URL** ([code-search.md](code-search.md)) |
+| "Can't reach the Chroma server http://localhost:…" | Chroma isn't running on this PC | start it ([code-search.md](code-search.md)) |
 | VS Code: "cmcoder couldn't start" mentioning `uv` | `cmcoder.executable` / `executableArgs` were set | remove both settings: the extension then uses its own copy |
 | Eclipse: the program can't start | **cmcoder program** preference set | empty it (Preferences → cmcoder) |
 

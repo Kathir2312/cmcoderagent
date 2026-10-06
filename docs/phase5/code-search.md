@@ -38,10 +38,12 @@ It asks four things:
    first). The one you pick is checked with a test request.
 2. **Where the index lives:**
    - *On this machine, built in*: nothing to install. The default.
-   - *Chroma on this machine*: needs `uv tool install --force --reinstall "cmcoder[chroma]"`.
-   - *A Chroma server*: its address and API key (the key goes to your OS
-     keychain, never a file), and whether you only search it (someone else,
-     e.g. CI, keeps it up to date).
+   - *Chroma, by its URL*: a Chroma running on this PC
+     (`http://localhost:8000`) or a server a team shares. Its URL and API key
+     (the key goes to your OS keychain, never a file), and whether you only
+     search it (someone else, e.g. CI, keeps it up to date). Chroma is always
+     used through its URL for now: Chroma inside cmcoder isn't offered (the
+     standalone program can't include it).
 3. **Whose settings:** yours (`~/.cmcoder/settings.json`) or the project's
    (`.cmcoder/settings.json`, shared through git).
 4. **Index now?**
@@ -51,11 +53,17 @@ Without questions (scripts, CI):
 ```
 cmcoder rag setup -m corp:bge-m3 --store local --scope user --index --yes
 cmcoder rag setup -m corp:bge-m3 --store chroma-server --url https://chroma.corp:8000 --read-only --yes
+cmcoder rag setup -m corp:bge-m3 --store chroma-server --url http://localhost:8000 --yes
 ```
 
+**Chroma on this PC** without Python: Docker
+(`docker run -d -p 127.0.0.1:8000:8000 -v chroma-data:/data chromadb/chroma`), then
+the URL `http://localhost:8000`. See [../guides/code-search.md](../guides/code-search.md).
+
 **VS Code:** Command Palette → **"cmcoder: Set Up Code Search"** (or click
-"Code search: off" in the status bar). The same four steps, in VS Code's pick
-lists. Both write the same settings.
+"Code search: off" in the status bar). **Eclipse / Visual Studio:** the code
+search item above the chat. The same four steps, in the IDE's dialogs. All
+write the same settings.
 
 ## 3. Use it
 
@@ -91,7 +99,7 @@ search result before the result is returned.
 |---|---|
 | `enabled` | `"auto"`: on when an embedding model is set and the project has an index. `false`: off. `true`: on, and says so if the project has no index |
 | `embeddingModel` | `provider:model` (or a model of the default provider) |
-| `store` | `{"type": "local"}`; `{"type": "chroma"}` (on this machine); `{"type": "chroma", "url": "...", "readOnly": true, "collection": "..."}` (a server; `headers` may use `${VAR}`) |
+| `store` | `{"type": "local"}`; `{"type": "chroma", "url": "...", "readOnly": true, "collection": "..."}` (Chroma at its URL, on this PC or a server; `url` is required; `headers` may use `${VAR}`) |
 | `include` / `exclude` | gitignore-style patterns. Secret files (`.env`, keys, `secrets/`) are never indexed, whatever these say |
 | `autoContext` | `topK` pieces at most, `maxTokens` at most (and never more than 8% of the model's window), only matches scoring `minScore` or more |
 | `autoUpdate` | Update changed files when a session starts |

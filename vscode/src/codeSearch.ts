@@ -165,8 +165,7 @@ export class CodeSearch implements vscode.Disposable {
     const store = await vscode.window.showQuickPick(
       [
         { label: "On this machine", description: "built in, nothing to install", value: "local" as const },
-        { label: "Chroma on this machine", description: "needs cmcoder[chroma]", value: "chroma" as const },
-        { label: "A Chroma server", description: "can be shared by a team", value: "chroma-server" as const },
+        { label: "Chroma, by its URL", description: "running on this PC, or a server a team shares", value: "chroma-server" as const },
       ],
       { title: "Code search (2/4): where the index lives" },
     );
@@ -176,13 +175,13 @@ export class CodeSearch implements vscode.Disposable {
     let readOnly = false;
     if (store.value === "chroma-server") {
       url = await vscode.window.showInputBox({
-        title: "Chroma server",
-        prompt: "Its address, e.g. https://chroma.example.com:8000",
+        title: "Chroma's URL",
+        prompt: "http://localhost:8000 for Chroma on this PC, or a server's, e.g. https://chroma.example.com:8000",
         validateInput: (v) => (/^https?:\/\/\S+$/.test(v.trim()) ? undefined : "An http:// or https:// address"),
       });
       if (!url) return;
       apiKey = await vscode.window.showInputBox({
-        title: "Chroma server API key",
+        title: "Chroma API key",
         prompt: "Kept in your OS keychain, never in a file. Leave empty if it needs none.",
         password: true,
       });
@@ -192,7 +191,7 @@ export class CodeSearch implements vscode.Disposable {
           { label: "Search and update it", value: false },
           { label: "Only search it", description: "someone else (e.g. CI) keeps it up to date", value: true },
         ],
-        { title: "Chroma server: updates" },
+        { title: "Chroma: updates" },
       );
       if (!mode) return;
       readOnly = mode.value;

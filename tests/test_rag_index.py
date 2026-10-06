@@ -1,13 +1,11 @@
 """Phase 5 items 2-3: chunking, which files are indexed, keeping the index
-current, and the stores (built in, a Chroma server, Chroma on this machine).
+current, and the stores (built in, and Chroma at a URL).
 
 The Chroma tests run when CMCODER_TEST_CHROMA_URL points at a Chroma server
-(CI starts one) and, for Chroma on this machine, when chromadb is installed
-(`uv run --extra chroma pytest ...`)."""
+(CI starts one). Chroma inside cmcoder (without a URL) isn't offered for now."""
 
 from __future__ import annotations
 
-import importlib.util
 import os
 import sys
 from collections.abc import Iterator
@@ -26,7 +24,6 @@ from cmcoder.rag.stores import StoreError
 from .conftest import API_KEY
 
 CHROMA_URL = os.environ.get("CMCODER_TEST_CHROMA_URL")
-HAS_CHROMADB = importlib.util.find_spec("chromadb") is not None
 
 AUTH = '''"""Authentication helpers."""
 
@@ -131,11 +128,6 @@ STORES: list[Any] = [
         id="chroma-server",
         marks=pytest.mark.skipif(not CHROMA_URL, reason="set CMCODER_TEST_CHROMA_URL"),
     ),
-    pytest.param(
-        {"type": "chroma"},
-        id="chroma-local",
-        marks=pytest.mark.skipif(not HAS_CHROMADB, reason="chromadb not installed"),
-    ),
 ]
 
 
@@ -221,12 +213,12 @@ async def test_read_only_and_errors(code_project: Path, make_index: Any) -> None
         await idx.update()
     await idx.close()
     down, _ = make_index(code_project, {"type": "chroma", "url": "http://127.0.0.1:9"})
-    with pytest.raises(StoreError, match="Can't reach the Chroma server"):
+    with pytest.raises(StoreError, match="Can't reach the Chroma server.*Is Chroma running"):
         await down.update()
     await down.close()
-    if not HAS_CHROMADB:
-        with pytest.raises(StoreError, match="chromadb"):
-            make_index(code_project, {"type": "chroma"})
+    # Chroma is always used through its URL (for now).
+    with pytest.raises(StoreError, match="Chroma needs its URL"):
+        make_index(code_project, {"type": "chroma"})
 
 
 def test_collection_names(project: Path) -> None:

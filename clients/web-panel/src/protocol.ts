@@ -479,7 +479,7 @@ export interface RagCandidates {
 export interface RagSetup {
   type: "rag_setup";
   embedding_model: string;
-  store?: "local" | "chroma" | "chroma-server";
+  store?: "local" | "chroma-server";
   url?: string | null;
   api_key?: string | null;
   scope?: "user" | "project";

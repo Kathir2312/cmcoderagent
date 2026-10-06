@@ -32,6 +32,7 @@ shell commands) runs locally; the model is always reached over the network.
 | D14 | TLS | Server uses **internal (company CA) certificates**. Trusted through the OS certificate store by default, with a CA-file override. |
 | D15 | Second gateway | **Open WebUI** (its OpenAI-compatible `/api` endpoints, API key from the user's account), in addition to LiteLLM. Phase 4 item 1. |
 | D16 | Developers' PCs | **May not have Python** (nor uv, pip or Node.js). Everything handed to developers carries the standalone `cmcoder` (PyInstaller) and never falls back to Python; the release workflow tests each file with no Python in reach (`packaging/no_python.py`). Git for Windows is still needed for shell commands on Windows. Decided 6 Oct 2026. |
+| D17 | Chroma for code search | **Always by its URL** (for now): a Chroma running on the PC (`http://localhost:8000`, e.g. its Docker container) or a shared server. Chroma inside cmcoder (the `chromadb` package) isn't offered, since the standalone program (D16) can't include it; to be revisited. Decided 6 Oct 2026. |
 
 ## 2. Goals and non-goals
 
@@ -464,7 +465,7 @@ Started early, because quality depends heavily on the model:
 | **2 — VS Code** | `--protocol stdio`, generated TS protocol types, extension, webview chat, native diffs, IDE context and tools | Same task behaves the same in CLI and VS Code |
 | **3 — Extensibility** | MCP client, hooks, custom slash commands, subagents (`Task`) with per-role models, skills | Teams can customise it without forking |
 | **4 — Hardening** | **Open WebUI gateway**, Bash sandbox (Linux, macOS, and Windows through WSL2; moved from Phase 3), OpenTelemetry (off by default), standalone binary + platform-specific VSIX, branding (icon and name). SSO and the Responses/Anthropic adapters were dropped (see [phase4/PLAN.md](phase4/PLAN.md)) | Release candidate |
-| **5 — Code search (RAG)** | Embeddings through the gateway, an incremental index of the project in a vector store (built-in local store, Chroma on the machine or a shared server), a `CodeSearch` tool and automatic context; embeddings from LiteLLM or Open WebUI (see [phase5/PLAN.md](phase5/PLAN.md)) | The model finds code by meaning in large repositories; fewer turns and tokens in the evals |
+| **5 — Code search (RAG)** | Embeddings through the gateway, an incremental index of the project in a vector store (built-in local store, or Chroma by its URL: on the machine or a shared server; D17), a `CodeSearch` tool and automatic context; embeddings from LiteLLM or Open WebUI (see [phase5/PLAN.md](phase5/PLAN.md)) | The model finds code by meaning in large repositories; fewer turns and tokens in the evals |
 
 Per-phase plans, guides and status reports live in [docs/README.md](README.md) (`docs/phase0/`, `docs/phase1/`, …). Finished phases are frozen as git snapshots (Phase 0: commit `ba6669f`, tag `phase0`; Phase 1: tag `phase1`; Phase 2: tag `phase2`; Phase 3: tag `phase3`).
 

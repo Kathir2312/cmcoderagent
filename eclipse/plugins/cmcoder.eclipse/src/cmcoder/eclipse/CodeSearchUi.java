@@ -87,22 +87,23 @@ final class CodeSearchUi {
 
             int where = new MessageDialog(shell(), "Code search (2/4): where the index lives", null,
                     "Where should the index of this project live?", MessageDialog.QUESTION, 0,
-                    "On this machine", "Chroma on this machine", "A Chroma server", "Cancel").open();
-            if (where < 0 || where > 2) return;
-            String store = new String[] {"local", "chroma", "chroma-server"}[where];
+                    "On this machine (built in)", "Chroma, by its URL (on this PC or a server)", "Cancel").open();
+            if (where < 0 || where > 1) return;
+            String store = new String[] {"local", "chroma-server"}[where];
             String url = null;
             String apiKey = null;
             boolean readOnly = false;
             if (store.equals("chroma-server")) {
-                url = ask("Chroma server", "Its address, e.g. https://chroma.example.com:8000", false,
+                url = ask("Chroma's URL",
+                        "http://localhost:8000 for Chroma on this PC, or a server's, e.g. https://chroma.example.com:8000", false,
                         v -> v.trim().matches("^https?://\\S+$") ? null : "An http:// or https:// address");
                 if (url == null) return;
                 url = url.trim();
-                apiKey = ask("Chroma server API key",
+                apiKey = ask("Chroma API key",
                         "Kept in your OS keychain, never in a file. Leave empty if it needs none.", true, null);
                 if (apiKey == null) return;
-                int mode = new MessageDialog(shell(), "Chroma server: updates", null,
-                        "Should this project update the index on the server?", MessageDialog.QUESTION, 0,
+                int mode = new MessageDialog(shell(), "Chroma: updates", null,
+                        "Should this project update the index in Chroma?", MessageDialog.QUESTION, 0,
                         "Search and update it", "Only search it (someone else keeps it up to date)", "Cancel").open();
                 if (mode < 0 || mode > 1) return;
                 readOnly = mode == 1;

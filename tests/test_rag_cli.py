@@ -71,6 +71,16 @@ def test_setup_index_status_off_on(mock_server: Any, code: Path) -> None:
     assert "No index for this project yet" in r.stdout
 
 
+def test_chroma_only_by_url(mock_server: Any, code: Path) -> None:
+    """Chroma is always used through its URL (on this PC or a server), for now."""
+    server = mock_server([])
+    args = ["rag", "setup", "-m", "default:text-embedding-3-small", "--no-index", "--yes"]
+    r = cli([*args, "--store", "chroma"], code, server)
+    assert r.returncode == 2 and "local, chroma-server" in r.stderr
+    r = cli([*args, "--store", "chroma-server"], code, server, {"CMCODER_CHROMA_API_KEY": ""})
+    assert r.returncode != 0 and "Chroma needs its URL" in r.stderr
+
+
 def test_project_scope_never_holds_the_key(mock_server: Any, code: Path) -> None:
     server = mock_server([])
     url = CHROMA_URL or "http://127.0.0.1:9"

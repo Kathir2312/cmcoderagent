@@ -35,7 +35,7 @@ cmcoder → **Uninstall** (your settings and conversations stay in `~/.cmcoder`)
 | Stop | **Esc** or **Stop** |
 | Permission mode | the picker at the top: ask / accept edits / plan (read only) |
 | Background helpers | **cmcoder: Open Agent Navigator** |
-| Code search | the status bar item, or **cmcoder: Set Up Code Search** / **Update Code Index** / **Code Search…** |
+| Code search | the status bar item, or **cmcoder: Set Up Code Search** / **Update Code Index** / **Code Search…** ([code-search.md](code-search.md)) |
 | The terminal version | **cmcoder: Open in Terminal** (terminal icon in the chat's title bar) |
 | Something wrong | **cmcoder: Show Log**; [troubleshooting.md](troubleshooting.md) |
 

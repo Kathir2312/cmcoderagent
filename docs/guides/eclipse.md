@@ -41,7 +41,7 @@ if the site was added from a shared folder or web server). **Uninstall:**
 | Earlier conversations | **History** at the top of the chat |
 | Stop | **Esc** or **Stop** |
 | Background helpers | the chat's navigator button (**Agent Navigator** view) |
-| Code search | the item in the chat view's toolbar: set up, update, search |
+| Code search | the item in the chat view's toolbar: set up, update, search ([code-search.md](code-search.md)) |
 | Log, diagnostics | **Ctrl+3**, then **cmcoder: Show Log** (Console) or **cmcoder: Copy Diagnostics** |
 
 Closing the chat view stops cmcoder; opening it starts a new one (your

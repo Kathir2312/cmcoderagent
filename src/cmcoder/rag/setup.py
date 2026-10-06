@@ -2,9 +2,9 @@
 extension (through the protocol), so both write the same settings.
 
 The steps: pick an embedding model from the gateway (checked with a test
-request), pick where the index lives (this machine, Chroma here, or a Chroma
-server, checked with a heartbeat; its API key goes to the keychain, never a
-file), and pick whose settings to write: yours, or the project's (shared
+request), pick where the index lives (built in on this machine, or Chroma at
+a URL: on this PC or a server, checked with a heartbeat; its API key goes to
+the keychain, never a file), and pick whose settings to write: yours, or the project's (shared
 with the team; a server named there needs each person's project trust).
 """
 
@@ -27,9 +27,11 @@ from ..providers.auth import store_api_key
 from ..providers.openai_compat import OpenAICompatProvider, ProviderError
 from .embed import Embedder
 from .index import CodeIndex
-from .stores import ChromaServerStore, StoreError, chroma_key_name, chroma_missing
+from .stores import ChromaServerStore, StoreError, chroma_key_name, chroma_needs_url
 
-StoreKind = Literal["local", "chroma", "chroma-server"]
+# "chroma-server": Chroma at a URL, on this PC (http://localhost:8000) or a
+# server. (Chroma inside cmcoder isn't offered for now.)
+StoreKind = Literal["local", "chroma-server"]
 Scope = Literal["user", "project"]
 
 # Names that usually mean an embedding model (listed first).
@@ -100,23 +102,15 @@ async def check_store(choice: SetupChoice) -> str:
     """A short description of the store after checking it can be used; raises StoreError."""
     if choice.store == "local":
         return "the built-in index on this machine"
-    if choice.store == "chroma":
-        try:
-            import chromadb  # type: ignore[import-not-found]  # noqa: F401
-        except ImportError as e:
-            raise StoreError(chroma_missing()) from e
-        return "Chroma on this machine"
     if not choice.url:
-        raise StoreError(
-            "A Chroma server needs its address (e.g. https://chroma.example.com:8000)."
-        )
+        raise StoreError(chroma_needs_url())
     headers = {"Authorization": f"Bearer {choice.api_key}"} if choice.api_key else {}
     store = ChromaServerStore(choice.url, "cmcoder-check", headers=headers)
     try:
         await store.check()  # writes nothing
     finally:
         await store.close()
-    return f"the Chroma server {choice.url}"
+    return f"Chroma at {choice.url}"
 
 
 def rag_block(choice: SetupChoice) -> dict[str, Any]:

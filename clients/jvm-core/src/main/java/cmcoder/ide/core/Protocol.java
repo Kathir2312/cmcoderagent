@@ -233,7 +233,7 @@ public final class Protocol {
 
     /**
      * Code search set-up, as {@code cmcoder rag setup} (answer: rag_setup_result).
-     * store: "local", "chroma" or "chroma-server"; scope: "user" or "project".
+     * store: "local" or "chroma-server" (Chroma at url: on this PC or a server); scope: "user" or "project".
      * The API key goes to cmcoder only, which keeps it in the OS keychain.
      */
     public static String ragSetup(String model, String store, String url, String apiKey, String scope,

@@ -21,7 +21,8 @@ answers and your saved conversations. Each IDE extension contains its own copy
 of cmcoder, so you don't need the terminal package for them.
 
 Then, once, whichever you chose: [setup.md](setup.md) (your gateway and API
-key). Problems: [troubleshooting.md](troubleshooting.md).
+key). Optional, for big projects: [code-search.md](code-search.md).
+Problems: [troubleshooting.md](troubleshooting.md).
 
 ## What your PC needs
 

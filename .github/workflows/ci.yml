@@ -81,7 +81,7 @@ jobs:
         run: |
           (uv run --no-sync chroma run --path /tmp/chroma-data --port 8765 > /tmp/chroma.log 2>&1 &)
           for i in $(seq 60); do curl -sf http://localhost:8765/api/v2/heartbeat && break; sleep 1; done; curl -sf http://localhost:8765/api/v2/heartbeat
-      - name: Index tests on the built-in store, a Chroma server and Chroma on this machine
+      - name: Index tests on the built-in store and Chroma by its URL (on this machine)
         env:
           CMCODER_TEST_CHROMA_URL: http://localhost:8765
         run: uv run --no-sync pytest -q tests/test_rag_index.py

@@ -1,13 +1,13 @@
-"""Vector stores for the code index: one interface, three places.
+"""Vector stores for the code index: one interface, two places.
 
 - `LocalStore` (default): built in, a SQLite file under ~/.cmcoder/index/
   with the vectors; search is a matrix product in memory. Nothing to install,
   so it works in the standalone build. Fine up to about 100k pieces.
-- `ChromaServerStore`: a Chroma server (possibly shared by a team), through
-  its REST API (v2) with cmcoder's own HTTP client: TLS, proxy and company CA
-  as for the gateway, no extra package.
-- `ChromaLocalStore`: Chroma on this machine, through the `chromadb` package
-  (`pip install cmcoder[chroma]`).
+- `ChromaServerStore`: Chroma at a URL, running on this PC
+  (http://localhost:8000) or a server shared by a team, through its REST API
+  (v2) with cmcoder's own HTTP client: TLS, proxy and company CA as for the
+  gateway, no extra package. (Chroma inside cmcoder, through the `chromadb`
+  package, isn't offered for now: the standalone program can't include it.)
 
 Scores are cosine similarities (vectors are unit length): 1 is identical.
 """
@@ -17,7 +17,6 @@ from __future__ import annotations
 import asyncio
 import os
 import sqlite3
-import sys
 import threading
 from dataclasses import dataclass
 from pathlib import Path
@@ -236,7 +235,13 @@ class ChromaServerStore:
         try:
             resp = await self.client.request(method, url, json=body)
         except httpx.HTTPError as e:
-            raise StoreError(f"Can't reach the Chroma server {self.url}: {e}") from e
+            hint = ""
+            if httpx.URL(self.url).host in ("localhost", "127.0.0.1", "::1"):
+                hint = (
+                    " Is Chroma running on this PC? Start it first, e.g. "
+                    "`docker run -d -p 127.0.0.1:8000:8000 -v chroma-data:/data chromadb/chroma`."
+                )
+            raise StoreError(f"Can't reach the Chroma server {self.url}: {e}.{hint}") from e
         if resp.status_code in (401, 403):
             raise StoreError(
                 f"The Chroma server {self.url} refused the request ({resp.status_code}). "
@@ -318,102 +323,18 @@ class ChromaServerStore:
         await self.client.aclose()
 
 
-# --- Chroma on this machine ----------------------------------------------------
+# --- Chroma in cmcoder itself: not offered for now ----------------------------
 
 
-def chroma_missing() -> str:
-    """Why Chroma on this machine can't be used, and what to do instead.
+def chroma_needs_url() -> str:
+    """Chroma is always used through its URL (for now); what to set instead.
 
-    The standalone program (what developers install, with no Python) never
-    includes Chroma, so it must not suggest pip or uv, which they don't have.
+    Chroma inside cmcoder (the `chromadb` package) isn't part of the
+    standalone program, which developers install without Python, so it isn't
+    offered. A Chroma on the same PC works through its URL like any server.
     """
-    if getattr(sys, "frozen", False):
-        return (
-            "Chroma on this machine isn't part of this installation. Choose the built-in "
-            'index on this machine ("store": {"type": "local"}) or a Chroma server.'
-        )
     return (
-        "Chroma on this machine needs the chromadb package: "
-        "`uv tool install --force --reinstall cmcoder[chroma]` (or `pip install chromadb`), "
-        'or use the built-in store ("store": {"type": "local"}) or a Chroma server.'
+        'Chroma needs its URL: "store": {"type": "chroma", "url": "http://localhost:8000"} '
+        "for a Chroma running on this PC, or your Chroma server's address. "
+        'Or use the built-in index ("store": {"type": "local"}). `cmcoder rag setup` sets either.'
     )
-
-
-class ChromaLocalStore:
-    def __init__(self, folder: Path, collection: str, metadata: dict[str, Any] | None = None):
-        try:
-            import chromadb  # type: ignore[import-not-found]
-        except ImportError as e:
-            raise StoreError(chroma_missing()) from e
-        private_folder(folder)
-        self.folder = folder
-        self.collection_name = collection
-        self.metadata = metadata
-        self._client = chromadb.PersistentClient(path=str(folder))
-        self._col: Any = None
-
-    def describe(self) -> str:
-        return f"Chroma on this machine ({self.folder}, collection {self.collection_name})"
-
-    def _collection(self) -> Any:
-        if self._col is None:
-            self._col = self._client.get_or_create_collection(
-                self.collection_name,
-                configuration={"hnsw": {"space": "cosine"}},
-                metadata=self.metadata or None,
-            )
-        return self._col
-
-    async def add(self, chunks: list[Chunk], vectors: np.ndarray) -> None:
-        def run() -> None:
-            col = self._collection()
-            for i in range(0, len(chunks), BATCH):
-                part = chunks[i : i + BATCH]
-                col.upsert(
-                    ids=[c.id for c in part],
-                    embeddings=vectors[i : i + BATCH],
-                    documents=[c.text for c in part],
-                    metadatas=[_metadata(c) for c in part],
-                )
-
-        await asyncio.to_thread(run)
-
-    async def delete_paths(self, paths: list[str]) -> None:
-        if paths:
-            await asyncio.to_thread(
-                lambda: self._collection().delete(where={"path": {"$in": paths}})
-            )
-
-    async def search(self, vector: np.ndarray, k: int, path_prefix: str | None = None) -> list[Hit]:
-        def run() -> Any:
-            return self._collection().query(
-                query_embeddings=[vector],
-                n_results=k * 4 if path_prefix else k,
-                include=["documents", "metadatas", "distances"],
-            )
-
-        data = await asyncio.to_thread(run)
-        hits: list[Hit] = []
-        for doc, meta, dist in zip(
-            data["documents"][0], data["metadatas"][0], data["distances"][0], strict=False
-        ):
-            chunk = _chunk(doc, meta)
-            if _prefix_ok(chunk.path, path_prefix):
-                hits.append(Hit(chunk, 1.0 - float(dist)))
-        return hits[:k]
-
-    async def count(self) -> int:
-        return int(await asyncio.to_thread(lambda: self._collection().count()))
-
-    async def clear(self) -> None:
-        def run() -> None:
-            try:
-                self._client.delete_collection(self.collection_name)
-            except Exception:  # not there: nothing to clear
-                pass
-            self._col = None
-
-        await asyncio.to_thread(run)
-
-    async def close(self) -> None:
-        self._col = None

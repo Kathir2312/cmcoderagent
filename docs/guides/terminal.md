@@ -102,10 +102,8 @@ own; before it changes a file or runs a command it asks:
 
 ## Code search (optional)
 
-For big projects, `cmcoder rag setup` lets cmcoder find code by meaning. Pick
-**the built-in index on this machine** or **a Chroma server** your team runs.
-"Chroma on this machine" needs a Python installation and isn't part of the
-standalone program; choosing it just tells you so.
+For big projects, `cmcoder rag setup` lets cmcoder find code by meaning:
+[code-search.md](code-search.md).
 
 ## Without Python: what to avoid
 

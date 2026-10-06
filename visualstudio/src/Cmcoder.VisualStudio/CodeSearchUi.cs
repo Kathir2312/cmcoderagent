@@ -71,19 +71,20 @@ namespace Cmcoder.VisualStudio
                 if (model == null) return;
 
                 var where = Dialogs.Choose("Code search (2/4): where the index lives", "Where should the index of this solution live?",
-                    "On this machine", "Chroma on this machine", "A Chroma server");
+                    "On this machine (built in)", "Chroma, by its URL (on this PC or a server)");
                 if (where == null) return;
-                var store = new[] { "local", "chroma", "chroma-server" }[where.Value];
+                var store = new[] { "local", "chroma-server" }[where.Value];
                 string? url = null, apiKey = null;
                 var readOnly = false;
                 if (store == "chroma-server")
                 {
-                    url = Dialogs.Ask("Chroma server", "Its address, e.g. https://chroma.example.com:8000", false,
+                    url = Dialogs.Ask("Chroma's URL",
+                        "http://localhost:8000 for Chroma on this PC, or a server's, e.g. https://chroma.example.com:8000", false,
                         v => Regex.IsMatch(v.Trim(), @"^https?://\S+$") ? null : "An http:// or https:// address")?.Trim();
                     if (url == null) return;
-                    apiKey = Dialogs.Ask("Chroma server API key", "Kept in your OS keychain, never in a file. Leave empty if it needs none.", true);
+                    apiKey = Dialogs.Ask("Chroma API key", "Kept in your OS keychain, never in a file. Leave empty if it needs none.", true);
                     if (apiKey == null) return;
-                    var mode = Dialogs.Choose("Chroma server: updates", "Should this solution update the index on the server?",
+                    var mode = Dialogs.Choose("Chroma: updates", "Should this solution update the index in Chroma?",
                         "Search and update it", "Only search it (someone else keeps it up to date)");
                     if (mode == null) return;
                     readOnly = mode == 1;
