@@ -1,0 +1,27 @@
+# One-off: copies the VS Code test screenshots of release build #64 into
+# docs/guides/screenshots/ on this branch (artifact storage is out of reach from
+# the cloud session; git isn't). Removed after use.
+name: Gate screenshots into the docs
+on:
+  push:
+    paths: [".github/workflows/show-gate-shots.yml"]
+permissions:
+  actions: read
+  contents: write
+jobs:
+  copy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Commit the screenshots
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download 37513756745 -R "$GITHUB_REPOSITORY" -n gate-screenshots-vscode -D "$RUNNER_TEMP/shots"
+          ls -la "$RUNNER_TEMP/shots"
+          cp "$RUNNER_TEMP"/shots/vscode-*.png docs/guides/screenshots/
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/guides/screenshots/vscode-*.png
+          git commit -m "VS Code test screenshots (release build #64)"
+          git push origin "HEAD:$GITHUB_REF_NAME"
