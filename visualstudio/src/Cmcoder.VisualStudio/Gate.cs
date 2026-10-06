@@ -46,7 +46,7 @@ namespace Cmcoder.VisualStudio
                         await package.JoinableTaskFactory.SwitchToMainThreadAsync();
                         var chat = Session.Get().Chat;
                         failure += "\nchat page: " + (chat == null ? "not open" : await chat.EvaluateAsync(
-                            "document.URL + ' ' + document.readyState + ' webview=' + typeof (window.chrome && window.chrome.webview) + ' text=' + document.body.textContent.slice(0, 300)"));
+                            "document.URL + ' ' + document.readyState + ' webview=' + typeof (window.chrome && window.chrome.webview) + ' scripts=' + Array.from(document.scripts).map(s => s.src).join(',') + ' styles=' + document.styleSheets.length + ' text=' + document.body.textContent.slice(0, 300)"));
                     }
                     catch (Exception probe)
                     {

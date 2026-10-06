@@ -89,7 +89,10 @@ namespace Cmcoder.VisualStudio
             s.AreHostObjectsAllowed = false;
             s.IsWebMessageEnabled = true;
             s.IsZoomControlEnabled = false;
-            web.SetVirtualHostNameToFolderMapping(FilesHost, Path.Combine(Brand.ExtensionDir, "panel"), CoreWebView2HostResourceAccessKind.Deny);
+            // DenyCors: the page (on PagesHost) may load these as scripts, styles and
+            // images, but no script can fetch or read them across origins. (Deny would
+            // block even the page's own <script> and <link>: an empty page.)
+            web.SetVirtualHostNameToFolderMapping(FilesHost, Path.Combine(Brand.ExtensionDir, "panel"), CoreWebView2HostResourceAccessKind.DenyCors);
             web.SetVirtualHostNameToFolderMapping(PagesHost, WritePages(), CoreWebView2HostResourceAccessKind.Deny);
             // Never leave the page; links go through openLink (H18). No new windows.
             web.NavigationStarting += (_, e) =>
