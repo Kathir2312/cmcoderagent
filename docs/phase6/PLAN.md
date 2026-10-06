@@ -447,6 +447,27 @@ and macOS, the release build on Windows, macOS and Linux.**
 
 ### 7. Visual Studio 2022 extension
 
+**Status: in progress.** Done so far:
+- `visualstudio/src/Cmcoder.Core` (netstandard2.0): the JVM core's rules in
+  C#, with 21 tests against the real cmcoder (Linux, macOS, Windows; the
+  release build on Windows with the standalone cmcoder.exe and no Python).
+  On Windows cmcoder runs in a job object, so everything it started ends
+  with it, even if Visual Studio crashes. Arguments are quoted for .NET
+  Framework (no ArgumentList), checked through a real process. Found while
+  testing: an exception in a listener crashed the test process (inside
+  Visual Studio it would end Visual Studio): reader threads now log and go
+  on; the JVM core got the same guard.
+- `visualstudio/src/Cmcoder.VisualStudio`: the extension as planned below
+  (WebView2 with virtual host names, the diff window with an info bar for
+  Accept / Accept Always / Reject, the Error List, options, commands, code
+  search, Copy Diagnostics). Compile-checked on Linux against the VS SDK
+  reference assemblies; built and packed by CI on Windows.
+- The gate: a self-test compiled only into a test build (`Gate.cs`), run
+  in Visual Studio's experimental instance by `gate/run-gate.ps1` in the
+  release build (the in-IDE test framework isn't on nuget.org).
+- Not carried over: the "extra arguments" setting (see item 6).
+
+
 - `visualstudio/` (C#, .NET Framework 4.8 as Visual Studio requires, the
   VS SDK with `AsyncPackage`; `InstallationTarget` `[17.10,18.0)`, x64 only:
   the standalone program is built for x64).
