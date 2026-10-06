@@ -35,7 +35,7 @@ folder others can write, never remote):
         content="default-src 'none'; style-src SOURCE; img-src SOURCE data:; script-src 'nonce-NONCE'">
   <link href="SOURCE/chat.css" rel="stylesheet">
 </head>
-<body data-product="cmcoder" data-icon="SOURCE/icon.png">
+<body data-product="cmcoder" data-icon="SOURCE/icon.png" data-host="function">
   <div id="app"></div>
   <script nonce="NONCE" src="SOURCE/chat.js"></script>
 </body></html>
@@ -43,7 +43,8 @@ folder others can write, never remote):
 
 `SOURCE` is where the IDE serves the plugin's files; `NONCE` a new random value
 per page. `data-product` is the brand name (`branding/brand.json`),
-`data-icon` the brand icon's address.
+`data-icon` the brand icon's address; `data-host="function"` only where the
+IDE adds `cmcoderHostPost` (JetBrains, Eclipse).
 
 ## Messages
 
@@ -61,7 +62,9 @@ are passed in unchanged inside `{"kind": "event", "event": ...}`.
 | Visual Studio (WebView2) | `window.chrome.webview.postMessage(message)`: the IDE gets it in `WebMessageReceived` |
 | JetBrains (JCEF), Eclipse (SWT) | `window.cmcoderHostPost(jsonText)`: a function the IDE adds (`JBCefJSQuery`, `BrowserFunction`) |
 
-The function can be added after the page loads: messages wait in the page
+Such an IDE also puts `data-host="function"` on `<body>`, so the page uses the
+function even where `window.chrome.webview` exists (SWT's browser on Windows is
+WebView2). The function can be added after the page loads: messages wait in the page
 until it exists (the first is `{"kind": "ready"}`, which tells the IDE to send
 the state). The IDE must accept messages only from its own page.
 

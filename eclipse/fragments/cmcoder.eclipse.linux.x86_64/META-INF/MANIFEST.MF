@@ -1,0 +1,10 @@
+Manifest-Version: 1.0
+Bundle-ManifestVersion: 2
+Bundle-Name: cmcoder program (linux x86_64)
+Bundle-Vendor: cmcoder
+Bundle-SymbolicName: cmcoder.eclipse.linux.x86_64
+Bundle-Version: 0.1.0.qualifier
+Fragment-Host: cmcoder.eclipse;bundle-version="[0.1.0,0.2.0)"
+Eclipse-PlatformFilter: (& (osgi.os=linux) (osgi.ws=gtk) (osgi.arch=x86_64))
+Eclipse-BundleShape: dir
+Bundle-RequiredExecutionEnvironment: JavaSE-17

@@ -45,6 +45,19 @@ test("JetBrains/Eclipse: messages wait until the IDE adds its function, then go 
   await p.close();
 });
 
+test('data-host="function": the IDE\'s function is used even where window.chrome.webview exists (SWT on Windows)', async () => {
+  const p = await page('data-host="function"', "window.webviewSent=[];window.chrome={webview:{postMessage(m){window.webviewSent.push(m)}}}");
+  await p.addScriptTag({ content: readFileSync(join(root, "dist", "chat.js"), "utf8") });
+  await p.evaluate(() => {
+    (window as unknown as { cmcoderHostPost: (j: string) => void }).cmcoderHostPost = (j: string) =>
+      (window as unknown as { sent: unknown[] }).sent.push(JSON.parse(j));
+  });
+  await p.waitForFunction(() => (window as unknown as { sent: unknown[] }).sent.length > 0);
+  assert.deepEqual((await sent(p))[0], { kind: "ready" });
+  assert.deepEqual(await p.evaluate(() => (window as unknown as { webviewSent: unknown[] }).webviewSent), []);
+  await p.close();
+});
+
 test("the IDE's icon is used; an address that could break out of the CSS is not", async () => {
   const good = await page('data-icon="https://panel.test/icon.png"', "window.chrome={webview:{postMessage(m){window.sent.push(m)}}}");
   await good.addScriptTag({ content: readFileSync(join(root, "dist", "chat.js"), "utf8") });

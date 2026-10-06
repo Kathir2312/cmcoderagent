@@ -1,12 +1,14 @@
 name: Release build
 
 # The standalone cmcoder (PyInstaller, no Python needed), the terminal
-# package and a VS Code extension per platform with it inside. Each build is
-# tested as users run it, with no Python in reach (packaging/no_python.py:
-# developers' PCs have none); on Linux the extension is also run in a real VS
-# Code with the bundled cmcoder. Artifacts: cmcoder-<target> (the program
-# folder), cmcoder-terminal-<target> (the zip with install scripts) and
-# cmcoder-<target>.vsix.
+# package and a VS Code extension per platform with it inside, and the Eclipse
+# plugin. Each build is tested as users run it, with no Python in reach
+# (packaging/no_python.py: developers' PCs have none); on Linux the extension
+# is also run in a real VS Code with the bundled cmcoder, and the Eclipse plugin
+# runs in a real Eclipse on every platform with its bundled cmcoder. Artifacts:
+# cmcoder-<target> (the program folder), cmcoder-terminal-<target> (the zip
+# with install scripts), cmcoder-<target>.vsix and cmcoder-eclipse (the update
+# site archive, every platform in one).
 on:
   workflow_dispatch:
   push:
@@ -16,6 +18,7 @@ on:
       - "branding/**"
       - "vscode/**"
       - "clients/**"
+      - "eclipse/**"
       - "pyproject.toml"
       - "uv.lock"
       - ".github/workflows/release.yml"
@@ -64,6 +67,22 @@ jobs:
           mvn=mvn; [ "$RUNNER_OS" = Windows ] && mvn=mvn.cmd
           export CMCODER_TEST_PYTHON="$(uv run python -c 'import sys; print(sys.executable)')"
           CMCODER_TEST_BINARY=$exe uv run python packaging/no_python.py run -- $mvn -B -f clients/jvm-core/pom.xml verify
+      - name: The Eclipse plugin in a real Eclipse, with this cmcoder inside (no Python in reach)
+        shell: bash
+        run: |
+          case "$RUNNER_OS" in
+            Linux) frag=linux.x86_64; sudo apt-get install -y libwebkit2gtk-4.1-0 ;;
+            Windows) frag=win32.x86_64 ;;
+            macOS) frag=macosx.aarch64 ;;
+          esac
+          cp -RL dist/cmcoder eclipse/fragments/cmcoder.eclipse.$frag/bin/cmcoder  # links as files
+          (cd clients/web-panel && npm ci && npm run build)
+          mvn=mvn; [ "$RUNNER_OS" = Windows ] && mvn=mvn.cmd
+          x=""; [ "$RUNNER_OS" = Linux ] && x="xvfb-run -a"
+          export CMCODER_TEST_PYTHON="$(uv run python -c 'import sys; print(sys.executable)')"
+          cd eclipse
+          CMCODER_TEST_BUNDLED=1 $x uv run python ../packaging/no_python.py run -- $mvn -B verify
+          rm -rf fragments/cmcoder.eclipse.$frag/bin/cmcoder
       - name: The terminal package (install, update, run, uninstall; no Python in reach)
         shell: bash
         run: |
@@ -99,3 +118,52 @@ jobs:
         with:
           name: cmcoder-${{ matrix.target }}.vsix
           path: vscode/cmcoder-${{ matrix.target }}.vsix
+
+  eclipse-site:
+    # The update site developers install from: the plugin and one fragment per
+    # platform, each with that platform's cmcoder (from the builds above).
+    name: Eclipse update site
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: cmcoder-*-*
+          path: programs
+      - name: cmcoder into each platform's fragment
+        run: |
+          set -e
+          for p in linux-x64:linux.x86_64 win32-x64:win32.x86_64 darwin-arm64:macosx.aarch64; do
+            src=programs/cmcoder-${p%%:*}; dst=eclipse/fragments/cmcoder.eclipse.${p##*:}/bin/cmcoder
+            test -d "$src" || { echo "missing $src"; exit 1; }
+            cp -R "$src" "$dst"
+          done
+          chmod +x eclipse/fragments/*/bin/cmcoder/cmcoder
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: The shared chat panel
+        working-directory: clients/web-panel
+        run: npm ci && npm run build
+      - name: Build the update site (the tests ran in the builds above)
+        working-directory: eclipse
+        run: mvn -B -DskipTests verify
+      - name: Every platform's cmcoder is in the site
+        working-directory: eclipse/site/target
+        run: |
+          set -e
+          mkdir site && cd site && unzip -q ../cmcoder-eclipse-*.zip
+          for f in win32.x86_64:cmcoder.exe linux.x86_64:cmcoder macosx.aarch64:cmcoder; do
+            jar=$(ls plugins/cmcoder.eclipse.${f%%:*}_*.jar)
+            unzip -l "$jar" | grep -q " bin/cmcoder/${f##*:}$" || { echo "no cmcoder in $jar"; exit 1; }
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cmcoder-eclipse
+          path: eclipse/site/target/cmcoder-eclipse-*.zip

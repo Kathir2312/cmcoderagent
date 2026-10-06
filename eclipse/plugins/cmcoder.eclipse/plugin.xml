@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?eclipse version="3.4"?>
+<plugin>
+   <!-- The chat (H5) and the Agent Navigator (H15): two views. -->
+   <extension point="org.eclipse.ui.views">
+      <category id="cmcoder.eclipse.category" name="cmcoder"/>
+      <view
+            id="cmcoder.eclipse.chat"
+            name="cmcoder"
+            category="cmcoder.eclipse.category"
+            class="cmcoder.eclipse.ChatView"
+            icon="icons/cmcoder.png"
+            allowMultiple="false"/>
+      <view
+            id="cmcoder.eclipse.navigator"
+            name="cmcoder: Agent Navigator"
+            category="cmcoder.eclipse.category"
+            class="cmcoder.eclipse.NavigatorView"
+            icon="icons/cmcoder.png"
+            allowMultiple="false"/>
+   </extension>
+
+   <extension point="org.eclipse.ui.commands">
+      <category id="cmcoder.eclipse.commands" name="cmcoder"/>
+      <command id="cmcoder.eclipse.open" categoryId="cmcoder.eclipse.commands" name="cmcoder: Open Chat"/>
+      <command id="cmcoder.eclipse.askAboutSelection" categoryId="cmcoder.eclipse.commands" name="cmcoder: Ask About Selection"/>
+      <command id="cmcoder.eclipse.newConversation" categoryId="cmcoder.eclipse.commands" name="cmcoder: New Conversation"/>
+      <command id="cmcoder.eclipse.stop" categoryId="cmcoder.eclipse.commands" name="cmcoder: Stop"/>
+      <command id="cmcoder.eclipse.openNavigator" categoryId="cmcoder.eclipse.commands" name="cmcoder: Open Agent Navigator"/>
+      <command id="cmcoder.eclipse.showLog" categoryId="cmcoder.eclipse.commands" name="cmcoder: Show Log"/>
+      <command id="cmcoder.eclipse.copyDiagnostics" categoryId="cmcoder.eclipse.commands" name="cmcoder: Copy Diagnostics"/>
+   </extension>
+
+   <extension point="org.eclipse.ui.handlers">
+      <handler commandId="cmcoder.eclipse.open" class="cmcoder.eclipse.Commands$Open"/>
+      <handler commandId="cmcoder.eclipse.askAboutSelection" class="cmcoder.eclipse.Commands$AskAboutSelection"/>
+      <handler commandId="cmcoder.eclipse.newConversation" class="cmcoder.eclipse.Commands$NewConversation"/>
+      <handler commandId="cmcoder.eclipse.stop" class="cmcoder.eclipse.Commands$Stop"/>
+      <handler commandId="cmcoder.eclipse.openNavigator" class="cmcoder.eclipse.Commands$OpenNavigator"/>
+      <handler commandId="cmcoder.eclipse.showLog" class="cmcoder.eclipse.Commands$ShowLog"/>
+      <handler commandId="cmcoder.eclipse.copyDiagnostics" class="cmcoder.eclipse.Commands$CopyDiagnostics"/>
+   </extension>
+
+   <!-- "Ask cmcoder about selection" in the editor's context menu (H14). -->
+   <extension point="org.eclipse.ui.menus">
+      <menuContribution locationURI="popup:#AbstractTextEditorContext?after=additions">
+         <command commandId="cmcoder.eclipse.askAboutSelection" label="Ask cmcoder About Selection"/>
+      </menuContribution>
+   </extension>
+
+   <extension point="org.eclipse.ui.bindings">
+      <key
+            commandId="cmcoder.eclipse.askAboutSelection"
+            contextId="org.eclipse.ui.textEditorScope"
+            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
+            sequence="M1+M3+K"/>
+      <key
+            commandId="cmcoder.eclipse.open"
+            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
+            sequence="M1+M3+J"/>
+   </extension>
+
+   <!-- Settings (H17, H21). -->
+   <extension point="org.eclipse.ui.preferencePages">
+      <page id="cmcoder.eclipse.preferences" name="cmcoder" class="cmcoder.eclipse.Preferences"/>
+   </extension>
+   <extension point="org.eclipse.core.runtime.preferences">
+      <initializer class="cmcoder.eclipse.Preferences$Defaults"/>
+   </extension>
+</plugin>

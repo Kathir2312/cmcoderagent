@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<site>
+   <feature id="cmcoder.eclipse.feature" version="0.0.0">
+      <category name="cmcoder"/>
+   </feature>
+   <category-def name="cmcoder" label="cmcoder"/>
+</site>

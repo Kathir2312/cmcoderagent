@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The release gate in a real Eclipse (H1-H24 where Eclipse is involved): the
+     plugin with its real chat page, a real cmcoder and the mock model server.
+     Needs CMCODER_TEST_PYTHON (a Python with cmcoder, for the mock server) and,
+     on Windows, CMCODER_TEST_BINARY (the standalone cmcoder.exe). -->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>cmcoder.eclipse</groupId>
+    <artifactId>cmcoder-eclipse-parent</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <relativePath>../../pom.xml</relativePath>
+  </parent>
+  <artifactId>cmcoder.eclipse.tests</artifactId>
+  <version>0.1.0-SNAPSHOT</version>
+  <packaging>eclipse-test-plugin</packaging>
+
+  <properties>
+    <macArgs></macArgs>
+  </properties>
+  <profiles>
+    <profile>
+      <id>macos</id>
+      <activation><os><family>mac</family></os></activation>
+      <properties><macArgs>-XstartOnFirstThread</macArgs></properties>
+    </profile>
+  </profiles>
+
+  <build>
+    <plugins>
+      <!-- What developers install: the plugin and this platform's fragment (with
+           cmcoder in it, in the release build). -->
+      <plugin>
+        <groupId>org.eclipse.tycho</groupId>
+        <artifactId>target-platform-configuration</artifactId>
+        <version>${tycho.version}</version>
+        <configuration>
+          <dependency-resolution>
+            <extraRequirements>
+              <requirement>
+                <type>eclipse-feature</type>
+                <id>cmcoder.eclipse.feature</id>
+                <versionRange>0.0.0</versionRange>
+              </requirement>
+            </extraRequirements>
+          </dependency-resolution>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.eclipse.tycho</groupId>
+        <artifactId>tycho-surefire-plugin</artifactId>
+        <version>${tycho.version}</version>
+        <configuration>
+          <useUIHarness>true</useUIHarness>
+          <useUIThread>false</useUIThread>
+          <product>org.eclipse.platform.ide</product>
+          <application>org.eclipse.ui.ide.workbench</application>
+          <forkedProcessTimeoutInSeconds>1200</forkedProcessTimeoutInSeconds>
+          <argLine>${macArgs} -Dcmcoder.testDriver=${project.basedir}/../../../clients/web-panel/dist/test-driver.js</argLine>
+          <redirectTestOutputToFile>false</redirectTestOutputToFile>
+          <trimStackTrace>false</trimStackTrace>
+          <dependencies>
+            <dependency>
+              <type>eclipse-feature</type>
+              <artifactId>org.eclipse.platform</artifactId>
+              <version>0.0.0</version>
+            </dependency>
+            <dependency>
+              <type>eclipse-plugin</type>
+              <artifactId>org.eclipse.compare</artifactId>
+              <version>0.0.0</version>
+            </dependency>
+            <dependency>
+              <type>eclipse-plugin</type>
+              <artifactId>org.eclipse.ui.console</artifactId>
+              <version>0.0.0</version>
+            </dependency>
+          </dependencies>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

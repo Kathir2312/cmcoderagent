@@ -12,6 +12,10 @@
 //
 // A function the IDE adds can appear only after the page has loaded, so messages
 // sent before that (the first is "ready") wait in a queue instead of being lost.
+//
+// An IDE that adds the function puts data-host="function" on <body>: Eclipse's
+// browser on Windows is WebView2 too, so window.chrome.webview exists there, but
+// it belongs to SWT (its own messages), not to the plugin.
 
 declare function acquireVsCodeApi(): { postMessage(message: unknown): void };
 
@@ -25,12 +29,13 @@ export interface Bridge<Out> {
 }
 
 export function bridge<Out>(): Bridge<Out> {
-  if (typeof acquireVsCodeApi === "function") {
+  const viaFunction = document.body?.dataset.host === "function";
+  if (!viaFunction && typeof acquireVsCodeApi === "function") {
     const api = acquireVsCodeApi();
     return { post: (m) => api.postMessage(m) };
   }
   const w = window as unknown as HostWindow;
-  if (w.chrome?.webview) {
+  if (!viaFunction && w.chrome?.webview) {
     const webview = w.chrome.webview;
     return { post: (m) => webview.postMessage(m) };
   }

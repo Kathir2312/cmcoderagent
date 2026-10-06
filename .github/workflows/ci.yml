@@ -172,6 +172,47 @@ jobs:
           export CMCODER_TEST_PYTHON="$(uv run python -c 'import sys; print(sys.executable)')"
           mvn -B -f clients/jvm-core/pom.xml verify
 
+  eclipse:
+    # The Eclipse plugin (eclipse/) in a real Eclipse, oldest and newest supported,
+    # with its real chat page, cmcoder from source and the mock model server. The
+    # Release build runs it again on every platform with the bundled cmcoder.
+    name: Eclipse plugin (${{ matrix.os }}, ${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, target: oldest }
+          - { os: ubuntu-latest, target: newest }
+          - { os: macos-latest, target: oldest }
+    steps:
+      - uses: actions/checkout@v4
+      - name: A browser engine for Eclipse (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: uv sync
+      - name: The shared chat panel
+        working-directory: clients/web-panel
+        run: npm ci && npm run build
+      - name: Build and test
+        working-directory: eclipse
+        shell: bash
+        run: |
+          export CMCODER_TEST_PYTHON="$(uv run python -c 'import sys; print(sys.executable)')"
+          run=""; [ "$RUNNER_OS" = Linux ] && run="xvfb-run -a"
+          $run mvn -B -Dtarget=${{ matrix.target }} verify
+
   security:
     name: security (SAST + dependency audit)
     runs-on: ubuntu-latest

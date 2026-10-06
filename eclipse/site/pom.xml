@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The p2 repository developers install from: target/cmcoder-eclipse-<version>.zip
+     (Help > Install New Software > Add > Archive). -->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>cmcoder.eclipse</groupId>
+    <artifactId>cmcoder-eclipse-parent</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <relativePath>../pom.xml</relativePath>
+  </parent>
+  <artifactId>cmcoder-eclipse</artifactId>
+  <version>0.1.0-SNAPSHOT</version>
+  <packaging>eclipse-repository</packaging>
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.eclipse.tycho</groupId>
+        <artifactId>tycho-p2-repository-plugin</artifactId>
+        <version>${tycho.version}</version>
+        <configuration>
+          <!-- Only our own bundles: Eclipse already has everything they need. -->
+          <includeAllDependencies>false</includeAllDependencies>
+          <repositoryName>cmcoder for Eclipse</repositoryName>
+          <finalName>cmcoder-eclipse-${qualifiedVersion}</finalName>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

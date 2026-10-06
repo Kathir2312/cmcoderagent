@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- What developers install: the plugin, and cmcoder itself for their system
+     (one fragment per platform; p2 installs only the matching one). -->
+<feature
+      id="cmcoder.eclipse.feature"
+      label="cmcoder"
+      version="0.1.0.qualifier"
+      provider-name="cmcoder">
+
+   <description>
+      A coding agent in Eclipse: a chat that reads, explains and changes the code
+      of your project, with every change shown in the compare editor first.
+   </description>
+
+   <license url="">
+      For use inside the company only.
+   </license>
+
+   <requires>
+      <import plugin="org.eclipse.ui" version="3.205.0" match="greaterOrEqual"/>
+   </requires>
+
+   <plugin id="cmcoder.eclipse" version="0.0.0" unpack="true"/>
+   <plugin id="cmcoder.eclipse.win32.x86_64" os="win32" ws="win32" arch="x86_64" fragment="true" version="0.0.0" unpack="true"/>
+   <plugin id="cmcoder.eclipse.linux.x86_64" os="linux" ws="gtk" arch="x86_64" fragment="true" version="0.0.0" unpack="true"/>
+   <plugin id="cmcoder.eclipse.macosx.aarch64" os="macosx" ws="cocoa" arch="aarch64" fragment="true" version="0.0.0" unpack="true"/>
+</feature>

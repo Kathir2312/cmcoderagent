@@ -374,23 +374,61 @@ in `README-FIRST.txt`.
 
 ### 6. Eclipse plugin
 
-- `eclipse/` (Java 21, Maven + Tycho): a bundle (the view, handlers,
-  preferences), a fragment per platform with `bin/cmcoder/` (so each archive
-  only carries its own program; `p2.inf` sets the executable bit), a feature
-  and a p2 repository archive per platform.
-- A view with SWT's `Browser`, created **with the Edge engine on Windows**
-  (`SWT.EDGE`; the old default engine can't run the panel), messages through
-  `BrowserFunction` / `execute`; navigation blocked with a `LocationListener`.
-- H1–H24 with Eclipse's APIs: Compare editor (`CompareUI`) for diffs (H9),
-  `ITextEditor` selection and problem markers (`IMarker`) (H7, H8),
-  `IDE.openEditor` + go to line (H8), a preference page (H17), a status-line
-  contribution (H16), commands/handlers/key bindings (H14), an editor part for
-  the navigator (H15), theme from the workbench's colours (H20). No trust
-  concept in Eclipse: a preference "Use the project's own cmcoder settings",
-  off by default (H21).
-- Tests: Tycho Surefire with the UI harness and **SWTBot** for the gate, on
-  Windows, macOS and Linux (Linux under a virtual display), on Eclipse
-  2024-06 and the newest release.
+**Status: in progress. Built and gate-tested here on Linux (Eclipse 2024-06
+and 2026-09, source and bundled cmcoder with no Python on PATH); CI on Linux
+and macOS, the release build on Windows, macOS and Linux.**
+
+- `eclipse/` (Maven + Tycho 5; the plugin targets Java 17, Eclipse runs on
+  21): a bundle (views, handlers, preferences; it also compiles
+  `clients/jvm-core`), a fragment per platform with `bin/cmcoder/`, a feature
+  and **one** p2 update-site archive for all platforms (Eclipse installs only
+  the matching fragment, so developers get one file). The executable bit is
+  restored by the JVM core when cmcoder starts (`ProgramLocator.prepare`), not
+  by `p2.inf`.
+- A view with SWT's `Browser`, **Edge (WebView2) on Windows**, WebKit
+  elsewhere. Messages from the page through `BrowserFunction`
+  (`cmcoderHostPost`), to it through `execute`. Found while testing:
+  - SWT's Edge also has `window.chrome.webview`, which belongs to SWT: the
+    page now carries `data-host="function"` and the shared panel's bridge then
+    uses only the function (a panel test covers it).
+  - On Linux SWT's function is a request to `swt://browserfunction/`: the
+    page's policy allows `connect-src swt:` and nothing else to fetch.
+  - The page says "ready" before the browser reports it loaded; the first
+    message from the page now counts as loaded (it was dropped before).
+- Page: written to the plugin's state folder per start, a new nonce each
+  time, the panel files from the installed plugin (`file:`), navigation and
+  new windows blocked, no context menu.
+- With Eclipse's APIs: the compare editor with Accept / Accept Always /
+  Reject above the diff (H9, H10), the active text editor's selection and
+  problem markers (H7), `getDiagnostics` from markers and `openFile` with
+  go to line (H8), rewind and @ pickers as dialogs (H11, H13), the external
+  browser for links (H18), theme from the view's colours and JFace fonts,
+  again on theme or font change (H20), a preference page (H17, H21: "Use the
+  project's own .cmcoder settings", off), commands, the editor menu entry and
+  Ctrl+Alt+K / Ctrl+Alt+J (H14), the log as a console, Copy Diagnostics with
+  version and `doctor --no-probe` (H22), `--client eclipse` (H23), the
+  brand's name and icon (H24).
+- Every call into the shared host runs on one background thread; the UI
+  thread never waits for cmcoder.
+- **Gate test** (`tests/`, the Tycho UI harness, no SWTBot needed): in a real
+  workbench with the real page (the panel's test driver) and a real cmcoder
+  against the mock model server: the page loads and cmcoder starts; the
+  context label from the open editor, selection and a marker; Eclipse's
+  colours on the page; a message whose context reaches the model;
+  `getDiagnostics` answered from markers; a Write shown in the compare editor
+  and accepted there (file written, editor closed, the chat says "Allowed");
+  the navigator opened mid-conversation shows the turn; the page can't
+  navigate away; Copy Diagnostics with no key; Ask About Selection fills the
+  prompt; closing the chat stops cmcoder. With `CMCODER_TEST_BUNDLED=1` it
+  checks cmcoder came from the fragment.
+- CI: Linux (oldest, newest) and macOS (oldest) from source; the release
+  build runs the gate on Windows, macOS and Linux with that platform's
+  standalone cmcoder in the fragment and no Python on PATH, then builds the
+  update site with all three and checks each fragment holds its program.
+- **Still to do for item 6:** code search status and set-up (H16); "extra
+  arguments" setting (H17); the navigator is a view, not an editor tab (H15:
+  works the same, decide if it matters); Reject and rewind in the gate; a
+  first run on Windows (release build).
 
 ### 7. Visual Studio 2022 extension
 

@@ -12,3 +12,7 @@ evals/.runs/
 .coverage
 vscode/bin/
 *.vsix
+
+# Eclipse plugin builds (Maven/Tycho)
+eclipse/**/target/
+eclipse/**/.tycho-consumer-pom.xml
