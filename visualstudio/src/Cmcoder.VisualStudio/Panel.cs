@@ -152,8 +152,9 @@ namespace Cmcoder.VisualStudio
             });
         }
 
-        /// <summary>Script in the page, its result as JSON (tests).</summary>
-        internal System.Threading.Tasks.Task<string> EvaluateAsync(string script) => view.CoreWebView2.ExecuteScriptAsync(script);
+        /// <summary>Script in the page, its result as JSON (tests); "null" while the browser is still starting.</summary>
+        internal System.Threading.Tasks.Task<string> EvaluateAsync(string script) =>
+            view.CoreWebView2 == null ? System.Threading.Tasks.Task.FromResult("null") : view.CoreWebView2.ExecuteScriptAsync(script);
 
         // -- the pages -----------------------------------------------------------------------------
 
