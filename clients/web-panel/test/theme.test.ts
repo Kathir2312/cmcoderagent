@@ -1,6 +1,6 @@
 // theme.json is the list of colours and fonts every IDE must give the panel.
 // These checks keep it exact: a colour the panel starts using without listing it
-// would be missing (unstyled) in JetBrains, Visual Studio and Eclipse.
+// would be missing (unstyled) in Visual Studio, Eclipse and NetBeans.
 
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  cmcoder's IDE core for the JVM IDEs (JetBrains, Eclipse): starting and stopping
+  cmcoder's IDE core for the JVM IDEs (Eclipse, NetBeans): starting and stopping
   the cmcoder program, the protocol, and the host logic shared by both plugins.
   No dependencies at run time (the IDEs' own libraries can't clash with it);
   JUnit only for the tests.
@@ -19,7 +19,7 @@
   <name>cmcoder IDE core (JVM)</name>
 
   <properties>
-    <!-- Java 17: Eclipse 2024-06 needs 17+, JetBrains IDEs run on 21. -->
+    <!-- Java 17: Eclipse 2024-06 and NetBeans 28 run on 17+. -->
     <maven.compiler.release>17</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <junit.version>5.11.4</junit.version>

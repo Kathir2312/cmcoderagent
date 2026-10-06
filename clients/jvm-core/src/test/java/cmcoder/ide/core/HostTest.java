@@ -18,7 +18,7 @@ import org.junit.jupiter.api.Test;
 
 /**
  * The shared host logic (H5-H18) with a fake IDE, against the real cmcoder:
- * what the JetBrains and Eclipse plugins get without writing it themselves.
+ * what the Eclipse and NetBeans plugins get without writing it themselves.
  */
 class HostTest {
     /** An IDE that records what it was asked to do. */
@@ -93,7 +93,7 @@ class HostTest {
         Host.Config c = new Host.Config();
         c.programSetting = Fixtures.program().toString();
         c.projectDir = project;
-        c.client = "jetbrains";
+        c.client = "netbeans";
         c.product = "Acme Coder";
         c.env = Fixtures.env(url);
         return c;

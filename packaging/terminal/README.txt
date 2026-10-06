@@ -25,5 +25,5 @@ Uninstall: uninstall.cmd (Windows) or sh uninstall.sh. Your settings,
 If your company doesn't allow the script, copy the "cmcoder" folder anywhere
 you like and add that folder to your PATH yourself.
 
-The IDE plugins (VS Code, JetBrains, Visual Studio, Eclipse) contain their own
+The IDE plugins (VS Code, Visual Studio, Eclipse, NetBeans) contain their own
 copy of the program, so you don't need this for them.

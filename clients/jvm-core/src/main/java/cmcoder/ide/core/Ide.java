@@ -6,7 +6,7 @@ import java.util.function.Consumer;
 
 /**
  * What an IDE does for {@link Host}: everything that needs the IDE's own APIs.
- * The JetBrains and Eclipse plugins each implement it; the rest of the host
+ * The Eclipse and NetBeans plugins each implement it; the rest of the host
  * duties live in {@link Host}, the same for both.
  *
  * <p>Host calls these from its own threads and never waits for them: an

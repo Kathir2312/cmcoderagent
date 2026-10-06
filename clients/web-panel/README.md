@@ -1,7 +1,7 @@
 # The shared chat panel
 
 cmcoder's chat panel and Agent Navigator, the same files in every IDE (VS Code,
-JetBrains, Visual Studio, Eclipse). The IDE side starts `cmcoder --protocol
+Visual Studio, Eclipse, NetBeans). The IDE side starts `cmcoder --protocol
 stdio`, shows these pages in its embedded browser and relays messages between
 them; the pages never talk to cmcoder directly.
 
@@ -44,7 +44,7 @@ folder others can write, never remote):
 `SOURCE` is where the IDE serves the plugin's files; `NONCE` a new random value
 per page. `data-product` is the brand name (`branding/brand.json`),
 `data-icon` the brand icon's address; `data-host="function"` only where the
-IDE adds `cmcoderHostPost` (JetBrains, Eclipse).
+IDE adds `cmcoderHostPost` (Eclipse, NetBeans).
 
 ## Messages
 
@@ -60,7 +60,7 @@ are passed in unchanged inside `{"kind": "event", "event": ...}`.
 |---|---|
 | VS Code | `acquireVsCodeApi().postMessage(message)` |
 | Visual Studio (WebView2) | `window.chrome.webview.postMessage(message)`: the IDE gets it in `WebMessageReceived` |
-| JetBrains (JCEF), Eclipse (SWT) | `window.cmcoderHostPost(jsonText)`: a function the IDE adds (`JBCefJSQuery`, `BrowserFunction`) |
+| Eclipse (SWT), NetBeans (JavaFX) | `window.cmcoderHostPost(jsonText)`: a function the IDE adds (`BrowserFunction`; in JavaFX an `alert()` with a per-load secret) |
 
 Such an IDE also puts `data-host="function"` on `<body>`, so the page uses the
 function even where `window.chrome.webview` exists (SWT's browser on Windows is
@@ -90,7 +90,7 @@ theme changes. A test fails if the pages use a variable that isn't listed.
 Test builds load `dist/test-driver.js` after `chat.js`. It adds
 `window.__cmcoderTest.run(action, selector, value?)`, which returns JSON text,
 so a test can drive the real panel through the embedded browser's "run
-JavaScript" call (JCEF `executeJavaScript`, SWT `Browser.evaluate`, WebView2
+JavaScript" call (JavaFX `executeScript`, SWT `Browser.evaluate`, WebView2
 `ExecuteScriptAsync`):
 
 | Action | Returns |

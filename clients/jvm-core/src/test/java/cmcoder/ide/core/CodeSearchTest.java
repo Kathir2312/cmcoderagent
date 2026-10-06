@@ -23,7 +23,7 @@ class CodeSearchTest {
             Host.Config c = new Host.Config();
             c.programSetting = Fixtures.program().toString();
             c.projectDir = project;
-            c.client = "jetbrains";
+            c.client = "netbeans";
             c.env = Fixtures.env(server.url);
             Host host = new Host(ide, c);
             AtomicInteger changes = new AtomicInteger();

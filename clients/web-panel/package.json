@@ -1,7 +1,7 @@
 {
   "name": "cmcoder-web-panel",
   "private": true,
-  "description": "cmcoder's chat panel and Agent Navigator, shown by every IDE (VS Code, JetBrains, Visual Studio, Eclipse).",
+  "description": "cmcoder's chat panel and Agent Navigator, shown by every IDE (VS Code, Visual Studio, Eclipse, NetBeans).",
   "license": "UNLICENSED",
   "scripts": {
     "generate": "cd ../.. && uv run cmcoder protocol-schema --typescript > clients/web-panel/src/protocol.ts",

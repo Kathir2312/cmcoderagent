@@ -1,6 +1,6 @@
 # cmcoder IDE core (JVM)
 
-The part of the JetBrains and Eclipse plugins that is the same for both, in
+The part of the Eclipse and NetBeans plugins that is the same for both, in
 plain Java 17 with no dependencies (so it can't clash with an IDE's own
 libraries). Each plugin adds only what needs its IDE's APIs, by implementing
 `Ide`.

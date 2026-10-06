@@ -63,7 +63,7 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: maven
-      - name: The IDE core for JetBrains/Eclipse with this cmcoder (no Python in reach)
+      - name: The IDE core for Eclipse/NetBeans with this cmcoder (no Python in reach)
         shell: bash
         run: |
           exe=$PWD/dist/cmcoder/cmcoder; [ "$RUNNER_OS" = Windows ] && exe=$PWD/dist/cmcoder/cmcoder.exe

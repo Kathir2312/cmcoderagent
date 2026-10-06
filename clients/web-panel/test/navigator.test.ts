@@ -20,7 +20,7 @@ after(async () => {
   await browser?.close();
 });
 
-// How each IDE connects (src/bridge.ts). JetBrains and Eclipse add their function
+// How each IDE connects (src/bridge.ts). Eclipse and NetBeans add their function
 // only after the page has loaded, so messages wait in the panel's queue first.
 const FLAVOURS = ["vscode", "webview2", "function"] as const;
 type Flavour = (typeof FLAVOURS)[number];
@@ -30,7 +30,7 @@ const HOSTS: Record<Flavour, string> = {
   function: "window.sent=[];setTimeout(()=>{window.cmcoderHostPost=(j)=>window.sent.push(JSON.parse(j))},150)",
 };
 
-/** Waits until the host can receive (the late function in JetBrains/Eclipse) and the queue is sent. */
+/** Waits until the host can receive (the late function in Eclipse/NetBeans) and the queue is sent. */
 async function connected(page: Page, flavour: Flavour): Promise<void> {
   if (flavour !== "function") return;
   // Every page says "ready" first: once it arrived, the queue has been sent.

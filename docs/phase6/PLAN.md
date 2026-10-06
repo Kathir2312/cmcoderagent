@@ -6,8 +6,12 @@
 > Node.js). Every file in this phase carries its own `cmcoder` and must work
 > without them; see [DESIGN.md](../DESIGN.md) decision D16.
 
-**Goal:** developers who use **JetBrains IDEs** (IntelliJ IDEA, Rider,
-PyCharm, WebStorm, ...), **Visual Studio 2022** or **Eclipse** get cmcoder
+> **JetBrains IDEs dropped (6 October 2026, the user's decision).** Item 5
+> is not done; the other IDEs, the gate list and the release bundle no longer
+> include it. Mentions of JetBrains below are kept as the plan was written.
+
+**Goal:** developers who use **Visual Studio 2022**, **Eclipse** or
+**Apache NetBeans** (added as item 11) get cmcoder
 inside their IDE, with the same chat panel and features as VS Code, on PCs
 that have **no Python**.
 
@@ -38,7 +42,7 @@ notes. Three rules follow, used in every item:
 
 | Question | Decision |
 |---|---|
-| Which IDEs | **All three**: JetBrains (one plugin for IntelliJ-based IDEs), **Visual Studio 2022**, **Eclipse**. |
+| Which IDEs | **All three**: JetBrains (one plugin for IntelliJ-based IDEs), **Visual Studio 2022**, **Eclipse**. Later the same day: **JetBrains dropped**, **NetBeans added**. |
 | How developers get them | **Files only.** CI builds the files; developers install them from disk. Updates are a new file. No plugin repository or update server. |
 | Rollout | **Everyone at once.** The build that passes the release gate goes to all developers. Hence the strictness above, and a "Copy diagnostics" command in every IDE so a problem report needs no back-and-forth. |
 | NetBeans (added 6 Oct) | **Yes**, for the latest four releases, with the shared chat page in a bundled JavaFX WebView (item 11). |
@@ -74,8 +78,9 @@ One CI run (the release workflow, on a version tag or by hand) produces a
 
 | File | For | Platforms | Installs with |
 |---|---|---|---|
-| `jetbrains/cmcoder-jetbrains-<platform>.zip` | IntelliJ IDEA, Rider, PyCharm, WebStorm, GoLand, PhpStorm, CLion, Android Studio, **2024.2 or newer** | win32-x64, linux-x64, darwin-arm64 | Settings → Plugins → ⚙ → *Install Plugin from Disk…* |
+| ~~`jetbrains/cmcoder-jetbrains-<platform>.zip`~~ (dropped) | IntelliJ IDEA, Rider, PyCharm, WebStorm, GoLand, PhpStorm, CLion, Android Studio, **2024.2 or newer** | win32-x64, linux-x64, darwin-arm64 | Settings → Plugins → ⚙ → *Install Plugin from Disk…* |
 | `visualstudio/cmcoder-visualstudio-win32-x64.vsix` | **Visual Studio 2022 17.10 or newer** (Community, Professional, Enterprise) | Windows x64 | double-click the `.vsix` (VSIX Installer), with Visual Studio closed |
+| `netbeans/cmcoder-netbeans-<platform>.nbm` | Apache NetBeans **28 or newer** (item 11) | win32-x64, linux-x64, darwin-arm64 | Tools → Plugins → Downloaded → *Add Plugins…* |
 | `eclipse/cmcoder-eclipse-<platform>.zip` | Eclipse **2024-06 (4.32) or newer** and Eclipse-based IDEs (Spring Tools, ...) | win32-x64, linux-x64, darwin-arm64 | Help → *Install New Software…* → Add → *Archive…* |
 | `vscode/cmcoder-<platform>.vsix` | VS Code (exists since Phase 4) | win32-x64, linux-x64, darwin-arm64 | Extensions → ⋯ → *Install from VSIX…* |
 | `terminal/cmcoder-<platform>.zip` | the terminal (`cmcoder`, `cmcoder --tui`), no IDE | win32-x64, linux-x64, darwin-arm64 | unzip, run `install.ps1` / `install.sh` (adds it to the user's PATH; no admin rights) |
@@ -352,7 +357,10 @@ in `README-FIRST.txt`.
   - The mock model server got `--record FILE` (each chat request, for tests
     in another process).
 
-### 5. JetBrains plugin
+### 5. JetBrains plugin — dropped
+
+**Dropped on 6 October 2026** (the user's decision): not built. What follows
+is the plan as written.
 
 - `jetbrains/` (Kotlin, Gradle, IntelliJ Platform Gradle Plugin 2.x;
   `sinceBuild` 242, no upper bound unless the verifier finds a break).
@@ -616,7 +624,7 @@ newest).
 - [x] 2. One chat panel for every IDE (shared package, bridge, test bridge; VS Code on it)
 - [x] 3. Protocol classes for Java/Kotlin checked against the schema (C# with item 7)
 - [x] 4. JVM core (program lookup, process, JSON lines, executable bit, and the host logic)
-- [ ] 5. JetBrains plugin (H1–H24, gate in IntelliJ IDEA and Rider, Plugin Verifier)
+- [—] 5. ~~JetBrains plugin~~ (dropped)
 - [ ] 6. Eclipse plugin (H1–H24, gate on 2024-06 and newest)
 - [x] 7. Visual Studio 2022 extension (H1–H24, gate in Visual Studio)
 - [ ] 8. Release workflow, bundle, gate report

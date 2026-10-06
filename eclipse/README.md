@@ -53,7 +53,7 @@ Python on PATH).
 
 | Folder | What |
 |---|---|
-| `plugins/cmcoder.eclipse` | the plugin; also compiles `clients/jvm-core` (the host logic shared with JetBrains) |
+| `plugins/cmcoder.eclipse` | the plugin; also compiles `clients/jvm-core` (the host logic shared with NetBeans) |
 | `fragments/` | one per platform, with that platform's cmcoder |
 | `features/`, `site/` | what developers install, and the update site archive |
 | `tests/` | the gate |

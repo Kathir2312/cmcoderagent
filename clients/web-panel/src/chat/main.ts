@@ -1,4 +1,4 @@
-// The chat panel, the same in every IDE (VS Code, JetBrains, Visual Studio, Eclipse):
+// The chat panel, the same in every IDE (VS Code, Visual Studio, Eclipse, NetBeans):
 // a sandboxed browser page. Plain DOM code: it receives protocol events from the
 // IDE side and renders them; it talks to the IDE only through ../bridge.
 

@@ -39,7 +39,7 @@ public final class Host {
         public String permissionMode;
         /** The project's own .cmcoder settings may be used (H21). */
         public boolean trustProject;
-        /** jetbrains, eclipse (H23). */
+        /** eclipse, netbeans (H23). */
         public String client;
         /** The brand name for messages. */
         public String product = "cmcoder";

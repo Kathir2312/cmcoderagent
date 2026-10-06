@@ -11,7 +11,7 @@ LangChain/LangGraph developers).
 > Status: **Phases 0–5 complete** (Windows, macOS and Linux): the terminal and TUI, VS Code, extensibility (MCP,
 > hooks, skills, subagents), hardening (sandbox, standalone build, both gateways) and code search.
 > **Install and use** (terminal, VS Code, Eclipse, NetBeans; no Python needed on the PC): [docs/guides/](docs/guides/README.md).
-> **Phase 6 (JetBrains, Visual Studio, Eclipse, NetBeans) is in progress**: [docs/phase6/PLAN.md](docs/phase6/PLAN.md).
+> **Phase 6 (Visual Studio, Eclipse, NetBeans) is in progress**: [docs/phase6/PLAN.md](docs/phase6/PLAN.md).
 
 ## Install
 
@@ -23,7 +23,7 @@ for Windows on Windows (below):
   (macOS, Linux). It installs for you only (no administrator rights) and adds `cmcoder` to your PATH; open a new
   terminal and run `cmcoder doctor`. `uninstall.cmd` / `uninstall.sh` remove it (settings and keys are kept).
 - **VS Code:** `cmcoder-<platform>.vsix` → Extensions → ⋯ → *Install from VSIX…*.
-- Eclipse ([guide](docs/guides/eclipse.md)), NetBeans ([guide](docs/guides/netbeans.md)) and Visual Studio: Phase 6, built and gate-tested; JetBrains: next ([plan](docs/phase6/PLAN.md)).
+- Eclipse ([guide](docs/guides/eclipse.md)), NetBeans ([guide](docs/guides/netbeans.md)) and Visual Studio: Phase 6, built and gate-tested ([plan](docs/phase6/PLAN.md)). JetBrains IDEs were dropped from the plan.
 
 **From source** (contributors). Works on **Windows, macOS and Linux**. Requires Python 3.11+ and bash:
 

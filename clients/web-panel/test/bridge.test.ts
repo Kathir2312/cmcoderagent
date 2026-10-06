@@ -30,7 +30,7 @@ async function page(body: string, head = ""): Promise<Page> {
 
 const sent = (p: Page) => p.evaluate(() => (window as unknown as { sent: unknown[] }).sent);
 
-test("JetBrains/Eclipse: messages wait until the IDE adds its function, then go in order", async () => {
+test("Eclipse/NetBeans: messages wait until the IDE adds its function, then go in order", async () => {
   const p = await page("");
   await p.addScriptTag({ content: readFileSync(join(root, "dist", "chat.js"), "utf8") });
   // The panel already said "ready" and asked for nothing else yet: nothing lost.

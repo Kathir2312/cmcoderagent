@@ -122,7 +122,7 @@ jobs:
       - name: Browser for the chat panel tests
         working-directory: clients/web-panel
         run: npx playwright install ${{ runner.os == 'Linux' && '--with-deps' || '' }} chromium
-      - name: The shared panel, as each IDE connects to it (VS Code, WebView2, JCEF/SWT)
+      - name: The shared panel, as each IDE connects to it (VS Code, WebView2, SWT, JavaFX)
         working-directory: clients/web-panel
         run: npm test
       # The tests start cmcoder with this Python. (`uv run npm ...` can't start
@@ -145,11 +145,11 @@ jobs:
           path: vscode/cmcoder.vsix
 
   jvm-core:
-    # The IDE core shared by the JetBrains and Eclipse plugins (clients/jvm-core),
+    # The IDE core shared by the Eclipse and NetBeans plugins (clients/jvm-core),
     # on the oldest Java it supports. Its tests start cmcoder from source here
     # (macOS, Linux); on Windows that needs the standalone cmcoder.exe, so the
     # Release build runs all of them there (with no Python in reach).
-    name: IDE core for JetBrains/Eclipse (${{ matrix.os }})
+    name: IDE core for Eclipse/NetBeans (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false

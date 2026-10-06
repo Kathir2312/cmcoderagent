@@ -3,8 +3,8 @@
 //
 //   VS Code                acquireVsCodeApi().postMessage(message)
 //   Visual Studio          window.chrome.webview.postMessage(message)   (WebView2)
-//   JetBrains, Eclipse     window.cmcoderHostPost(JSON text)            (a function the
-//                          IDE adds: JBCefJSQuery in JCEF, BrowserFunction in SWT)
+//   Eclipse, NetBeans      window.cmcoderHostPost(JSON text)            (a function the
+//                          IDE adds: BrowserFunction in SWT, alert() in JavaFX)
 //
 // Receiving is the same everywhere: the IDE dispatches a `message` event on the
 // window with the message as `data` (VS Code does it itself; the others run

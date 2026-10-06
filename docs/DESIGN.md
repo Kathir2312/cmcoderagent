@@ -46,7 +46,7 @@ shell commands) runs locally; the model is always reached over the network.
 
 **Non-goals (for now)**
 - Multi-user servers, auth, rate limiting (D5).
-- ~~JetBrains or other IDEs~~: now Phase 6 (JetBrains, Visual Studio 2022, Eclipse), on the same
+- ~~JetBrains or other IDEs~~: now Phase 6 (Visual Studio 2022, Eclipse, NetBeans; JetBrains dropped), on the same
   IDE-neutral protocol; see [phase6/PLAN.md](phase6/PLAN.md).
 - Hosted or cloud execution of the agent itself.
 - Running models on the dev machine.
