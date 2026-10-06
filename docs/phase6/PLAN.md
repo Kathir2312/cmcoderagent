@@ -425,10 +425,13 @@ and macOS, the release build on Windows, macOS and Linux.**
   build runs the gate on Windows, macOS and Linux with that platform's
   standalone cmcoder in the fragment and no Python on PATH, then builds the
   update site with all three and checks each fragment holds its program.
-- **Still to do for item 6:** code search status and set-up (H16); "extra
-  arguments" setting (H17); the navigator is a view, not an editor tab (H15:
-  works the same, decide if it matters); Reject and rewind in the gate; a
-  first run on Windows (release build).
+- **Still to do for item 6:** code search status and set-up (H16); the
+  navigator is a view, not an editor tab (H15: works the same, decide if it
+  matters); rewind in the gate; Windows passing in the release build.
+- H17's "extra arguments" is not carried over: in VS Code it exists to run
+  cmcoder through `uv run`, which D16 (no Python) rules out for developers.
+- The gate also rejects a change in the compare editor: nothing is written,
+  the chat says "Denied", and the turn stops (the model isn't asked again).
 
 ### 7. Visual Studio 2022 extension
 

@@ -66,7 +66,8 @@ public class GateTest {
                 + "{\"tool_calls\":[{\"name\":\"getDiagnostics\",\"arguments\":{}}]},"
                 + "{\"content\":\"Checked the problems.\"},"
                 + "{\"tool_calls\":[{\"name\":\"Write\",\"arguments\":{\"file_path\":\"new.py\",\"content\":\"x = 2\\n\"}}]},"
-                + "{\"content\":\"Wrote new.py.\"}]";
+                + "{\"content\":\"Wrote new.py.\"},"
+                + "{\"tool_calls\":[{\"name\":\"Write\",\"arguments\":{\"file_path\":\"other.py\",\"content\":\"y = 3\\n\"}}]}]";
         server = new MockServer(python, script);
 
         project = ResourcesPlugin.getWorkspace().getRoot().getProject("demo");
@@ -161,6 +162,22 @@ public class GateTest {
                 "return document.body.textContent")).contains("create new.py"),
                 () -> "navigator page: " + evaluate(nav.panel(), "return document.URL + ' ' + document.readyState + ' '"
                         + " + typeof window.cmcoderHostPost + ' ' + document.body.textContent.slice(0, 300)"));
+
+        // H10: Reject in the compare editor: nothing written, the chat says "Denied",
+        // and the turn stops (cmcoder doesn't go on after a denial).
+        assertEquals("true", run(chat, "fill", "textarea", "create other.py"));
+        assertEquals("true", run(chat, "press", "textarea", "Enter"));
+        until("the second diff", () -> ui(() -> compareEditor() != null));
+        ui(() -> {
+            Button reject = find(compareEditor(), "cmcoder.eclipse.diff.reject");
+            assertNotNull("the diff has Reject", reject);
+            reject.notifyListeners(SWT.Selection, new Event());
+            return null;
+        });
+        until("the denial", () -> run(chat, "texts", ".permission .answer", null).contains("Denied"));
+        until("the second diff closed", () -> ui(() -> compareEditor() == null));
+        assertFalse(Files.exists(project.getLocation().toFile().toPath().resolve("other.py")));
+        assertEquals("the model isn't asked again after a denial", 5, server.requests().size());
 
         // H19: the page can't navigate away or open windows.
         String url = ui(() -> chat.browser().getUrl());
