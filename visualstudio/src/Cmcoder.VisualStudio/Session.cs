@@ -256,6 +256,15 @@ namespace Cmcoder.VisualStudio
                 recent.AddLast(line);
                 while (recent.Count > 300) recent.RemoveFirst();
             }
+#if CMCODER_GATE
+            // The gate's log as it happens (a hang leaves no report).
+            var gate = Environment.GetEnvironmentVariable("CMCODER_VS_GATE");
+            if (!string.IsNullOrEmpty(gate))
+            {
+                try { lock (recent) File.AppendAllText(gate + ".log", DateTime.Now.ToString("HH:mm:ss ") + line + Environment.NewLine); }
+                catch (IOException) { }
+            }
+#endif
             Ui.Later(async () =>
             {
                 await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();

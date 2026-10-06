@@ -81,6 +81,9 @@ try {
             Write-Host "Screenshot: $shot"
             Stop-Process -Id $vsProcess.Id -Force
         }
+        foreach ($f in "$result.steps", "$result.log") {
+            if (Test-Path $f) { Write-Host "--- $(Split-Path $f -Leaf):"; Get-Content $f | ForEach-Object { Write-Host "  $_" } }
+        }
         throw "No gate result after $TimeoutSeconds s (Visual Studio exited: $($vsProcess.HasExited))"
     }
     $vsProcess.WaitForExit(60000) | Out-Null

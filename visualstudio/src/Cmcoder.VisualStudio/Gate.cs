@@ -67,7 +67,14 @@ namespace Cmcoder.VisualStudio
             });
         }
 
-        private static void Step(string what) => Steps.Add(DateTime.Now.ToString("HH:mm:ss") + " " + what);
+        /// <summary>Also to a file as it happens: if Visual Studio hangs, the runner shows how far it got.</summary>
+        private static void Step(string what)
+        {
+            var line = DateTime.Now.ToString("HH:mm:ss") + " " + what;
+            Steps.Add(line);
+            try { File.AppendAllText(Environment.GetEnvironmentVariable("CMCODER_VS_GATE") + ".steps", line + Environment.NewLine); }
+            catch (IOException) { }
+        }
 
         private static async Task UntilAsync(string what, Func<Task<bool>> check, int seconds = 90)
         {

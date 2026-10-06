@@ -50,8 +50,10 @@ public final class Host {
     private final Ide ide;
     private final Config config;
     private final Navigator navigator = new Navigator();
-    private AgentProcess agent;
-    private String state = "exited";
+    // Written with the host locked, read without: a UI thread may ask while the
+    // host (locked) waits for that UI thread.
+    private volatile AgentProcess agent;
+    private volatile String state = "exited";
     private final Set<String> openDiffs = new HashSet<>();
 
     private final List<java.util.function.Consumer<Protocol.Event>> listeners = new java.util.concurrent.CopyOnWriteArrayList<>();
@@ -125,8 +127,10 @@ public final class Host {
         if (self[0].running()) agent = self[0];
     }
 
-    public synchronized boolean running() {
-        return agent != null && agent.running();
+    /** Never waits for the host's lock (safe on a UI thread). */
+    public boolean running() {
+        AgentProcess a = agent;
+        return a != null && a.running();
     }
 
     /** The project or IDE closes: stop cmcoder (H3). */
@@ -358,12 +362,18 @@ public final class Host {
         toPanel(Json.write(map("kind", "context", "label", label)));
     }
 
-    /** Any protocol message (code search, tests); false when cmcoder isn't running. */
-    public synchronized boolean send(String json) {
-        return agent != null && agent.send(json);
+    /**
+     * Any protocol message (code search, tests); false when cmcoder isn't running.
+     * Never waits for the host's lock (the process has its own): a UI thread may
+     * send (code search's dialogs) while the host waits for that UI thread.
+     */
+    public boolean send(String json) {
+        AgentProcess a = agent;
+        return a != null && a.send(json);
     }
 
-    public synchronized String state() {
+    /** Never waits for the host's lock (safe on a UI thread). */
+    public String state() {
         return state;
     }
 

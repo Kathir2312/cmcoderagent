@@ -58,8 +58,10 @@ namespace Cmcoder.Core
         private readonly HashSet<string> openDiffs = new HashSet<string>();
         private readonly Dictionary<string, Protocol.FileChange> changes = new Dictionary<string, Protocol.FileChange>();
         private readonly List<Action<Protocol.Event>> listeners = new List<Action<Protocol.Event>>();
-        private AgentProcess? agent;
-        private string state = "exited";
+        // Written under the lock, read without it: the IDE's UI thread may ask for the
+        // state while the host (holding its lock) waits for that UI thread.
+        private volatile AgentProcess? agent;
+        private volatile string state = "exited";
 
         public Host(IIde ide, Config config)
         {
@@ -141,10 +143,8 @@ namespace Cmcoder.Core
             public void OnExit(int? code, bool expected, string? error) => host.OnAgentExit(holder, code, expected, error);
         }
 
-        public bool Running
-        {
-            get { lock (gate) return agent != null && agent.Running; }
-        }
+        /// <summary>Never waits for the host's lock (safe on a UI thread).</summary>
+        public bool Running => agent?.Running ?? false;
 
         /// <summary>The project or Visual Studio closes: stop cmcoder (H3).</summary>
         public void Dispose()
@@ -426,15 +426,18 @@ namespace Cmcoder.Core
         }
 
         /// <summary>Any protocol message; false when cmcoder isn't running.</summary>
+        /// <remarks>
+        /// Never waits for the host's lock (the process has its own): a UI thread
+        /// may send (code search's dialogs) while the host waits for that UI thread.
+        /// </remarks>
         public bool Send(string json)
         {
-            lock (gate) return agent != null && agent.Send(json);
+            var a = agent;
+            return a != null && a.Send(json);
         }
 
-        public string State
-        {
-            get { lock (gate) return state; }
-        }
+        /// <summary>Never waits for the host's lock (safe on a UI thread).</summary>
+        public string State => state;
 
         private void SetState(string s, string? message)
         {
