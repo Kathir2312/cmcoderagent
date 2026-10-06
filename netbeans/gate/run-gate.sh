@@ -64,9 +64,18 @@ cleanup() {
   if [ -n "$nb_pid" ]; then kill "$nb_pid" 2>/dev/null || true; fi
 }
 trap cleanup EXIT
-for _ in $(seq 100); do grep -q '^mock server on ' "$work/mock.out" 2>/dev/null && break; sleep 0.2; done
+# A first start can be slow (compiling, a virus scan or Gatekeeper on macOS): up to 2 minutes.
+for _ in $(seq 600); do
+  grep -q '^mock server on ' "$work/mock.out" 2>/dev/null && break
+  kill -0 "$mock" 2>/dev/null || break
+  sleep 0.2
+done
 url=$(sed -n 's/^mock server on //p' "$work/mock.out" | head -1 | tr -d '\r')
-[ -n "$url" ] || { cat "$work/mock.out"; echo "mock server didn't start" >&2; exit 1; }
+if [ -z "$url" ]; then
+  echo "--- mock server output:"; cat "$work/mock.out"
+  echo "mock server didn't start ($(kill -0 "$mock" 2>/dev/null && echo still running || echo it exited))" >&2
+  exit 1
+fi
 echo "Mock model server: $url"
 
 export CMCODER_BASE_URL="$url" CMCODER_API_KEY="$api_key" CMCODER_MODEL=qwen3-27b

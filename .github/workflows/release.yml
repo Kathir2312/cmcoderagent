@@ -139,7 +139,9 @@ jobs:
           (cd netbeans && $mvn -B -q package -Dplatform=$plat && cp target/cmcoder-netbeans-${{ matrix.target }}.nbm ../dist/)
           py="$(uv run python -c 'import sys; print(sys.executable)')"
           x=(); [ "$RUNNER_OS" = Linux ] && x=(xvfb-run -a -s "-screen 0 1600x1000x24")
-          "${x[@]}" uv run python packaging/no_python.py run -- bash netbeans/gate/run-gate.sh \
+          # Git's bash by its full path: started from Python, Windows finds its own bash.exe (WSL) first.
+          sh=bash; [ "$RUNNER_OS" = Windows ] && sh="$(cygpath -w /usr/bin/bash.exe)"
+          "${x[@]}" uv run python packaging/no_python.py run -- "$sh" netbeans/gate/run-gate.sh \
             --nbm gate.nbm --netbeans "$nb/netbeans" --python "$py" --jdk "$JAVA_HOME"
       - uses: actions/upload-artifact@v4
         with:
