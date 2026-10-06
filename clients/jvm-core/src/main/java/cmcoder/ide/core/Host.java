@@ -90,11 +90,14 @@ public final class Host {
         args.addAll(extraArgs);
         ide.log("Starting " + found.program + " --protocol stdio " + String.join(" ", args) + " in " + config.projectDir);
         setState("starting", null);
+        // The holder, not the process, goes to the callbacks: they read it once
+        // they hold the lock, which this method keeps until it's set. (Read
+        // earlier, a fast first line arrived as from "no process" and was lost.)
         AgentProcess[] self = new AgentProcess[1];
         self[0] = AgentProcess.start(found.program, args, config.projectDir, config.env, new AgentProcess.Listener() {
             @Override
             public void onEvent(Protocol.Event event) {
-                Host.this.onAgentEvent(self[0], event);
+                Host.this.onAgentEvent(self, event);
             }
 
             @Override
@@ -104,7 +107,7 @@ public final class Host {
 
             @Override
             public void onExit(Integer code, boolean expected, String error) {
-                Host.this.onAgentExit(self[0], code, expected, error);
+                Host.this.onAgentExit(self, code, expected, error);
             }
         });
         // start() reports a failed start through onExit before returning: only
@@ -134,8 +137,10 @@ public final class Host {
         if (a != null) a.stop();
     }
 
-    private synchronized void onAgentExit(AgentProcess which, Integer code, boolean expected, String error) {
-        if (which != agent && agent != null) return; // an old process, already replaced
+    private synchronized void onAgentExit(AgentProcess[] holder, Integer code, boolean expected, String error) {
+        // null: it couldn't start, reported from within start() itself.
+        AgentProcess which = holder[0];
+        if (which != agent && which != null) return; // an old process, already replaced
         if (which == agent) agent = null;
         closeAllDiffs();
         ide.log(config.product + " exited (code " + code + ")");
@@ -147,8 +152,8 @@ public final class Host {
 
     // -- events from cmcoder (H5, H6, H9, H8, H11) ----------------------------------
 
-    private synchronized void onAgentEvent(AgentProcess which, Protocol.Event event) {
-        if (which != agent) return;
+    private synchronized void onAgentEvent(AgentProcess[] holder, Protocol.Event event) {
+        if (holder[0] == null || holder[0] != agent) return; // an old process
         // The panel sees every event first and in order; side effects come after.
         ide.toPanel("{\"kind\":\"event\",\"event\":" + event.raw + "}");
         navigator.event(event);

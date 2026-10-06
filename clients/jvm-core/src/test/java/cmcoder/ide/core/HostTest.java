@@ -206,6 +206,30 @@ class HostTest {
     }
 
     @Test
+    void aFirstLineSentAtOnceIsNotMissed() throws Exception {
+        // A program that answers before start() has even returned (seen on CI:
+        // the first event was dropped as coming from "no process").
+        assumeFalse(ProgramLocator.windows(), "uses a shell script as the program");
+        Path project = Fixtures.project();
+        Path fast = project.resolve("fast-cmcoder");
+        Files.writeString(fast, "#!/bin/sh\necho '{\"type\":\"system_init\",\"protocol_version\":1,\"session_id\":\"s\",\"cwd\":\".\","
+                + "\"model\":\"m\",\"provider\":\"p\",\"tools\":[],\"permission_mode\":\"default\"}'\ncat > /dev/null\n", StandardCharsets.UTF_8);
+        assertTrue(fast.toFile().setExecutable(true));
+        for (int i = 0; i < 25; i++) {
+            FakeIde ide = new FakeIde();
+            Host.Config c = new Host.Config();
+            c.programSetting = fast.toString();
+            c.projectDir = project;
+            Host host = new Host(ide, c);
+            host.onPanelMessage("{\"kind\":\"ready\"}");
+            long end = System.currentTimeMillis() + 10_000;
+            while (!"ready".equals(host.state()) && System.currentTimeMillis() < end) Thread.sleep(10);
+            assertEquals("ready", host.state(), "run " + i + ": the first line was lost");
+            host.dispose();
+        }
+    }
+
+    @Test
     void aProgramSpeakingAnotherProtocolIsStoppedWithAReason() throws Exception {
         assumeFalse(ProgramLocator.windows(), "uses a shell script as the program");
         Path project = Fixtures.project();

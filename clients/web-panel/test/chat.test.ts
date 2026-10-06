@@ -35,8 +35,8 @@ const HOSTS: Record<Flavour, string> = {
 /** Waits until the host can receive (the late function in JetBrains/Eclipse) and the queue is sent. */
 async function connected(page: Page, flavour: Flavour): Promise<void> {
   if (flavour !== "function") return;
-  await page.waitForFunction(() => typeof (window as unknown as { cmcoderHostPost?: unknown }).cmcoderHostPost === "function");
-  await page.waitForTimeout(60);
+  // Every page says "ready" first: once it arrived, the queue has been sent.
+  await page.waitForFunction(() => (window as unknown as { sent: unknown[] }).sent.length > 0);
 }
 
 async function panel(flavour: Flavour, product?: string): Promise<{ page: Page; send: (m: ToWebview) => Promise<void>; ev: (e: AgentEvent) => Promise<void>; sent: () => Promise<FromWebview[]> }> {
