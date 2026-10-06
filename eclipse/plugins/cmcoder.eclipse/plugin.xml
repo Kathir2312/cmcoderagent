@@ -20,6 +20,15 @@
             allowMultiple="false"/>
    </extension>
 
+   <!-- The chat opens on the right of the editors (as in VS Code), in every
+        perspective; left to Eclipse, it went into the short bottom stack. -->
+   <extension point="org.eclipse.ui.perspectiveExtensions">
+      <perspectiveExtension targetID="*">
+         <view id="cmcoder.eclipse.chat" relative="org.eclipse.ui.editorss" relationship="right"
+               ratio="0.62" visible="false"/>
+      </perspectiveExtension>
+   </extension>
+
    <extension point="org.eclipse.ui.commands">
       <category id="cmcoder.eclipse.commands" name="cmcoder"/>
       <command id="cmcoder.eclipse.open" categoryId="cmcoder.eclipse.commands" name="cmcoder: Open Chat"/>

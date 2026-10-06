@@ -59,6 +59,7 @@ try {
     Write-Host 'Extension installed in the experimental instance.'
 
     $env:CMCODER_VS_GATE = $result
+    if (-not $env:CMCODER_GATE_SHOTS) { $env:CMCODER_GATE_SHOTS = Join-Path $env:RUNNER_TEMP 'gate-shots' }
     $env:CMCODER_BASE_URL = $url
     $env:CMCODER_API_KEY = $apiKey
     $env:CMCODER_MODEL = 'qwen3-27b'

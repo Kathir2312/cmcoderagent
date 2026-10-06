@@ -136,6 +136,7 @@ public class GateTest {
         assertEquals("true", run(chat, "fill", "textarea", "any problems?"));
         assertEquals("true", run(chat, "press", "textarea", "Enter"));
         until("the first reply", () -> run(chat, "texts", ".msg.assistant", null).contains("Checked the problems."));
+        shot("1-chat");
         List<Map<String, Object>> requests = server.requests();
         String first = Json.write(requests.get(0));
         assertTrue("the editor context reached the model: " + first, first.contains("app.py") && first.contains("x is never used"));
@@ -146,6 +147,7 @@ public class GateTest {
         assertEquals("true", run(chat, "fill", "textarea", "create new.py"));
         assertEquals("true", run(chat, "press", "textarea", "Enter"));
         until("the diff", () -> ui(() -> compareEditor() != null));
+        shot("2-diff");
         ui(() -> {
             Button accept = find(compareEditor(), "cmcoder.eclipse.diff.accept");
             assertNotNull("the diff has Accept", accept);
@@ -165,6 +167,7 @@ public class GateTest {
                 "return document.body.textContent")).contains("create new.py"),
                 () -> "navigator page: " + evaluate(nav.panel(), "return document.URL + ' ' + document.readyState + ' '"
                         + " + typeof window.cmcoderHostPost + ' ' + document.body.textContent.slice(0, 300)"));
+        shot("3-navigator");
 
         // H10: Reject in the compare editor: nothing written, the chat says "Denied",
         // and the turn stops (cmcoder doesn't go on after a denial).
@@ -341,6 +344,39 @@ public class GateTest {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
+        }
+    }
+
+    /**
+     * A screenshot of the workbench window, if CMCODER_GATE_SHOTS names a folder
+     * (the release build keeps them as an artifact). Never fails the test.
+     */
+    private static void shot(String name) {
+        String folder = System.getenv("CMCODER_GATE_SHOTS");
+        if (folder == null || folder.isBlank()) return;
+        try {
+            Thread.sleep(1500); // the page and the window settle
+            ui(() -> {
+                Display display = PlatformUI.getWorkbench().getDisplay();
+                org.eclipse.swt.widgets.Shell shell = PlatformUI.getWorkbench().getActiveWorkbenchWindow().getShell();
+                shell.forceActive();
+                org.eclipse.swt.graphics.Rectangle b = shell.getBounds();
+                org.eclipse.swt.graphics.Image image = new org.eclipse.swt.graphics.Image(display, b.width, b.height);
+                org.eclipse.swt.graphics.GC gc = new org.eclipse.swt.graphics.GC(display);
+                try {
+                    gc.copyArea(image, b.x, b.y);
+                    org.eclipse.swt.graphics.ImageLoader loader = new org.eclipse.swt.graphics.ImageLoader();
+                    loader.data = new org.eclipse.swt.graphics.ImageData[] {image.getImageData()};
+                    Files.createDirectories(Path.of(folder));
+                    loader.save(Path.of(folder, "eclipse-" + name + ".png").toString(), SWT.IMAGE_PNG);
+                } finally {
+                    gc.dispose();
+                    image.dispose();
+                }
+                return null;
+            });
+        } catch (Exception e) {
+            System.err.println("(no screenshot " + name + ": " + e + ")");
         }
     }
 }

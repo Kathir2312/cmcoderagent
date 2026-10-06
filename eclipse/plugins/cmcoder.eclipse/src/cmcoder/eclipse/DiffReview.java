@@ -149,6 +149,8 @@ final class DiffReview {
 
     private static CompareConfiguration configuration(Protocol.FileChange change) {
         CompareConfiguration c = new CompareConfiguration();
+        // Now on the left, proposed on the right, even where "swap left and right" is on.
+        c.setProperty(CompareConfiguration.MIRRORED, Boolean.FALSE);
         c.setLeftEditable(false);
         c.setRightEditable(false);
         c.setLeftLabel(change.before == null ? "(no file yet)" : name(change) + " (now)");

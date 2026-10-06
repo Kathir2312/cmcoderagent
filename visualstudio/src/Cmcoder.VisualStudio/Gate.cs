@@ -68,6 +68,28 @@ namespace Cmcoder.VisualStudio
         }
 
         /// <summary>Also to a file as it happens: if Visual Studio hangs, the runner shows how far it got.</summary>
+        /// <summary>A screenshot of the screen, if CMCODER_GATE_SHOTS names a folder (kept by the release build). Never fails the gate.</summary>
+        private static async Task ShotAsync(string name)
+        {
+            var folder = Environment.GetEnvironmentVariable("CMCODER_GATE_SHOTS");
+            if (string.IsNullOrEmpty(folder)) return;
+            try
+            {
+                await Task.Delay(1500); // the page and the window settle
+                var b = System.Windows.Forms.Screen.PrimaryScreen.Bounds;
+                using (var bmp = new System.Drawing.Bitmap(b.Width, b.Height))
+                {
+                    using (var g = System.Drawing.Graphics.FromImage(bmp)) g.CopyFromScreen(b.Location, System.Drawing.Point.Empty, b.Size);
+                    Directory.CreateDirectory(folder);
+                    bmp.Save(Path.Combine(folder, "visualstudio-" + name + ".png"), System.Drawing.Imaging.ImageFormat.Png);
+                }
+            }
+            catch (Exception e)
+            {
+                Step("(no screenshot " + name + ": " + e.Message + ")");
+            }
+        }
+
         private static void Step(string what)
         {
             var line = DateTime.Now.ToString("HH:mm:ss") + " " + what;
@@ -139,10 +161,12 @@ namespace Cmcoder.VisualStudio
             // H8: a message; the model asks Visual Studio for its problems.
             await SendAsync(chat, "any problems?");
             await UntilAsync("the first reply", async () => (await DriverAsync(chat, "texts", ".msg.assistant")).Contains("Checked the problems."));
+            await ShotAsync("1-chat");
 
             // H9, H10: a change in the diff window, accepted there.
             await SendAsync(chat, "create new.txt");
             await UntilAsync("the diff window", () => session.Ide.Diffs.OpenRequests.Count == 1);
+            await ShotAsync("2-diff");
             session.Ide.Diffs.Click(session.Ide.Diffs.OpenRequests.First(), DiffReview.Accept);
             await UntilAsync("new.txt written", () => File.Exists(Path.Combine(folder!, "new.txt")));
             await UntilAsync("the diff closed", () => session.Ide.Diffs.OpenRequests.Count == 0);
@@ -161,6 +185,7 @@ namespace Cmcoder.VisualStudio
             var navigator = (NavigatorWindow)(await package.ShowToolWindowAsync(typeof(NavigatorWindow), 0, true, package.DisposalToken))!;
             await UntilAsync("the navigator's turn", async () =>
                 (await navigator.Panel.EvaluateAsync("document.body.textContent")).Contains("create other.txt"));
+            await ShotAsync("3-navigator");
 
             // H19: the page can't navigate away.
             var url = chat.View.Source?.ToString();

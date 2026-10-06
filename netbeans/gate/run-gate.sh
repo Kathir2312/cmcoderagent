@@ -10,7 +10,8 @@
 # --python is a Python with cmcoder, for the mock server only (test
 # equipment); NetBeans and cmcoder run without it (run this under
 # packaging/no_python.py so nothing finds Python on PATH). On Linux, run it
-# under xvfb-run. Works in Git Bash on Windows.
+# under xvfb-run. Works in Git Bash on Windows. CMCODER_GATE_SHOTS=<folder>
+# keeps screenshots of the chat, a diff and the navigator.
 set -euo pipefail
 
 timeout_s=900
@@ -84,6 +85,7 @@ unset HTTPS_PROXY HTTP_PROXY ALL_PROXY https_proxy http_proxy all_proxy JAVA_TOO
 
 args=(--userdir "$(native "$work/userdir")" --cachedir "$(native "$work/cache")" --nosplash
       "-J-Dcmcoder.gate=$(native "$result")" "-J-Dcmcoder.gate.project=$(native "$project")"
+      ${CMCODER_GATE_SHOTS:+"-J-Dcmcoder.gate.shots=$(native "$CMCODER_GATE_SHOTS")"}
       -J-Dplugin.manager.check.updates=false -J-Dnetbeans.close.no.question=true)
 [ -n "${jdk:-}" ] && args+=(--jdkhome "$(native "$jdk")")
 "$launcher" "${args[@]}" > "$work/netbeans.out" 2>&1 &

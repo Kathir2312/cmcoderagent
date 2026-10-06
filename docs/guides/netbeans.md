@@ -49,6 +49,19 @@ project, else the only open project; for a file outside any project, its git
 repository. Closing the chat stops cmcoder; opening it starts a new one (your
 conversations are kept: **History**).
 
+
+![The chat in NetBeans, after a question about problems](screenshots/netbeans-1-chat.png)
+
+*The chat on the right; the open file and its selection go with each message.*
+
+![A proposed change in NetBeans's diff viewer](screenshots/netbeans-2-diff.png)
+
+*A proposed change: the file now on the left, the proposal on the right, Accept / Accept Always / Reject above.*
+
+![The Agent Navigator in NetBeans](screenshots/netbeans-3-navigator.png)
+
+*The Agent Navigator: the turn, and any helpers (subagents) it started.*
+
 ## Options (Tools → Options → Miscellaneous → cmcoder)
 
 | Option | Meaning |

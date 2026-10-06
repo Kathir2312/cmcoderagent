@@ -86,6 +86,28 @@ public final class Gate {
         LifecycleManager.getDefault().exit();
     }
 
+    /**
+     * A screenshot of NetBeans' main window, if -J-Dcmcoder.gate.shots=<folder>
+     * is set (the release build keeps them as an artifact). Never fails the gate.
+     */
+    private static void shot(String name) {
+        String folder = System.getProperty("cmcoder.gate.shots");
+        if (folder == null || folder.isBlank()) return;
+        try {
+            Thread.sleep(1500); // the page and the window settle
+            java.awt.Rectangle bounds = ui(() -> {
+                java.awt.Frame main = WindowManager.getDefault().getMainWindow();
+                main.toFront();
+                return main.getBounds();
+            });
+            java.awt.image.BufferedImage image = new java.awt.Robot().createScreenCapture(bounds);
+            Files.createDirectories(Path.of(folder));
+            javax.imageio.ImageIO.write(image, "png", Path.of(folder, "netbeans-" + name + ".png").toFile());
+        } catch (Exception e) {
+            step("(no screenshot " + name + ": " + e + ")");
+        }
+    }
+
     /** Also to a file as it happens: if NetBeans hangs, the runner shows how far it got. */
     private static void step(String what) {
         String line = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss")) + " " + what;
@@ -197,11 +219,13 @@ public final class Gate {
         // H8: a message; the model asks NetBeans for its problems.
         send(chat, "any problems?");
         until("the first reply", () -> driver(chat, "texts", ".msg.assistant").contains("Checked the problems."));
+        shot("1-chat");
 
         // H9, H10: a change in the diff viewer, accepted there.
         DiffReview diffs = session.diffs();
         send(chat, "create new.txt");
         until("the diff tab", () -> ui(() -> diffs.openRequests().size() == 1));
+        shot("2-diff");
         ui(() -> {
             diffs.click(diffs.openRequests().iterator().next(), DiffReview.ACCEPT);
             return null;
@@ -227,6 +251,7 @@ public final class Gate {
         Panel nav = navigator.panel();
         if (nav == null) throw new AssertionError("the navigator page couldn't start");
         until("the navigator's turn", () -> nav.evaluate("document.body.textContent").get(10, TimeUnit.SECONDS).contains("create other.txt"));
+        shot("3-navigator");
 
         // H19: the page can't navigate away.
         String url = chat.pageLocation().get(10, TimeUnit.SECONDS);

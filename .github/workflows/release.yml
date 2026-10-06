@@ -103,10 +103,11 @@ jobs:
           cp -RL dist/cmcoder eclipse/fragments/cmcoder.eclipse.$frag/bin/cmcoder  # links as files
           (cd clients/web-panel && npm ci && npm run build)
           mvn=mvn; [ "$RUNNER_OS" = Windows ] && mvn=mvn.cmd
-          x=""; [ "$RUNNER_OS" = Linux ] && x="xvfb-run -a"
+          x=(); [ "$RUNNER_OS" = Linux ] && x=(xvfb-run -a -s "-screen 0 1600x1000x24")
           export CMCODER_TEST_PYTHON="$(uv run python -c 'import sys; print(sys.executable)')"
+          export CMCODER_GATE_SHOTS="$RUNNER_TEMP/gate-shots"
           cd eclipse
-          CMCODER_TEST_BUNDLED=1 $x uv run python ../packaging/no_python.py run -- $mvn -B verify
+          CMCODER_TEST_BUNDLED=1 "${x[@]}" uv run python ../packaging/no_python.py run -- $mvn -B verify
           rm -rf fragments/cmcoder.eclipse.$frag/bin/cmcoder
       - name: NetBeans (the newest release; cached)
         uses: actions/cache@v4
@@ -141,7 +142,7 @@ jobs:
           x=(); [ "$RUNNER_OS" = Linux ] && x=(xvfb-run -a -s "-screen 0 1600x1000x24")
           # Git's bash by its full path: started from Python, Windows finds its own bash.exe (WSL) first.
           sh=bash; [ "$RUNNER_OS" = Windows ] && sh="$(cygpath -w /usr/bin/bash.exe)"
-          "${x[@]}" uv run python packaging/no_python.py run -- "$sh" netbeans/gate/run-gate.sh \
+          CMCODER_GATE_SHOTS="$RUNNER_TEMP/gate-shots" "${x[@]}" uv run python packaging/no_python.py run -- "$sh" netbeans/gate/run-gate.sh \
             --nbm gate.nbm --netbeans "$nb/netbeans" --python "$py" --jdk "$JAVA_HOME"
       - uses: actions/upload-artifact@v4
         with:
@@ -163,6 +164,13 @@ jobs:
           py="$(uv run python -c 'import sys; print(sys.executable)')"
           uv run python packaging/no_python.py run -- powershell -NoProfile -ExecutionPolicy Bypass \
             -File visualstudio/gate/run-gate.ps1 -Vsix "$GATE_VSIX" -Python "$py"
+      - name: Screenshots from the IDE gates (chat, a diff, the navigator)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate-screenshots-${{ matrix.target }}
+          path: ${{ runner.temp }}/gate-shots
+          if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         if: failure() && runner.os == 'Windows'
         with:
