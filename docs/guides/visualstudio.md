@@ -45,6 +45,18 @@ Runtime, which Visual Studio installs.
 Closing the solution stops cmcoder; so does closing Visual Studio, even if it
 crashes.
 
+![The chat in Visual Studio, after a question about problems](screenshots/visualstudio-1-chat.png)
+
+*The chat on the right; the open file and its selection go with each message.*
+
+![A proposed change in Visual Studio's diff window](screenshots/visualstudio-2-diff.png)
+
+*A proposed change: Accept / Accept Always / Reject in the bar above the diff, and the same question in the chat.*
+
+![The Agent Navigator in Visual Studio](screenshots/visualstudio-3-navigator.png)
+
+*The Agent Navigator: the turn, and any helpers (subagents) it started.*
+
 ## Options (Tools → Options → cmcoder)
 
 | Option | Meaning |
