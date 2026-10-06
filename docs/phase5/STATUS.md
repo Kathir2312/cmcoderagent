@@ -90,7 +90,7 @@ Part of Phase 5, though not code search: they came from using cmcoder on a
 
 | Where | Result |
 |---|---|
-| CI (Linux, macOS, Windows; 11 jobs) | 630 Python tests, 23 extension tests, real-VS Code test, 25 mock eval tasks, mock evals with `-p`/VS Code parity, real LiteLLM and Open WebUI jobs (embeddings included), a real Chroma 1.5 server, security job (Bandit, pip-audit with the extras, npm audit) |
+| CI (Linux, macOS, Windows; 11 jobs) | 631 Python tests, 23 extension tests, real-VS Code test, 25 mock eval tasks, mock evals with `-p`/VS Code parity, real LiteLLM and Open WebUI jobs (embeddings included), a real Chroma 1.5 server, security job (Bandit, pip-audit with the extras, npm audit) |
 | Security review ([SECURITY-REVIEW.md](SECURITY-REVIEW.md)) | Index folders made private (0700); chromadb's server advisories (no fix yet) named in CI, with how to run a Chroma server safely |
 | Your Windows machine, real gateway (Qwen3.5-35B-A3B, Qwen3.6-27B) | Phase 5 marked complete by you on 5 October after using it: VS Code on a .NET solution (subagents fanned out per project), the CLI in the classic console, an MCP server over your own codebase index (`codebase_code`). The fixes above came from that use |
 

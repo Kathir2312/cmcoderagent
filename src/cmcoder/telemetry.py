@@ -127,7 +127,7 @@ class Telemetry:
         self.add("cmcoder.session.count", 1, {"frontend": frontend, "session.id": session_id})
 
     def turn_started(self, session_id: str) -> None:
-        self._turn_started[session_id] = time.monotonic()
+        self._turn_started[session_id] = time.perf_counter()  # fine on Windows too
 
     def observe(self, event: ev.Event, model: str, session_id: str) -> None:
         if getattr(event, "parent_tool_use_id", None):
@@ -156,7 +156,7 @@ class Telemetry:
             self.add("cmcoder.turn.count", 1, attrs(model=model, result=event.subtype))
             started = self._turn_started.pop(session_id, None)
             if started is not None:
-                ms = (time.monotonic() - started) * 1000
+                ms = (time.perf_counter() - started) * 1000
                 self.add("cmcoder.turn.duration", ms, attrs(model=model))
 
     # -- export -------------------------------------------------------------------

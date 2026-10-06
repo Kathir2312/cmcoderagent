@@ -191,3 +191,33 @@ async def test_doctor(collector: Collector) -> None:
     assert "OpenTelemetry metrics go to" in console.export_text()
     assert collector.posts[-1][1] == {"resourceMetrics": []}  # no fake metric sent
     assert isinstance(Telemetry, type)
+
+
+def test_turn_time_is_measured_with_a_fine_clock(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Windows' time.monotonic() ticks every ~15 ms, so a quick turn measured
+    # 0 ms (seen on Windows CI); the turn time needs perf_counter.
+    import time
+
+    import httpx
+
+    from cmcoder.protocol import events as ev
+
+    monkeypatch.setattr(time, "monotonic", lambda: 1000.0)  # a clock that hasn't ticked
+    telemetry = Telemetry("http://collector.invalid", {}, {}, 60.0, httpx.AsyncClient())
+    telemetry.turn_started("s")
+    sum(range(10_000))  # a quick turn
+    telemetry.observe(
+        ev.Result(
+            subtype="success",
+            is_error=False,
+            result="",
+            num_turns=1,
+            duration_ms=1,
+            usage={},
+            session_id="s",
+        ),
+        "m",
+        "s",
+    )
+    [ms] = [v for (name, _), v in telemetry.sums.items() if name == "cmcoder.turn.duration"]
+    assert ms > 0
