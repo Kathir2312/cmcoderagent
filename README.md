@@ -6,10 +6,11 @@ that works with **any OpenAI-compatible endpoint**, such as a LiteLLM gateway se
 The agent runs on your machine (it reads and edits files and runs commands there); the model always runs on a
 remote server. See [docs/DESIGN.md](docs/DESIGN.md) for the architecture and roadmap, and
 [docs/README.md](docs/README.md) for the per-phase plans and code guides (for Python developers and for
-LangChain/LangGraph developers). Phase 0 is complete; Phase 1 is in progress ([plan](docs/phase1/PLAN.md)).
+LangChain/LangGraph developers).
 
-> Status: **Phase 0 complete, Phase 1 in progress** (Windows, macOS and Linux). Working agent loop, tools, permissions, LiteLLM/OpenAI-compatible provider,
-> basic interactive terminal UI, headless mode, `doctor` and `login`.
+> Status: **Phases 0–5 complete** (Windows, macOS and Linux): the terminal and TUI, VS Code, extensibility (MCP,
+> hooks, skills, subagents), hardening (sandbox, standalone build, both gateways) and code search.
+> **Phase 6 (JetBrains, Visual Studio, Eclipse) is planned**: [docs/phase6/PLAN.md](docs/phase6/PLAN.md).
 
 ## Install
 

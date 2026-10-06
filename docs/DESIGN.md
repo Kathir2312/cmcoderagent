@@ -1,6 +1,6 @@
 # cmcoderagent — Design
 
-Status: **Phase 0 implemented** (see §16.1) · Scope: architecture and roadmap
+Status: **Phases 0–5 complete; Phase 6 (other IDEs) planned** (see [README.md](README.md)) · Scope: architecture and roadmap
 
 cmcoderagent is an agentic coding assistant that runs on the developer's
 machine. Its behaviour and user experience mirror Claude Code (CLI and VS Code
@@ -44,7 +44,8 @@ shell commands) runs locally; the model is always reached over the network.
 
 **Non-goals (for now)**
 - Multi-user servers, auth, rate limiting (D5).
-- JetBrains or other IDEs (the protocol is kept IDE-neutral so they can be added later).
+- ~~JetBrains or other IDEs~~: now Phase 6 (JetBrains, Visual Studio 2022, Eclipse), on the same
+  IDE-neutral protocol; see [phase6/PLAN.md](phase6/PLAN.md).
 - Hosted or cloud execution of the agent itself.
 - Running models on the dev machine.
 

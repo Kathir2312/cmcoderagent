@@ -1,8 +1,8 @@
 # Phase 5 — Code search (RAG): status
 
-**Status:** ✅ complete (5 October 2026). **Snapshot:** the code as of the
-commit that adds the critique checkbox, recorded with
-this file's last update.
+**Status:** ✅ complete (marked complete on 6 October 2026). **Snapshot:**
+commit `46f2e75`, the last Phase 5 commit (CI and the release build green on
+Linux, macOS and Windows). Phase 6 starts after it.
 
 Phase 5's goal ([PLAN.md](PLAN.md)): *the model can find code by meaning in
 large repositories, not only by exact words, using an index of the project in
