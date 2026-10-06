@@ -2,6 +2,10 @@
 
 **Status:** 🚧 planned (6 October 2026). Phase 5 ended at commit `46f2e75`.
 
+> **Note: developers' PCs may not have Python installed** (nor uv, pip or
+> Node.js). Every file in this phase carries its own `cmcoder` and must work
+> without them; see [DESIGN.md](../DESIGN.md) decision D16.
+
 **Goal:** developers who use **JetBrains IDEs** (IntelliJ IDEA, Rider,
 PyCharm, WebStorm, ...), **Visual Studio 2022** or **Eclipse** get cmcoder
 inside their IDE, with the same chat panel and features as VS Code, on PCs

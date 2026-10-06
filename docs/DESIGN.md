@@ -31,6 +31,7 @@ shell commands) runs locally; the model is always reached over the network.
 | D13 | Authentication | **API key now** (LiteLLM virtual key, sent as `Authorization: Bearer`). Built behind an auth-provider interface. SSO (e.g. Okta/OIDC) is **not planned** (removed from Phase 4, 3 Oct 2026); the interface would let it be added without touching the rest of the engine. |
 | D14 | TLS | Server uses **internal (company CA) certificates**. Trusted through the OS certificate store by default, with a CA-file override. |
 | D15 | Second gateway | **Open WebUI** (its OpenAI-compatible `/api` endpoints, API key from the user's account), in addition to LiteLLM. Phase 4 item 1. |
+| D16 | Developers' PCs | **May not have Python** (nor uv, pip or Node.js). Everything handed to developers carries the standalone `cmcoder` (PyInstaller) and never falls back to Python; the release workflow tests each file with no Python in reach (`packaging/no_python.py`). Git for Windows is still needed for shell commands on Windows. Decided 6 Oct 2026. |
 
 ## 2. Goals and non-goals
 
