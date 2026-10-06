@@ -136,7 +136,7 @@ namespace Cmcoder.Core.Tests
             Assert.Equal("Bash", r.Next("tool_use").Str("name"));
             var marker = ProgramLocator.Windows ? "ping" : "sleep";
             List<int> children = new List<int>();
-            Fixtures.Until("the shell command", () => (children = Processes.Under(agent.Id!.Value)).Any(pid => Processes.Name(pid).Contains(marker)),
+            Fixtures.Until("the shell command", () => (children = Processes.Under(agent.Id!.Value)).Any(pid => Processes.Name(pid).IndexOf(marker, StringComparison.OrdinalIgnoreCase) >= 0),
                 () => string.Join(", ", children.Select(Processes.Name)), 30_000);
             agent.Stop(3_000);
             Assert.True(agent.WaitForExit(15_000));
@@ -144,7 +144,7 @@ namespace Cmcoder.Core.Tests
                 () => "still running: " + string.Join(", ", children.Where(Processes.Alive).Select(Processes.Name)), 15_000);
         }
 
-        [Fact]
+        [SkippableFact]
         public void LinesThatArentEventsGoToTheLog()
         {
             Skip.If(ProgramLocator.Windows, "uses a shell script as the program");

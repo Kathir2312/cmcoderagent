@@ -183,7 +183,7 @@ namespace Cmcoder.Core.Tests
             Assert.Contains("Open a solution or folder first", Json.Str(ide.Sent("state").Last(), "message"));
         }
 
-        [Fact]
+        [SkippableFact]
         public void AFirstLineSentAtOnceIsNotMissed()
         {
             Skip.If(ProgramLocator.Windows, "uses a shell script as the program");
@@ -202,7 +202,7 @@ namespace Cmcoder.Core.Tests
             }
         }
 
-        [Fact]
+        [SkippableFact]
         public void AProgramSpeakingAnotherProtocolIsStoppedWithAReason()
         {
             Skip.If(ProgramLocator.Windows, "uses a shell script as the program");

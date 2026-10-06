@@ -153,7 +153,26 @@ namespace Cmcoder.Core
         internal static List<int> Descendants(int pid)
         {
             var all = new List<int>();
-            if (ProgramLocator.Windows || !Directory.Exists("/proc")) return all;
+            if (ProgramLocator.Windows) return all;
+            var parents = Directory.Exists("/proc") ? ParentsFromProc() : ParentsFromPs();
+            var queue = new Queue<int>();
+            queue.Enqueue(pid);
+            while (queue.Count > 0)
+            {
+                var p = queue.Dequeue();
+                foreach (var kv in parents)
+                {
+                    if (kv.Value != p || kv.Key == p) continue;
+                    all.Add(kv.Key);
+                    queue.Enqueue(kv.Key);
+                }
+            }
+            return all;
+        }
+
+        /// <summary>Linux: each process's parent, from /proc.</summary>
+        private static Dictionary<int, int> ParentsFromProc()
+        {
             var parents = new Dictionary<int, int>();
             foreach (var dir in Directory.GetDirectories("/proc"))
             {
@@ -167,19 +186,27 @@ namespace Cmcoder.Core
                 }
                 catch (Exception) { /* it ended meanwhile */ }
             }
-            var queue = new Queue<int>();
-            queue.Enqueue(pid);
-            while (queue.Count > 0)
+            return parents;
+        }
+
+        /// <summary>macOS (no /proc): each process's parent, from ps.</summary>
+        private static Dictionary<int, int> ParentsFromPs()
+        {
+            var parents = new Dictionary<int, int>();
+            try
             {
-                var p = queue.Dequeue();
-                foreach (var kv in parents)
+                var psi = new ProcessStartInfo("/bin/ps", "-A -o pid= -o ppid=") { UseShellExecute = false, RedirectStandardOutput = true };
+                using var ps = Process.Start(psi)!;
+                string? line;
+                while ((line = ps.StandardOutput.ReadLine()) != null)
                 {
-                    if (kv.Value != p) continue;
-                    all.Add(kv.Key);
-                    queue.Enqueue(kv.Key);
+                    var parts = line.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                    if (parts.Length == 2 && int.TryParse(parts[0], out var id) && int.TryParse(parts[1], out var parent)) parents[id] = parent;
                 }
+                ps.WaitForExit(10_000);
             }
-            return all;
+            catch (Exception) { /* no ps: nothing to clean up after */ }
+            return parents;
         }
 
         /// <summary>Ends what's still running of these after a short grace (they normally end with cmcoder).</summary>
