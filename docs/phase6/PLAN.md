@@ -510,6 +510,17 @@ and macOS, the release build on Windows, macOS and Linux.**
 
 ### 8. Release workflow and bundle
 
+**Status: built (6 October 2026).** `packaging/bundle.py` (tested:
+`tests/test_bundle.py`) assembles the bundle in the release workflow's
+`bundle` job, which runs only when every platform's build and gates and the
+Eclipse site passed: `terminal/`, `vscode/`, `visualstudio/`, `eclipse/`,
+`netbeans/`, `README-FIRST.txt`, `GATE-REPORT.md` (each platform's job lists
+the checks it ran; ✅ per platform, "Not covered by automated tests" at the
+end; also in the run's summary) and `SHA256SUMS.txt`. Missing any file → no
+bundle. A `v*` tag also makes a GitHub release with the files.
+`tests/test_versions.py` checks that every manifest says pyproject.toml's
+version (they're kept in step rather than rewritten at build time).
+
 - `release.yml` grows to: build the standalone program per platform → build
   every IDE file around it → run each IDE's gate (the installed file, no
   Python) → assemble the bundle (`README-FIRST.txt`, `GATE-REPORT.md`,
@@ -627,7 +638,7 @@ newest).
 - [—] 5. ~~JetBrains plugin~~ (dropped)
 - [ ] 6. Eclipse plugin (H1–H24, gate on 2024-06 and newest)
 - [x] 7. Visual Studio 2022 extension (H1–H24, gate in Visual Studio)
-- [ ] 8. Release workflow, bundle, gate report
+- [x] 8. Release workflow, bundle, gate report
 - [ ] 9. Security review
 - [ ] 10. Docs for developers and admins; guides; STATUS
 - [ ] 11. Apache NetBeans plugin (JavaFX WebView; gate on NetBeans 28 and 31)

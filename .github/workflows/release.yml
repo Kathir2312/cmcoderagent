@@ -10,9 +10,16 @@ name: Release build
 # program folder), cmcoder-terminal-<target> (the zip with install scripts),
 # cmcoder-<target>.vsix, cmcoder-netbeans-<target>.nbm and cmcoder-eclipse
 # (the update site archive, every platform in one).
+#
+# Then the release bundle (packaging/bundle.py): every file in one folder with
+# README-FIRST.txt, GATE-REPORT.md and SHA256SUMS.txt, made only when every
+# job passed. On a version tag (v0.6.0, ...) it's also a GitHub release.
 on:
   workflow_dispatch:
   push:
+    # Both, or GitHub runs it for only one kind of push; path filters apply to branches only.
+    branches: ["**"]
+    tags: ["v*"]
     paths:
       - "src/**"
       - "packaging/**"
@@ -181,6 +188,26 @@ jobs:
         run: |
           export CMCODER_TEST_PYTHON="$(uv run python -c 'import sys; print(sys.executable)')"
           xvfb-run -a npm run test:integration
+      - name: What this platform's gates checked (all passed, or the job failed)
+        shell: bash
+        run: |
+          f=gate-${{ matrix.target }}.txt
+          {
+            echo "Standalone cmcoder, run as users run it (no Python)"
+            echo "IDE core for Eclipse/NetBeans, with this cmcoder"
+            echo "Visual Studio core, with this cmcoder"
+            echo "Eclipse plugin in a real Eclipse, cmcoder inside"
+            echo "NetBeans plugin in a real NetBeans 31, cmcoder inside"
+            [ "$RUNNER_OS" = Windows ] && echo "Visual Studio extension in a real Visual Studio, cmcoder inside"
+            echo "Terminal package: install, update, run, uninstall"
+            echo "VS Code extension: the cmcoder inside it runs"
+            [ "$RUNNER_OS" = Linux ] && echo "VS Code extension in a real VS Code, cmcoder inside"
+            true
+          } > "$f"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gate-${{ matrix.target }}
+          path: gate-${{ matrix.target }}.txt
       - uses: actions/upload-artifact@v4
         with:
           name: cmcoder-${{ matrix.target }}
@@ -242,3 +269,35 @@ jobs:
         with:
           name: cmcoder-eclipse
           path: eclipse/site/target/cmcoder-eclipse-*.zip
+
+  bundle:
+    # Every file in one folder, only when every build and gate passed.
+    needs: [build, eclipse-site]
+    name: Release bundle
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - name: Assemble the bundle
+        run: |
+          uv run --no-project python packaging/bundle.py --artifacts artifacts --out bundle
+          cat bundle/GATE-REPORT.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cmcoder-release-bundle
+          path: bundle
+      - name: A GitHub release (version tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd bundle
+          gh release create "$GITHUB_REF_NAME" --title "cmcoder $GITHUB_REF_NAME" --notes-file GATE-REPORT.md \
+            README-FIRST.txt GATE-REPORT.md SHA256SUMS.txt */*
