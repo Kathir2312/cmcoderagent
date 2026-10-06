@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  cmcoder for Visual Studio 2022 (Phase 6 item 7): a VSIX with the shared chat
+  panel in WebView2, on the C# core (../Cmcoder.Core). Built on Windows with
+  Visual Studio's MSBuild:
+    (cd ../../../clients/web-panel && npm ci && npm run build)
+    msbuild Cmcoder.VisualStudio.csproj /restore /p:Configuration=Release
+  The release build first copies the standalone cmcoder into bin\cmcoder\
+  (this folder); without it the extension looks for cmcoder on PATH.
+  /p:CmcoderGate=true builds the self-test used by the gate (never shipped).
+-->
+<Project ToolsVersion="15.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MinimumVisualStudioVersion>17.0</MinimumVisualStudioVersion>
+    <VSToolsPath Condition="'$(VSToolsPath)' == ''">$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)</VSToolsPath>
+  </PropertyGroup>
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectTypeGuids>{82b43b9b-a64c-4715-b499-d71e9ca2bd60};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
+    <ProjectGuid>{6B1F4C0E-3D2A-4E5B-9C7D-1A2B3C4D5E6F}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>Cmcoder.VisualStudio</RootNamespace>
+    <AssemblyName>Cmcoder.VisualStudio</AssemblyName>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <GeneratePkgDefFile>true</GeneratePkgDefFile>
+    <UseCodebase>true</UseCodebase>
+    <IncludeAssemblyInVSIXContainer>true</IncludeAssemblyInVSIXContainer>
+    <IncludeDebugSymbolsInVSIXContainer>false</IncludeDebugSymbolsInVSIXContainer>
+    <IncludeDebugSymbolsInLocalVSIXDeployment>false</IncludeDebugSymbolsInLocalVSIXDeployment>
+    <CopyBuildOutputToOutputDirectory>true</CopyBuildOutputToOutputDirectory>
+    <CopyOutputSymbolsToOutputDirectory>true</CopyOutputSymbolsToOutputDirectory>
+    <DeployExtension Condition="'$(DeployExtension)' == ''">false</DeployExtension>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- VSTHRD: the threading analyzers' advice is followed by hand (one worker thread for the host). -->
+    <NoWarn>$(NoWarn);VSTHRD002;VSTHRD003;VSTHRD010;VSTHRD100;VSTHRD101;VSTHRD110;VSTHRD200</NoWarn>
+    <StartAction>Program</StartAction>
+    <StartProgram Condition="'$(DevEnvDir)' != ''">$(DevEnvDir)devenv.exe</StartProgram>
+    <StartArguments>/rootsuffix Exp</StartArguments>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(CmcoderGate)' == 'true'">
+    <DefineConstants>$(DefineConstants);CMCODER_GATE</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Brand.cs" />
+    <Compile Include="CmcoderPackage.cs" />
+    <Compile Include="Options.cs" />
+    <Compile Include="Session.cs" />
+    <Compile Include="VsIde.cs" />
+    <Compile Include="DiffReview.cs" />
+    <Compile Include="Panel.cs" />
+    <Compile Include="ToolWindows.cs" />
+    <Compile Include="Dialogs.cs" />
+    <Compile Include="CodeSearchUi.cs" />
+    <Compile Include="Gate.cs" Condition="'$(CmcoderGate)' == 'true'" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="source.extension.vsixmanifest">
+      <SubType>Designer</SubType>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <VSCTCompile Include="CmcoderPackage.vsct">
+      <ResourceName>Menus.ctmenu</ResourceName>
+    </VSCTCompile>
+  </ItemGroup>
+  <!-- The shared chat panel (clients/web-panel, built first), its theme list, the brand. -->
+  <ItemGroup>
+    <Content Include="..\..\..\clients\web-panel\dist\chat.js;..\..\..\clients\web-panel\dist\chat.css;..\..\..\clients\web-panel\dist\navigator.js;..\..\..\clients\web-panel\dist\navigator.css;..\..\..\clients\web-panel\theme.json;..\..\..\branding\icon.png;..\..\..\branding\brand.json">
+      <Link>panel\%(Filename)%(Extension)</Link>
+      <IncludeInVSIX>true</IncludeInVSIX>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\..\clients\web-panel\dist\test-driver.js" Condition="'$(CmcoderGate)' == 'true'">
+      <Link>panel\test-driver.js</Link>
+      <IncludeInVSIX>true</IncludeInVSIX>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\..\branding\icon.png">
+      <Link>icon.png</Link>
+      <IncludeInVSIX>true</IncludeInVSIX>
+    </Content>
+    <!-- cmcoder itself (the release build puts it here). -->
+    <Content Include="bin\cmcoder\**\*">
+      <IncludeInVSIX>true</IncludeInVSIX>
+    </Content>
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="PresentationCore" />
+    <Reference Include="PresentationFramework" />
+    <Reference Include="System" />
+    <Reference Include="System.Design" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xaml" />
+    <Reference Include="WindowsBase" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.VisualStudio.SDK" Version="17.10.40171" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.VSSDK.BuildTools" Version="17.14.2142">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2903.40" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Cmcoder.Core\Cmcoder.Core.csproj">
+      <Name>Cmcoder.Core</Name>
+      <SetTargetFramework>TargetFramework=netstandard2.0</SetTargetFramework>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <Import Project="$(VSToolsPath)\VSSDK\Microsoft.VsSDK.targets" Condition="'$(VSToolsPath)' != ''" />
+</Project>

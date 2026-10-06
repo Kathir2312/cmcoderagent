@@ -198,6 +198,25 @@ jobs:
           dotnet build visualstudio/src/Cmcoder.Core -c Release
           dotnet test visualstudio/test/Cmcoder.Core.Tests -c Release --logger "console;verbosity=normal"
 
+  visualstudio-extension:
+    # The Visual Studio extension builds and packs (Windows, Visual Studio's
+    # MSBuild); the Release build runs it in a real Visual Studio.
+    name: Visual Studio extension (build)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: The shared chat panel
+        working-directory: clients/web-panel
+        run: npm ci && npm run build
+      - name: Build the .vsix (and the gate build)
+        shell: pwsh
+        run: |
+          ./visualstudio/build-vsix.ps1
+          ./visualstudio/build-vsix.ps1 -Gate
+
   eclipse:
     # The Eclipse plugin (eclipse/) in a real Eclipse, oldest and newest supported,
     # with its real chat page, cmcoder from source and the mock model server. The

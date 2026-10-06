@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The extension's commands: Tools > cmcoder, the editor's context menu, keys (H14). -->
+<CommandTable xmlns="http://schemas.microsoft.com/VisualStudio/2005-10-18/CommandTable" xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <Extern href="stdidcmd.h" />
+  <Extern href="vsshlids.h" />
+
+  <Commands package="guidCmcoderPackage">
+    <Menus>
+      <Menu guid="guidCmcoderCmdSet" id="CmcoderMenu" priority="0x0100" type="Menu">
+        <Parent guid="guidCmcoderCmdSet" id="ToolsGroup" />
+        <Strings>
+          <ButtonText>cmcoder</ButtonText>
+        </Strings>
+      </Menu>
+    </Menus>
+    <Groups>
+      <Group guid="guidCmcoderCmdSet" id="ToolsGroup" priority="0x0100">
+        <Parent guid="guidSHLMainMenu" id="IDM_VS_MENU_TOOLS" />
+      </Group>
+      <Group guid="guidCmcoderCmdSet" id="MenuGroup" priority="0x0100">
+        <Parent guid="guidCmcoderCmdSet" id="CmcoderMenu" />
+      </Group>
+      <Group guid="guidCmcoderCmdSet" id="EditorGroup" priority="0x0600">
+        <Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_CODEWIN" />
+      </Group>
+    </Groups>
+    <Buttons>
+      <Button guid="guidCmcoderCmdSet" id="cmdOpenChat" priority="0x0100" type="Button">
+        <Parent guid="guidCmcoderCmdSet" id="MenuGroup" />
+        <Strings><ButtonText>Open Chat</ButtonText><CommandName>cmcoder.OpenChat</CommandName></Strings>
+      </Button>
+      <Button guid="guidCmcoderCmdSet" id="cmdAskAboutSelection" priority="0x0101" type="Button">
+        <Parent guid="guidCmcoderCmdSet" id="MenuGroup" />
+        <Strings><ButtonText>Ask About Selection</ButtonText><CommandName>cmcoder.AskAboutSelection</CommandName></Strings>
+      </Button>
+      <Button guid="guidCmcoderCmdSet" id="cmdNewConversation" priority="0x0102" type="Button">
+        <Parent guid="guidCmcoderCmdSet" id="MenuGroup" />
+        <Strings><ButtonText>New Conversation</ButtonText><CommandName>cmcoder.NewConversation</CommandName></Strings>
+      </Button>
+      <Button guid="guidCmcoderCmdSet" id="cmdStop" priority="0x0103" type="Button">
+        <Parent guid="guidCmcoderCmdSet" id="MenuGroup" />
+        <Strings><ButtonText>Stop</ButtonText><CommandName>cmcoder.Stop</CommandName></Strings>
+      </Button>
+      <Button guid="guidCmcoderCmdSet" id="cmdOpenNavigator" priority="0x0104" type="Button">
+        <Parent guid="guidCmcoderCmdSet" id="MenuGroup" />
+        <Strings><ButtonText>Open Agent Navigator</ButtonText><CommandName>cmcoder.OpenNavigator</CommandName></Strings>
+      </Button>
+      <Button guid="guidCmcoderCmdSet" id="cmdCodeSearch" priority="0x0105" type="Button">
+        <Parent guid="guidCmcoderCmdSet" id="MenuGroup" />
+        <Strings><ButtonText>Code Search…</ButtonText><CommandName>cmcoder.CodeSearch</CommandName></Strings>
+      </Button>
+      <Button guid="guidCmcoderCmdSet" id="cmdShowLog" priority="0x0106" type="Button">
+        <Parent guid="guidCmcoderCmdSet" id="MenuGroup" />
+        <Strings><ButtonText>Show Log</ButtonText><CommandName>cmcoder.ShowLog</CommandName></Strings>
+      </Button>
+      <Button guid="guidCmcoderCmdSet" id="cmdCopyDiagnostics" priority="0x0107" type="Button">
+        <Parent guid="guidCmcoderCmdSet" id="MenuGroup" />
+        <Strings><ButtonText>Copy Diagnostics</ButtonText><CommandName>cmcoder.CopyDiagnostics</CommandName></Strings>
+      </Button>
+      <Button guid="guidCmcoderCmdSet" id="cmdAskFromEditor" priority="0x0100" type="Button">
+        <Parent guid="guidCmcoderCmdSet" id="EditorGroup" />
+        <Strings><ButtonText>Ask cmcoder About Selection</ButtonText></Strings>
+      </Button>
+    </Buttons>
+  </Commands>
+
+  <KeyBindings>
+    <KeyBinding guid="guidCmcoderCmdSet" id="cmdOpenChat" editor="guidVSStd97" key1="C" mod1="Control Shift Alt" />
+    <KeyBinding guid="guidCmcoderCmdSet" id="cmdAskAboutSelection" editor="guidVSStd97" key1="K" mod1="Control Shift Alt" />
+  </KeyBindings>
+
+  <Symbols>
+    <GuidSymbol name="guidCmcoderPackage" value="{3f6b8a52-9c1e-4d7a-b5e2-7c4f1a9d2e63}" />
+    <GuidSymbol name="guidCmcoderCmdSet" value="{a4c2e7d1-5b3f-4e8a-9d6c-2f1b7e4a8c95}">
+      <IDSymbol name="ToolsGroup" value="0x1000" />
+      <IDSymbol name="MenuGroup" value="0x1001" />
+      <IDSymbol name="EditorGroup" value="0x1002" />
+      <IDSymbol name="CmcoderMenu" value="0x1100" />
+      <IDSymbol name="cmdOpenChat" value="0x0100" />
+      <IDSymbol name="cmdAskAboutSelection" value="0x0101" />
+      <IDSymbol name="cmdNewConversation" value="0x0102" />
+      <IDSymbol name="cmdStop" value="0x0103" />
+      <IDSymbol name="cmdOpenNavigator" value="0x0104" />
+      <IDSymbol name="cmdCodeSearch" value="0x0105" />
+      <IDSymbol name="cmdShowLog" value="0x0106" />
+      <IDSymbol name="cmdCopyDiagnostics" value="0x0107" />
+      <IDSymbol name="cmdAskFromEditor" value="0x0108" />
+    </GuidSymbol>
+  </Symbols>
+</CommandTable>

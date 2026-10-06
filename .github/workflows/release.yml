@@ -94,6 +94,33 @@ jobs:
           cd eclipse
           CMCODER_TEST_BUNDLED=1 $x uv run python ../packaging/no_python.py run -- $mvn -B verify
           rm -rf fragments/cmcoder.eclipse.$frag/bin/cmcoder
+      - name: The Visual Studio extension, with this cmcoder inside (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Copy-Item -Recurse dist/cmcoder visualstudio/src/Cmcoder.VisualStudio/bin/cmcoder
+          $vsix = ./visualstudio/build-vsix.ps1 | Select-Object -Last 1
+          $gate = ./visualstudio/build-vsix.ps1 -Gate | Select-Object -Last 1
+          Copy-Item $vsix dist/cmcoder-visualstudio.vsix
+          "GATE_VSIX=$gate" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - name: The Visual Studio extension in a real Visual Studio, with its cmcoder (no Python in reach)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          py="$(uv run python -c 'import sys; print(sys.executable)')"
+          uv run python packaging/no_python.py run -- powershell -NoProfile -ExecutionPolicy Bypass \
+            -File visualstudio/gate/run-gate.ps1 -Vsix "$GATE_VSIX" -Python "$py"
+      - uses: actions/upload-artifact@v4
+        if: failure() && runner.os == 'Windows'
+        with:
+          name: vs-gate-screen
+          path: ${{ runner.temp }}/vs-gate-screen.png
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'Windows'
+        with:
+          name: cmcoder-visualstudio.vsix
+          path: dist/cmcoder-visualstudio.vsix
       - name: The terminal package (install, update, run, uninstall; no Python in reach)
         shell: bash
         run: |
