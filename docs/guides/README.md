@@ -10,6 +10,10 @@ runs on your PC.
 
 ## Which one?
 
+Each guide covers everything for that IDE: what you need, getting the file,
+installing, first-time setup, using it (with screenshots), settings,
+updating and removing, and fixes.
+
 | You work in | Install | Guide |
 |---|---|---|
 | A terminal (PowerShell, cmd, Terminal, bash) | the terminal package | [terminal.md](terminal.md) |
@@ -45,7 +49,8 @@ download.
 ## Where the files come from
 
 Your team shares them, usually as the release bundle (or: GitHub → Actions →
-**Release build** → the latest green run → Artifacts → `cmcoder-release-bundle`). Pick your platform: `win32-x64` (Windows),
+**Release build** → the latest green run → Artifacts → `cmcoder-release-bundle`;
+GitHub wraps every download in a `.zip`, unzip it once). Pick your platform: `win32-x64` (Windows),
 `darwin-arm64` (Mac with Apple silicon) or `linux-x64`.
 
 | File | What |
@@ -54,7 +59,7 @@ Your team shares them, usually as the release bundle (or: GitHub → Actions →
 | `cmcoder-<platform>.vsix` | the VS Code extension (cmcoder inside) |
 | `cmcoder-eclipse` (a `.zip`) | the Eclipse plugin, every platform in one file |
 | `cmcoder-netbeans-<platform>.nbm` | the NetBeans plugin (cmcoder and its chat browser inside) |
-| `cmcoder-visualstudio-win32-x64.vsix` | the Visual Studio 2022 extension (Windows) |
+| `cmcoder-visualstudio-win32-x64.vsix` | the Visual Studio 2022 extension (Windows; on GitHub's Artifacts list: `cmcoder-visualstudio.vsix`) |
 
 Updates are new files: install the new one over the old one.
 

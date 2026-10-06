@@ -1,7 +1,8 @@
 # First-time setup (once, for every way you use cmcoder)
 
 cmcoder needs to know your company's AI gateway and your API key. You do this
-once; the terminal, VS Code and Eclipse all use it.
+once; the terminal and every IDE (VS Code, Visual Studio, Eclipse, NetBeans)
+use it.
 
 Your team may already have done this for you (a company settings file). If
 `cmcoder doctor` passes, or the chat answers, skip this page.
@@ -35,13 +36,13 @@ The key goes into your operating system's keychain (Windows Credential
 Manager, macOS Keychain, the Linux secret service), never into a file.
 
 - **Terminal:** run `cmcoder login` and paste the key (it isn't shown).
-- **VS Code / Eclipse without the terminal package:** run the cmcoder that
-  is inside the extension once, with `login` (or install the terminal package;
-  the key is shared, so one `login` is enough for all):
-  - VS Code (Windows):
-    `%USERPROFILE%\.vscode\extensions\cmcoder.cmcoder-<version>-win32-x64\bin\cmcoder\cmcoder.exe login`
-    (macOS, Linux: `~/.vscode/extensions/cmcoder.cmcoder-<version>-<platform>/bin/cmcoder/cmcoder login`)
-  - Eclipse: see [eclipse.md](eclipse.md), step 4.
+- **An IDE without the terminal package:** run the cmcoder that is inside
+  the extension once, with `login` (the key is shared, so one `login` is
+  enough for all). Each guide's step 3 shows where it is:
+  [VS Code](vscode.md#3-first-time-setup-once),
+  [Visual Studio](visualstudio.md#3-first-time-setup-once),
+  [Eclipse](eclipse.md#3-first-time-setup-once),
+  [NetBeans](netbeans.md#3-first-time-setup-once).
 
 Never put the key in `settings.json`, a script, or a chat message.
 
@@ -53,7 +54,8 @@ cmcoder doctor
 
 It checks, and tells you what to fix: the gateway's name (VPN), proxies, the
 certificate chain, the key, the model list, streaming, and tool calling. In
-Eclipse, **cmcoder: Copy Diagnostics** (Ctrl+3) gives the same report.
+Visual Studio, Eclipse and NetBeans, **Copy Diagnostics** includes the same
+report.
 
 ## Company networks
 
