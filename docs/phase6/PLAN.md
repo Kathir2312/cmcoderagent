@@ -547,6 +547,14 @@ Findings fixed with a test that fails on the earlier code, as before.
 
 ### 10. Docs
 
+**Status: written (6 October 2026),** except `STATUS.md`, which comes at the
+end:
+- developers: `docs/guides/` (terminal, VS Code, Visual Studio, Eclipse,
+  NetBeans, setup, code search, troubleshooting);
+- admins: `docs/guides/admin.md`;
+- code: [ide-guide.md](ide-guide.md), [python-guide.md](python-guide.md),
+  [langgraph-guide.md](langgraph-guide.md).
+
 - **For developers** (the people receiving the files), one page per IDE:
   install, first start (gateway and key, as today), the panel tour, settings,
   updating to a new file, uninstalling, troubleshooting (Git Bash missing,

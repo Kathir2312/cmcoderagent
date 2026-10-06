@@ -16,6 +16,7 @@ runs on your PC.
 | VS Code | the VS Code extension | [vscode.md](vscode.md) |
 | Eclipse | the Eclipse plugin | [eclipse.md](eclipse.md) |
 | NetBeans | the NetBeans plugin | [netbeans.md](netbeans.md) |
+| Visual Studio 2022 | the Visual Studio extension | [visualstudio.md](visualstudio.md) |
 
 You can use several: they share your settings, your API key, your permission
 answers and your saved conversations. Each IDE extension contains its own copy
@@ -34,7 +35,7 @@ download.
 | You need | Why | Who |
 |---|---|---|
 | **Git for Windows** | cmcoder runs shell commands with Git Bash (as Claude Code does) | Windows only; most developers have it. macOS and Linux have bash already |
-| **Microsoft Edge WebView2 Runtime** | the chat panel in Eclipse (VS Code has its own) | Windows; part of Windows 11 and of Microsoft Edge |
+| **Microsoft Edge WebView2 Runtime** | the chat panel in Eclipse and Visual Studio (VS Code has its own) | Windows; part of Windows 11 and of Microsoft Edge |
 | **Java 21** | runs Eclipse itself | Eclipse users (Eclipse 2024-06 or newer) |
 | **JDK 17 or newer** | runs NetBeans itself | NetBeans users (NetBeans 28 or newer) |
 | **WebKitGTK** (`libwebkit2gtk-4.1-0`) | the chat panel in Eclipse | Eclipse on Linux |
@@ -43,8 +44,8 @@ download.
 
 ## Where the files come from
 
-Your team shares them (or: GitHub → Actions → **Release build** → the latest
-green run → Artifacts). Pick your platform: `win32-x64` (Windows),
+Your team shares them, usually as the release bundle (or: GitHub → Actions →
+**Release build** → the latest green run → Artifacts → `cmcoder-release-bundle`). Pick your platform: `win32-x64` (Windows),
 `darwin-arm64` (Mac with Apple silicon) or `linux-x64`.
 
 | File | What |
@@ -53,5 +54,9 @@ green run → Artifacts). Pick your platform: `win32-x64` (Windows),
 | `cmcoder-<platform>.vsix` | the VS Code extension (cmcoder inside) |
 | `cmcoder-eclipse` (a `.zip`) | the Eclipse plugin, every platform in one file |
 | `cmcoder-netbeans-<platform>.nbm` | the NetBeans plugin (cmcoder and its chat browser inside) |
+| `cmcoder-visualstudio-win32-x64.vsix` | the Visual Studio 2022 extension (Windows) |
 
 Updates are new files: install the new one over the old one.
+
+Administrators (building, the gate report, handing out the files, managed
+settings): [admin.md](admin.md).
