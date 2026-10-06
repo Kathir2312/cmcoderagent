@@ -1,6 +1,6 @@
 # Phase 6 — Other IDEs: plan
 
-**Status:** 🚧 planned (6 October 2026). Phase 5 ended at commit `46f2e75`.
+**Status:** ✅ complete (6 October 2026): [STATUS.md](STATUS.md). Phase 5 ended at commit `46f2e75`.
 
 > **Note: developers' PCs may not have Python installed** (nor uv, pip or
 > Node.js). Every file in this phase carries its own `cmcoder` and must work
@@ -383,7 +383,7 @@ is the plan as written.
 
 ### 6. Eclipse plugin
 
-**Status: in progress. Built and gate-tested here on Linux (Eclipse 2024-06
+**Status: done (6 October 2026). Built and gate-tested here on Linux (Eclipse 2024-06
 and 2026-09, source and bundled cmcoder with no Python on PATH); CI on Linux
 and macOS, the release build on Windows, macOS and Linux.**
 
@@ -456,7 +456,7 @@ and macOS, the release build on Windows, macOS and Linux.**
 
 ### 7. Visual Studio 2022 extension
 
-**Status: in progress.** Done so far:
+**Status: done (6 October 2026); the gate passes in a real Visual Studio 2022 (release build #63).**
 - `visualstudio/src/Cmcoder.Core` (netstandard2.0): the JVM core's rules in
   C#, with 21 tests against the real cmcoder (Linux, macOS, Windows; the
   release build on Windows with the standalone cmcoder.exe and no Python).
@@ -510,7 +510,7 @@ and macOS, the release build on Windows, macOS and Linux.**
 
 ### 8. Release workflow and bundle
 
-**Status: built (6 October 2026).** `packaging/bundle.py` (tested:
+**Status: done (6 October 2026); the bundle job passed in release build #63.** `packaging/bundle.py` (tested:
 `tests/test_bundle.py`) assembles the bundle in the release workflow's
 `bundle` job, which runs only when every platform's build and gates and the
 Eclipse site passed: `terminal/`, `vscode/`, `visualstudio/`, `eclipse/`,
@@ -547,8 +547,7 @@ Findings fixed with a test that fails on the earlier code, as before.
 
 ### 10. Docs
 
-**Status: written (6 October 2026),** except `STATUS.md`, which comes at the
-end:
+**Status: done (6 October 2026),** with [STATUS.md](STATUS.md):
 - developers: `docs/guides/` (terminal, VS Code, Visual Studio, Eclipse,
   NetBeans, setup, code search, troubleshooting);
 - admins: `docs/guides/admin.md`;
@@ -572,7 +571,7 @@ end:
 
 ### 11. Apache NetBeans plugin (added 6 October 2026)
 
-**Status: in progress. The gate passes here in a real NetBeans 31 on JDK 21
+**Status: done (6 October 2026); the release build's gate passes on Windows, macOS and Linux. The gate passes here in a real NetBeans 31 on JDK 21
 and on JDK 25 (Linux, the bundled cmcoder, no Python on PATH); CI runs it on
 NetBeans 28 and 31, the release build on every platform.** Found by the gate
 and fixed: a script's navigation away from the page made JavaFX report the
@@ -648,9 +647,9 @@ newest).
 - [x] 3. Protocol classes for Java/Kotlin checked against the schema (C# with item 7)
 - [x] 4. JVM core (program lookup, process, JSON lines, executable bit, and the host logic)
 - [—] 5. ~~JetBrains plugin~~ (dropped)
-- [ ] 6. Eclipse plugin (H1–H24, gate on 2024-06 and newest)
+- [x] 6. Eclipse plugin (H1–H24, gate on 2024-06 and newest)
 - [x] 7. Visual Studio 2022 extension (H1–H24, gate in Visual Studio)
 - [x] 8. Release workflow, bundle, gate report
 - [x] 9. Security review
-- [ ] 10. Docs for developers and admins; guides; STATUS
-- [ ] 11. Apache NetBeans plugin (JavaFX WebView; gate on NetBeans 28 and 31)
+- [x] 10. Docs for developers and admins; guides; STATUS
+- [x] 11. Apache NetBeans plugin (JavaFX WebView; gate on NetBeans 28 and 31)
