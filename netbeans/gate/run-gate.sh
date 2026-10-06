@@ -47,10 +47,19 @@ printf 'first line\nsecond line\n' > "$project/app.txt"
 result="$work/result.json"
 
 # The module's files where NetBeans' installer puts a plugin: the user folder.
-if command -v unzip >/dev/null; then unzip -q "$nbm" 'netbeans/*' -d "$work/nbm"
-else (cd "$work/nbm" && "${jdk:-$JAVA_HOME}/bin/jar" xf "$(native "$(cd "$(dirname "$nbm")" && pwd)/$(basename "$nbm")")"); fi
+# (unzip on Linux and macOS; on Windows the JDK's jar, with Windows paths for it.)
+if [ "$windows" = 0 ] && command -v unzip >/dev/null; then
+  unzip -q "$nbm" 'netbeans/*' -d "$work/nbm"
+else
+  jar="${jdk:-$JAVA_HOME}/bin/jar"; [ "$windows" = 1 ] && jar="$(cygpath -u "$jar").exe"
+  (cd "$work/nbm" && "$jar" xf "$(native "$(cd "$(dirname "$nbm")" && pwd)/$(basename "$nbm")")")
+fi
 cp -R "$work/nbm/netbeans/." "$work/userdir/"
-test -f "$work/userdir/config/Modules/cmcoder-netbeans.xml"
+if [ ! -f "$work/userdir/config/Modules/cmcoder-netbeans.xml" ]; then
+  echo "The .nbm's files didn't land in the user folder. Unpacked:" >&2
+  find "$work/nbm" -maxdepth 4 | head -30 >&2
+  exit 1
+fi
 
 # The model's replies, in order: a getDiagnostics call, a reply, a Write
 # accepted, a reply, a Write rejected (the turn stops there).
