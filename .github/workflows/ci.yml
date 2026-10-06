@@ -277,11 +277,13 @@ jobs:
         run: |
           uv export --format requirements-txt --no-hashes --no-emit-project --all-extras > /tmp/requirements.txt
           # chromadb (the optional "chroma" extra): server-side advisories with no fix
-          # yet; cmcoder only uses it as an in-process client. See
+          # yet; only CI's test Chroma server uses it (cmcoder reaches Chroma by URL). See
           # docs/phase5/SECURITY-REVIEW.md, finding 2, before removing or adding any.
           uvx pip-audit -r /tmp/requirements.txt --no-deps --disable-pip --strict \
             --ignore-vuln PYSEC-2026-311 --ignore-vuln PYSEC-2026-3813 \
             --ignore-vuln PYSEC-2026-3814 --ignore-vuln PYSEC-2026-3815
+      - name: OSV (OpenJFX in the NetBeans plugin, NuGet packages in the Visual Studio extension)
+        run: uv run --no-project python packaging/osv_check.py
       - name: npm audit (extension and shared panel dependencies; fails on high or critical)
         working-directory: vscode
         run: |

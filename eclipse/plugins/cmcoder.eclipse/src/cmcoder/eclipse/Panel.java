@@ -38,7 +38,7 @@ import cmcoder.ide.core.Json;
  * (H5, H16, H18, H19).
  */
 public final class Panel {
-    /** Tests only: a test-driver.js to load after the page's script (never set in a release). */
+    /** Tests only: a test-driver.js to load after the page's script (ignored without the tests' fragment). */
     public static final String TEST_DRIVER = "cmcoder.testDriver";
 
     private final Browser browser;
@@ -215,7 +215,9 @@ public final class Panel {
         }
         String source = panel.toUri().toString().replaceAll("/$", "");
         String nonce = nonce();
-        String testDriver = System.getProperty(TEST_DRIVER);
+        // Only with the tests installed (their fragment): a release ignores the setting.
+        String testDriver = org.eclipse.core.runtime.Platform.getBundle("cmcoder.eclipse.tests") == null ? null
+                : System.getProperty(TEST_DRIVER);
         String testScript = testDriver == null || testDriver.isBlank() ? ""
                 : "\n  <script nonce=\"" + nonce + "\" src=\"" + attr(Path.of(testDriver).toUri().toString()) + "\"></script>";
         String icon = Files.isRegularFile(panel.resolve("icon.png")) ? " data-icon=\"" + attr(source + "/icon.png") + "\"" : "";

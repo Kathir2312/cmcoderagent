@@ -533,6 +533,10 @@ version (they're kept in step rather than rewritten at build time).
 
 ### 9. Security review
 
+**Status: done (6 October 2026):** [SECURITY-REVIEW.md](SECURITY-REVIEW.md).
+2 issues fixed (NetBeans' page bridge and navigation; the test driver in
+release builds), nothing open; OpenJFX under watch with an OSV check in CI.
+
 The Phase 4/5 review method, for what's new: each embedded browser's
 security settings (H19: remote content, navigation, scripts from the model's
 text, the bridge only reachable from the panel), the program lookup on each
@@ -639,6 +643,6 @@ newest).
 - [ ] 6. Eclipse plugin (H1–H24, gate on 2024-06 and newest)
 - [x] 7. Visual Studio 2022 extension (H1–H24, gate in Visual Studio)
 - [x] 8. Release workflow, bundle, gate report
-- [ ] 9. Security review
+- [x] 9. Security review
 - [ ] 10. Docs for developers and admins; guides; STATUS
 - [ ] 11. Apache NetBeans plugin (JavaFX WebView; gate on NetBeans 28 and 31)

@@ -60,3 +60,34 @@ async def test_set_up_and_use_code_search_from_vs_code(mock_server: Any, project
     finally:
         await agent.send(type="shutdown")
         await agent.proc.wait()
+
+
+async def test_an_api_key_in_a_rejected_message_is_never_echoed(
+    mock_server: Any, project: Path
+) -> None:
+    """Phase 6 security review: the IDEs' code search set-up sends a Chroma API
+    key; a message cmcoder rejects is reported by field and reason, never with
+    its values (which would reach the chat and the IDE's log)."""
+    secret = "sk-chroma-secret-9f3a"
+    agent = await Agent.start(project, mock_server([]))
+    try:
+        await agent.until("system_init")
+        # embedding_model must be a string; the rest of the message carries the key.
+        await agent.send_raw(
+            json.dumps(
+                {
+                    "type": "rag_setup",
+                    "embedding_model": 5,
+                    "store": "chroma-server",
+                    "api_key": secret,
+                }
+            )
+            + "\n"
+        )
+        error = await agent.until("error")
+        assert "embedding_model" in error["message"] and secret not in json.dumps(error)
+    finally:
+        await agent.send(type="shutdown")
+        await agent.proc.wait()
+    assert secret not in await agent.stderr()
+    assert all(secret not in json.dumps(e) for e in agent.events)

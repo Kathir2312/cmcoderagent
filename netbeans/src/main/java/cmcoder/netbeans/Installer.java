@@ -9,7 +9,7 @@ public final class Installer extends ModuleInstall {
     @Override
     public void restored() {
         String gate = System.getProperty("cmcoder.gate");
-        if (gate == null || gate.isBlank()) return;
+        if (gate == null || gate.isBlank() || !Panel.testBuild()) return;
         try {
             // Only in the test build (-Pgate): never in a release.
             Class.forName("cmcoder.netbeans.Gate").getMethod("start", String.class).invoke(null, gate);

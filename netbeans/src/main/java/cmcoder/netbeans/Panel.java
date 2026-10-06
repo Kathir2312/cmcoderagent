@@ -48,7 +48,7 @@ import cmcoder.ide.core.Json;
  */
 public final class Panel extends JPanel {
     private static final long serialVersionUID = 1L;
-    /** Tests only: a test-driver.js to load after the page's script (never set in a release). */
+    /** Tests only: a test-driver.js to load after the page's script (ignored by a release build). */
     public static final String TEST_DRIVER = "cmcoder.testDriver";
     private static final String MARKER = "\u0001cmcoder:";
 
@@ -219,7 +219,7 @@ public final class Panel extends JPanel {
         }
         String source = panel.toUri().toString().replaceAll("/$", "");
         String nonce = nonce();
-        String testDriver = System.getProperty(TEST_DRIVER);
+        String testDriver = testBuild() ? System.getProperty(TEST_DRIVER) : null; // a release ignores the setting
         String testScript = testDriver == null || testDriver.isBlank() ? ""
                 : "\n  <script nonce=\"" + nonce + "\" src=\"" + attr(Path.of(testDriver).toUri().toString()) + "\"></script>";
         String icon = Files.isRegularFile(panel.resolve("icon.png")) ? " data-icon=\"" + attr(source + "/icon.png") + "\"" : "";
@@ -236,6 +236,16 @@ public final class Panel extends JPanel {
         Path file = folder.resolve(page + ".html");
         Files.writeString(file, html, StandardCharsets.UTF_8);
         return file;
+    }
+
+    /** The test build (-Pgate) has the gate's self-test in it; a release doesn't. */
+    static boolean testBuild() {
+        try {
+            Class.forName("cmcoder.netbeans.Gate", false, Panel.class.getClassLoader());
+            return true;
+        } catch (ClassNotFoundException e) {
+            return false;
+        }
     }
 
     private static String nonce() {
