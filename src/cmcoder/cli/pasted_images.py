@@ -8,6 +8,7 @@ placeholder the user deletes before sending is left out.
 from __future__ import annotations
 
 import io
+import os
 import re
 from pathlib import Path
 from urllib.parse import unquote, urlparse
@@ -54,8 +55,8 @@ def image_path(text: str) -> Path | None:
         text = unquote(urlparse(text).path)
         if re.match(r"^/[A-Za-z]:/", text):  # file:///C:/x.png
             text = text[1:]
-    else:
-        text = re.sub(r"\\(.)", r"\1", text) if "\\ " in text else text  # macOS: "a\ b.png"
+    elif os.name != "nt" and "\\ " in text:  # macOS/Linux terminals: "my\ shot.png"
+        text = re.sub(r"\\(.)", r"\1", text)  # (on Windows, \ separates folders)
     path = Path(text).expanduser()
     if path.suffix.lower() not in IMAGE_SUFFIXES:
         return None

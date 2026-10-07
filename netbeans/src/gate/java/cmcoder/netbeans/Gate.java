@@ -257,8 +257,14 @@ public final class Gate {
         String url = chat.pageLocation().get(10, TimeUnit.SECONDS);
         chat.evaluate("location.href='https://example.com/'; 'ok'").get(10, TimeUnit.SECONDS);
         Thread.sleep(1500);
-        String now = chat.pageLocation().get(10, TimeUnit.SECONDS);
-        if (!url.equals(now)) throw new AssertionError("the chat page navigated away to " + now);
+        // The navigation is cancelled; the panel may reload its own page as a
+        // safeguard, and while that runs the address reads null (slow on Windows).
+        String[] last = {null};
+        try {
+            until("the chat page after a navigation attempt", () -> url.equals(last[0] = chat.pageLocation().get(10, TimeUnit.SECONDS)), 15);
+        } catch (AssertionError e) {
+            throw new AssertionError("the chat page navigated away to " + last[0], e);
+        }
         if (!"1".equals(driver(chat, "count", "textarea"))) throw new AssertionError("the chat page is gone after a navigation attempt");
         step("the page stayed");
 

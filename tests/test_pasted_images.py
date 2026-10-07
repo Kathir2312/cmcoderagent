@@ -4,6 +4,7 @@ image file's path, the [Image #n] placeholders, and the TUI end to end."""
 from __future__ import annotations
 
 import io
+import os
 from pathlib import Path
 from typing import Any
 
@@ -45,11 +46,12 @@ def test_a_pasted_or_dropped_image_path_is_recognised(tmp_path: Path) -> None:
         str(shot),
         f'"{shot}"',  # Windows Terminal quotes a dropped path
         f"'{shot}'",
-        str(shot).replace(" ", "\\ "),  # macOS Terminal escapes spaces
         shot.as_uri(),  # file:// URL
         f"  {shot}\n",
     ):
         assert image_path(pasted) == shot, pasted
+    if os.name != "nt":  # macOS Terminal escapes spaces (on Windows \ separates folders)
+        assert image_path(str(shot).replace(" ", "\\ ")) == shot
 
 
 def test_other_pastes_are_text(tmp_path: Path) -> None:
