@@ -92,6 +92,7 @@ cmcoder what to do instead).
 |---|---|
 | Ask about some code | select it, then **Ctrl+Alt+K** (Mac: Cmd+Alt+K) or right-click → **Ask cmcoder About Selection** |
 | See what goes with your message | the 📎 line above the input: the open file, the selection and its problems. Untick it to leave them out once |
+| Show an image (a screenshot, an error dialog) | **Ctrl+V** in the input, drop the file on the chat, or the **Image** button ([images.md](images.md)) |
 | Stop cmcoder | **Esc**, or **Stop** |
 | Start over | **Ctrl+3** → **cmcoder: New Conversation** |
 | Go back to an earlier conversation | **History** at the top of the chat |

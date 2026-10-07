@@ -10,6 +10,7 @@
   },
   "model": "corp:qwen3-27b",
   "smallFastModel": "corp:qwen3-7b",
+  "visionModel": "corp:qwen2.5-vl-7b",
   "maxTurns": 50,
   "subagentMaxTurns": 100,
   "maxParallelSubagents": 4,

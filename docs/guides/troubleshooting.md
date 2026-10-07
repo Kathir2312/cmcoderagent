@@ -32,6 +32,8 @@ needs Python, and cmcoder never tries to install it. If something asks for
 | Proxy errors | set `HTTPS_PROXY`; put internal gateway domains in `NO_PROXY` |
 | "No API key" / 401 | `cmcoder login` again (keys expire); for Open WebUI an API key, not a password |
 | Model not found | `cmcoder models` lists the gateway's names; fix `model` in your settings |
+| "… can't see images. Set "visionModel" …" | your model is text only: set `visionModel` to a model that reads images ([images.md](images.md)) |
+| Alt+V: "no image in the clipboard" (Linux terminal) | install `wl-clipboard` (Wayland) or `xclip` (X11) |
 | Eclipse: the chat is blank (Windows) | install the Microsoft Edge WebView2 Runtime |
 | Eclipse: the chat is blank (Linux) | install WebKitGTK: `sudo apt install libwebkit2gtk-4.1-0` (or your distribution's package) |
 | Eclipse: plugin won't install | Eclipse older than 2024-06, or not on Java 21 |

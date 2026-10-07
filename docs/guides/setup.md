@@ -26,6 +26,8 @@ for example:
 - `baseUrl`: the gateway's address (LiteLLM: ending in `/v1`).
 - `model`: `provider:model`; the model names are whatever the gateway serves
   (`cmcoder models` lists them once your key works).
+- `visionModel` (optional): a model on the gateway that can read images, for
+  when your main model can't ([images.md](images.md)).
 - **Open WebUI** instead of LiteLLM: add `"type": "openwebui"` to the provider
   and use the Open WebUI address; the key is an Open WebUI API key
   (Settings → Account → API keys).
