@@ -1,0 +1,50 @@
+# One-off: a full SAST and SCA pass over the whole repository, for tools whose
+# rule or vulnerability databases the cloud session can't reach (Semgrep's
+# registry, OSV, the Go module proxy). Results go to the job log. Removed after use.
+name: Security scan (one-off)
+on:
+  push:
+    paths: [".github/workflows/security-scan.yml"]
+permissions:
+  contents: read
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - name: Tools
+        run: |
+          go install github.com/google/osv-scanner/v2/cmd/osv-scanner@latest
+          go install github.com/zricethezav/gitleaks/v8@latest
+          pipx install semgrep
+          pipx install zizmor
+          echo "$HOME/go/bin" >> "$GITHUB_PATH"
+      - name: "SCA: osv-scanner (uv.lock, package-lock.json, pom.xml with transitive Maven deps)"
+        if: always()
+        run: osv-scanner scan source -r --format table . || true
+      - name: "SAST: Semgrep (default, OWASP Top 10, security audit, secrets, GitHub Actions)"
+        if: always()
+        run: |
+          semgrep scan --metrics=off --quiet --json -o semgrep.json \
+            --config p/default --config p/owasp-top-ten --config p/security-audit \
+            --config p/secrets --config p/github-actions \
+            --exclude 'node_modules' --exclude 'dist*' --exclude 'target' --exclude 'evals/fixtures' . || true
+          python3 - <<'EOF'
+          import json, collections
+          d = json.load(open("semgrep.json"))
+          r = d.get("results", [])
+          print(f"semgrep: {len(r)} findings, {len(d.get('errors', []))} errors")
+          for x in r:
+              print(f"{x['extra'].get('severity','?'):8} {x['path']}:{x['start']['line']}  {x['check_id'].split('.')[-1]}  | {x['extra']['lines'].strip()[:140]}")
+          EOF
+      - name: "Secrets: gitleaks (whole git history, redacted)"
+        if: always()
+        run: gitleaks git . --redact --no-banner -v || true
+      - name: "Workflows: zizmor"
+        if: always()
+        run: zizmor --offline --format plain .github/workflows || true
