@@ -7,6 +7,7 @@ on:
     paths: [".github/workflows/security-scan.yml"]
 permissions:
   contents: read
+  actions: read
 jobs:
   scan:
     runs-on: ubuntu-latest
@@ -14,6 +15,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-go@v5
         with:
           go-version: stable
@@ -26,7 +28,7 @@ jobs:
           echo "$HOME/go/bin" >> "$GITHUB_PATH"
       - name: "SCA: osv-scanner (uv.lock, package-lock.json, pom.xml with transitive Maven deps)"
         if: always()
-        run: osv-scanner scan source -r --format table . || true
+        run: osv-scanner scan source -r --format markdown . 2>&1 | grep -v "^Scanning\|^Starting\|^Scanned" | head -80 || true
       - name: "SAST: Semgrep (default, OWASP Top 10, security audit, secrets, GitHub Actions)"
         if: always()
         run: |
@@ -44,7 +46,25 @@ jobs:
           EOF
       - name: "Secrets: gitleaks (whole git history, redacted)"
         if: always()
-        run: gitleaks git . --redact --no-banner -v || true
+        run: gitleaks git . --redact --no-banner 2>&1 | tail -5; gitleaks git . --redact --no-banner --report-format csv --report-path gl.csv >/dev/null 2>&1; cut -d, -f1-6 gl.csv | head -30 || true
       - name: "Workflows: zizmor"
         if: always()
-        run: zizmor --offline --format plain .github/workflows || true
+        run: |
+          zizmor --offline --format json .github/workflows > zizmor.json || true
+          python3 - <<'EOF2'
+          import json, collections
+          d = json.load(open("zizmor.json"))
+          c = collections.Counter((f["ident"], f["determinations"]["severity"]) for f in d)
+          print("zizmor:", len(d), "findings"); [print(f"  {n:3} {s:8} {i}") for (i, s), n in c.most_common()]
+          for f in d:
+              if f["ident"] != "unpinned-uses":
+                  loc = f["locations"][0]["symbolic"]
+                  print(f'{f["determinations"]["severity"]:7} {f["ident"]:22} {loc["key"]["Local"]["given_path"]}  {loc.get("annotation","")[:90]}')
+          EOF2
+      - name: "What the Visual Studio extension ships (release build #64's .vsix)"
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download 37513756745 -R "$GITHUB_REPOSITORY" -n cmcoder-visualstudio.vsix -D vsix
+          unzip -l vsix/*.vsix | grep -iv 'bin/cmcoder/_internal' | grep -i '\.dll\|\.exe\|\.json\|manifest' | head -40
