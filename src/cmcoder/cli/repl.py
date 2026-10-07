@@ -16,6 +16,7 @@ from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.keys import Keys
 from rich.console import Console
 from rich.live import Live
 from rich.markdown import Markdown
@@ -34,6 +35,7 @@ from ..core.critic import critic_command, critique_note
 from ..core.permissions import MODES, ModeNotAllowed
 from ..core.sessions import SessionLog, age, list_sessions, load
 from ..core.subagents import agents_command
+from ..images import Image, ImageError
 from ..mcp_client import status_lines
 from ..protocol import events as ev
 from ..providers.messages import Usage
@@ -41,6 +43,7 @@ from ..providers.openai_compat import OpenAICompatProvider
 from ..rag.index import Progress
 from .agent_map import AgentMap, ParallelTasks, review_lines
 from .factory import AgentOptions, build_agent, index_command, resolve_model_profile
+from .pasted_images import PendingImages, clipboard_image, image_path
 from .symbols import sym as S
 
 # Lines the permission prompt needs besides the preview: panel border and
@@ -182,6 +185,9 @@ class Repl:
         self._prompt_lock = asyncio.Lock()
         self._prompting = False
         self._held: list[ev.Event] = []
+        # Images attached to the message being typed (Ctrl+V / Alt+V, a pasted path).
+        self.pending_images = PendingImages()
+        self._image_note = ""  # shown in the toolbar until the next message
         self._chooser: asyncio.Task[None] | None = None
         self._live: Live | None = None
         self._buffer = ""
@@ -318,7 +324,7 @@ class Repl:
             c.print(Text(f"{S().error} {event.message}", style="bold red"))
             if event.hint:
                 c.print(Text(f"  {event.hint}", style="red"))
-        elif isinstance(event, ev.CodeContext):
+        elif isinstance(event, ev.CodeContext | ev.ImagesDescribed):
             c.print(Text(f"{S().note} {event.summary()}", style="dim"))
         elif isinstance(event, ev.Compacted):
             self._stop_status()
@@ -711,7 +717,11 @@ class Repl:
             return ""
         ctx = self._last_prompt_tokens
         pct = f" · context {100 * ctx // max(1, self.agent.profile.context_window)}%" if ctx else ""
-        return f" {self.agent.model} · mode: {self.agent.policy.mode} (shift+tab){pct}"
+        n = len(self.pending_images.images)
+        images = f" · {n} image{'s' if n > 1 else ''} attached" if n else ""
+        note = f" · {self._image_note}" if self._image_note else ""
+        mode = self.agent.policy.mode
+        return f" {self.agent.model} · mode: {mode} (shift+tab){pct}{images}{note}"
 
     def _arm_interrupt(self) -> None:
         task = self._turn_task
@@ -760,10 +770,12 @@ class Repl:
             if self._prompting:
                 self._release()
 
-    async def _run_turn(self, prompt: str, allow: list[str] | None = None) -> None:
+    async def _run_turn(
+        self, prompt: str, allow: list[str] | None = None, images: list[Image] | None = None
+    ) -> None:
         assert self.agent is not None
         self.map.start_turn(prompt, self.agent.model)
-        await self._run_stream(self.agent.run(prompt, allow=allow))
+        await self._run_stream(self.agent.run(prompt, allow=allow, images=images))
 
     async def _run_stream(
         self,
@@ -843,6 +855,37 @@ class Repl:
         def _newline(event: Any) -> None:
             event.current_buffer.insert_text("\n")
 
+        def attach(event: Any, raw: bytes, name: str) -> None:
+            try:
+                placeholder = self.pending_images.add(raw, name)
+            except ImageError as e:
+                self._image_note = str(e)
+            else:
+                self._image_note = ""
+                buffer = event.current_buffer
+                space = "" if not buffer.text or buffer.text[-1:].isspace() else " "
+                buffer.insert_text(f"{space}{placeholder} ")
+            event.app.invalidate()
+
+        # Windows Terminal keeps Ctrl+V for pasting text: Alt+V works everywhere.
+        @bindings.add("c-v")
+        @bindings.add("escape", "v")
+        def _paste_image(event: Any) -> None:
+            raw = clipboard_image()
+            if raw is None:
+                self._image_note = "no image in the clipboard"
+                event.app.invalidate()
+            else:
+                attach(event, raw, "")
+
+        @bindings.add(Keys.BracketedPaste)
+        def _paste(event: Any) -> None:
+            path = image_path(event.data)  # a dropped image file arrives as its path
+            if path is not None:
+                attach(event, path.read_bytes(), path.name)
+                return
+            event.current_buffer.insert_text(event.data.replace("\r\n", "\n").replace("\r", "\n"))
+
         hist = config_dir() / "history"
         hist.parent.mkdir(parents=True, exist_ok=True)
         self.session = PromptSession(
@@ -872,13 +915,15 @@ class Repl:
                 else:
                     line, pending = pending, None
                 line = line.strip()
+                images = self.pending_images.take(line)
+                self._image_note = ""
                 if not line:
                     continue
                 if line.startswith("/"):
                     if not await self._command(line):
                         break
                     continue
-                await self._run_turn(line)
+                await self._run_turn(line, images=images)
         finally:
             with suppress(Exception):
                 await agent.close()

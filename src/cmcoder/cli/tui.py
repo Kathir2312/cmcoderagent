@@ -17,7 +17,7 @@ from typing import Any
 from rich.markdown import Markdown as RichMarkdown
 from rich.syntax import Syntax
 from rich.text import Text
-from textual import on
+from textual import events, on
 from textual.app import App, ComposeResult, ScreenStackError
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
@@ -35,11 +35,13 @@ from ..core.commands import BUILT_IN, help_lines
 from ..core.critic import critic_command, critique_note
 from ..core.permissions import MODES, ModeNotAllowed
 from ..core.subagents import agent_run_details, agents_command
+from ..images import Image, ImageError
 from ..mcp_client import status_lines
 from ..protocol import events as ev
 from ..rag.index import Progress
 from .agent_map import STATE_STYLES, AgentMap, ParallelTasks, review_lines
 from .factory import AgentOptions, build_agent, index_command
+from .pasted_images import PendingImages, clipboard_image, image_path
 from .repl import Repl, output_preview, short_rule, subagent_line
 from .symbols import sym as S
 
@@ -272,6 +274,17 @@ class AgentNavigatorScreen(Screen[None]):
         self.app.pop_screen()
 
 
+class PromptInput(Input):
+    """The prompt: a pasted (or dropped) image file's path attaches the image."""
+
+    def _on_paste(self, event: events.Paste) -> None:
+        path = image_path(event.text)
+        if path is not None and isinstance(self.app, CmcoderApp):
+            event.stop()
+            event.prevent_default()  # Textual would also run Input's own paste handler
+            self.app.attach_image(path.read_bytes(), path.name)
+
+
 class CmcoderApp(App[int]):
     TITLE = "cmcoder"  # replaced by the brand's name in __init__
     CSS = """
@@ -291,6 +304,9 @@ class CmcoderApp(App[int]):
         Binding("shift+tab", "cycle_mode", "Mode", priority=True),
         Binding("ctrl+g", "navigator", "Agent navigator"),
         Binding("ctrl+d", "quit", "Quit"),
+        # Windows Terminal keeps Ctrl+V for pasting text: Alt+V works everywhere.
+        Binding("ctrl+v", "paste_image", "Paste image", show=False),
+        Binding("alt+v", "paste_image", "Paste image", show=False),
     ]
 
     def __init__(self, settings: Settings, initial_prompt: str | None = None) -> None:
@@ -308,14 +324,15 @@ class CmcoderApp(App[int]):
         self._quit_armed = False
         self.tasks = ParallelTasks()
         self.map = AgentMap()  # this turn's subagents, shown above the input
+        self.pending_images = PendingImages()  # attached to the message being typed
 
     # -- layout -------------------------------------------------------------------
 
     def compose(self) -> ComposeResult:
         yield VerticalScroll(id="log")
         yield Static(id="agents")
-        yield Input(
-            placeholder=f"Ask {self.brand.product_name}…  (/help for commands)",
+        yield PromptInput(
+            placeholder=f"Ask {self.brand.product_name}…  (/help for commands; Alt+V pastes an image)",
             id="prompt",
             suggester=SlashSuggester(self),
         )
@@ -415,10 +432,30 @@ class CmcoderApp(App[int]):
 
     # -- turns ----------------------------------------------------------------------
 
+    def attach_image(self, raw: bytes, name: str) -> None:
+        """An image for the message being typed: its placeholder goes in the prompt."""
+        try:
+            placeholder = self.pending_images.add(raw, name)
+        except ImageError as e:
+            self.notify(str(e), severity="warning")
+            return
+        prompt = self.query_one("#prompt", Input)
+        space = "" if not prompt.value or prompt.value[-1:].isspace() else " "
+        prompt.insert_text_at_cursor(f"{space}{placeholder} ")
+        prompt.focus()
+
+    def action_paste_image(self) -> None:
+        raw = clipboard_image()
+        if raw is None:
+            self.notify("No image in the clipboard.", severity="warning")
+        else:
+            self.attach_image(raw, "")
+
     @on(Input.Submitted, "#prompt")
     async def _submitted(self, event: Input.Submitted) -> None:
         line = event.value.strip()
         event.input.value = ""
+        images = self.pending_images.take(line)
         if not line:
             return
         if self.turn is not None and self.turn.is_running:
@@ -430,14 +467,14 @@ class CmcoderApp(App[int]):
         if line.startswith("/"):
             await self.command(line)
         else:
-            self.start_turn(line)
+            self.start_turn(line, images)
 
-    def start_turn(self, prompt: str) -> None:
+    def start_turn(self, prompt: str, images: list[Image] | None = None) -> None:
         assert self.agent is not None
         self.write(Text(f"> {prompt}"), "user")
         self.new_map(prompt)
         self.turn = self.run_worker(
-            self.stream(self.agent.run(prompt)), exclusive=True, group="turn"
+            self.stream(self.agent.run(prompt, images=images)), exclusive=True, group="turn"
         )
 
     async def stream(
@@ -527,7 +564,7 @@ class CmcoderApp(App[int]):
         elif isinstance(event, ev.ReviewResult):
             for text, style in review_lines(event):
                 self.write(text, {"green": "tool", "yellow": "warn"}.get(style, "dim"))
-        elif isinstance(event, ev.CodeContext):
+        elif isinstance(event, ev.CodeContext | ev.ImagesDescribed):
             self.write(f"{S().note} {event.summary()}", "dim")
         elif isinstance(event, ev.Compacted):
             self._prompt_tokens = 0
