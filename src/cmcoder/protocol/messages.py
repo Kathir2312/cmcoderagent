@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, TypeAdapter
+from pydantic import BaseModel, Field, TypeAdapter, model_validator
 
 
 class _Message(BaseModel):
@@ -38,13 +38,29 @@ class IdeContext(BaseModel):
     diagnostics: list[IdeDiagnostic] = Field(default_factory=list)
 
 
+class ImageAttachment(BaseModel):
+    """An image the user pasted, dropped or picked. cmcoder checks the bytes
+    (PNG, JPEG, GIF or WebP only) and makes a large one smaller."""
+
+    data: str  # base64 (a data: URL is taken too)
+    media_type: str | None = None  # informative: the bytes decide
+    name: str | None = None  # the file's name, if it had one
+
+
 class UserMessage(_Message):
     """Start a turn. Only one turn runs at a time."""
 
     type: Literal["user_message"] = "user_message"
-    text: str = Field(min_length=1)
+    text: str = ""
     # The editor's state; given to the model as a note, not shown as the prompt.
     context: IdeContext | None = None
+    images: list[ImageAttachment] = Field(default_factory=list, max_length=5)
+
+    @model_validator(mode="after")
+    def _text_or_images(self) -> UserMessage:
+        if not self.text and not self.images:
+            raise ValueError("a user_message needs text, images or both")
+        return self
 
 
 class Interrupt(_Message):

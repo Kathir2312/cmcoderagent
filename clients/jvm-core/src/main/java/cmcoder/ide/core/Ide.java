@@ -70,6 +70,15 @@ public interface Ide {
     /** The @ button: let the user pick a project file; call {@code chosen} with its path relative to the project (H13). */
     void attachFile(Consumer<String> chosen);
 
+    /**
+     * The system clipboard's image as PNG bytes, or null when it holds none. For
+     * browsers that don't give the page clipboard images (JavaFX's); others don't
+     * need it. Called on the host's thread; may answer on any thread.
+     */
+    default void clipboardImage(Consumer<byte[]> png) {
+        png.accept(null);
+    }
+
     /** Open an http(s) address in the system browser (H18; Host has already checked it). */
     void openExternal(String url);
 

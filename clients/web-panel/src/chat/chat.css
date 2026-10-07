@@ -371,3 +371,12 @@ footer .commands .description { opacity: 0.7; margin-left: 8px; }
 .note.review .issue.high { color: var(--vscode-errorForeground); }
 .note.review .fix { opacity: 0.75; }
 .note.review-pass { color: var(--vscode-testing-iconPassed, #73c991); }
+
+/* Images to send (pasted, dropped or picked), and in sent messages. */
+footer .images { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+footer .images .item { position: relative; }
+footer .images .thumb { display: block; height: 56px; max-width: 120px; object-fit: cover; border: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.4)); border-radius: 3px; }
+footer .images .remove { position: absolute; top: -6px; right: -6px; padding: 0 5px; line-height: 16px; border-radius: 8px; }
+footer .image { padding: 4px 8px; }
+.msg.user .thumbs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.msg.user .thumbs .thumb { height: 72px; max-width: 160px; object-fit: cover; border-radius: 3px; }

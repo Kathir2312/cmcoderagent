@@ -447,3 +447,92 @@ for (const flavour of FLAVOURS) {
     await page.close();
   });
 }
+
+// --- images: pasted, dropped or picked ------------------------------------------------
+
+// A 1×1 PNG.
+const PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+
+/** Fires a paste (or drop) event on the input (or page) carrying these files. */
+async function transfer(page: Page, event: "paste" | "drop", files: { name: string; type: string; b64: string }[], text = ""): Promise<void> {
+  await page.evaluate(
+    ([event, files, text]) => {
+      const dt = new DataTransfer();
+      for (const f of files) dt.items.add(new File([Uint8Array.from(atob(f.b64), (c) => c.charCodeAt(0))], f.name, { type: f.type }));
+      if (text) dt.setData("text/plain", text);
+      const target = document.querySelector(event === "paste" ? "textarea" : "footer")!;
+      const e = event === "paste"
+        ? new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true })
+        : new DragEvent("drop", { dataTransfer: dt, bubbles: true, cancelable: true });
+      target.dispatchEvent(e);
+    },
+    [event, files, text] as const,
+  );
+}
+
+for (const flavour of FLAVOURS) {
+  test(`${flavour}: a pasted image shows above the input and goes with the message`, async () => {
+    const { page, sent } = await panel(flavour);
+    await transfer(page, "paste", [{ name: "shot.png", type: "image/png", b64: PNG }]);
+    await page.waitForSelector("footer .images .thumb");
+    assert.equal(await page.getAttribute("footer .images .thumb", "src"), `data:image/png;base64,${PNG}`);
+    await page.fill("textarea", "what's wrong here?");
+    await page.press("textarea", "Enter");
+    assert.deepEqual((await sent()).at(-1), {
+      kind: "send",
+      text: "what's wrong here?",
+      includeContext: false,
+      images: [{ data: PNG, mediaType: "image/png", name: "shot.png" }],
+    });
+    assert.equal(await page.isVisible("footer .images"), false, "sent: the strip is empty again");
+    assert.equal(await page.locator(".msg.user .thumbs .thumb").count(), 1, "the sent message shows it");
+    await page.close();
+  });
+}
+
+test("an image alone can be sent; dropped images and the picker add to the strip; × removes", async () => {
+  const { page, sent } = await panel("vscode");
+  await transfer(page, "drop", [
+    { name: "a.png", type: "image/png", b64: PNG },
+    { name: "b.png", type: "image/png", b64: PNG },
+  ]);
+  await page.waitForFunction(() => document.querySelectorAll("footer .images .thumb").length === 2);
+  await page.click("footer .images .item:nth-child(1) .remove");
+  assert.equal(await page.locator("footer .images .thumb").count(), 1);
+  await page.press("textarea", "Enter"); // no text: the image alone
+  assert.deepEqual((await sent()).at(-1), { kind: "send", text: "", includeContext: false, images: [{ data: PNG, mediaType: "image/png", name: "b.png" }] });
+  // The Image button opens a file picker that takes images only.
+  assert.equal(await page.getAttribute("input.image-file", "accept"), "image/png,image/jpeg,image/gif,image/webp");
+  await page.close();
+});
+
+test("only PNG, JPEG, GIF and WebP are taken, and at most 5", async () => {
+  const { page } = await panel("vscode");
+  await transfer(page, "paste", [{ name: "x.svg", type: "image/svg+xml", b64: btoa("<svg/>") }]);
+  await page.waitForFunction(() => /isn't a PNG, JPEG, GIF or WebP/.test(document.querySelector(".status")?.textContent ?? ""));
+  assert.equal(await page.isVisible("footer .images"), false);
+  await transfer(page, "paste", Array.from({ length: 6 }, (_, i) => ({ name: `${i}.png`, type: "image/png", b64: PNG })));
+  await page.waitForFunction(() => /At most 5 images/.test(document.querySelector(".status")?.textContent ?? ""));
+  assert.equal(await page.locator("footer .images .thumb").count(), 5);
+  await page.close();
+});
+
+test("a paste with no image and no text asks the IDE for the clipboard's image (JavaFX)", async () => {
+  const { page, send, sent } = await panel("function");
+  await transfer(page, "paste", []);
+  await page.waitForFunction(() => (window as unknown as { sent: { kind: string }[] }).sent.some((m) => m.kind === "pasteImage"));
+  await send({ kind: "image", data: PNG, mediaType: "image/png", name: "" });
+  assert.equal(await page.locator("footer .images .thumb").count(), 1);
+  // A paste of text is left to the input, and doesn't ask the IDE.
+  const before = (await sent()).length;
+  await transfer(page, "paste", [], "some text");
+  assert.equal((await sent()).length, before);
+  await page.close();
+});
+
+test("the vision model's description is noted in the chat", async () => {
+  const { page, ev } = await panel("vscode");
+  await ev({ type: "images_described", model: "qwen2.5-vl-7b", count: 2 });
+  assert.equal(await page.textContent(".note.info"), "◦ qwen2.5-vl-7b described 2 images for the model, which can't see images");
+  await page.close();
+});

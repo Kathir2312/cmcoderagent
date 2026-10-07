@@ -255,9 +255,19 @@ public final class Host {
                 break;
             case "send": {
                 String text = Json.string(m, "text");
-                if (text != null && !text.isEmpty()) sendText(text, Json.bool(m, "includeContext"));
+                List<Map<String, Object>> images = Protocol.images(Json.list(m, "images"));
+                if ((text != null && !text.isEmpty()) || !images.isEmpty()) {
+                    sendText(text == null ? "" : text, Json.bool(m, "includeContext"), images);
+                }
                 break;
             }
+            case "pasteImage":
+                // The page got no image from the clipboard (JavaFX's browser doesn't pass
+                // them on): the IDE reads it, and the page shows it like a pasted one.
+                ide.clipboardImage(png -> {
+                    if (png != null) toPanel(Protocol.panelImage(png));
+                });
+                break;
             case "interrupt":
                 send(Protocol.interrupt());
                 break;
@@ -320,9 +330,14 @@ public final class Host {
 
     /** Sends a message, with the editor context when asked and allowed (H7). */
     public synchronized boolean sendText(String text, boolean includeContext) {
+        return sendText(text, includeContext, Collections.emptyList());
+    }
+
+    /** A message with images the user attached ({@link Protocol#images}). */
+    public synchronized boolean sendText(String text, boolean includeContext, List<Map<String, Object>> images) {
         Map<String, Object> context = includeContext && ide.autoContext() ? ide.editorContext() : null;
-        if (send(Protocol.userMessage(text, context))) {
-            navigator.startTurn(text);
+        if (send(Protocol.userMessage(text, context, images))) {
+            navigator.startTurn(text.isEmpty() ? "(" + images.size() + (images.size() == 1 ? " image)" : " images)") : text);
             return true;
         }
         setState("exited", config.product + " isn't running. Click Restart.");

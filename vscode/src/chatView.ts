@@ -10,7 +10,7 @@ import { AgentNavigator } from "./navigator";
 import { cmcoderCommand } from "./executable";
 import { contextLabel, currentEditor, editorContext, IDE_TOOLS, runIdeTool } from "./editorContext";
 import type { AgentEvent, ClientMessage, FileChange, RewindPoint } from "./protocol";
-import type { AgentState, FromWebview, ToWebview } from "./webviewMessages";
+import type { AgentState, FromWebview, ImageAttachment, ToWebview } from "./webviewMessages";
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
   static readonly viewId = "cmcoder.chat";
@@ -50,12 +50,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
   // --- commands ----------------------------------------------------------
 
-  /** Sends a message, with the editor context when asked and enabled. */
-  sendText(text: string, includeContext: boolean): boolean {
+  /** Sends a message, with the editor context when asked and enabled, and any images. */
+  sendText(text: string, includeContext: boolean, images: ImageAttachment[] = []): boolean {
     const enabled = vscode.workspace.getConfiguration("cmcoder").get<boolean>("autoContext", true);
     const context = includeContext && enabled ? editorContext(currentEditor()) : null;
-    if (this.agent?.send({ type: "user_message", text, context })) {
-      this.navigator.startTurn(text);
+    const attached = images.map((i) => ({ data: i.data, media_type: i.mediaType, name: i.name || null }));
+    if (this.agent?.send({ type: "user_message", text, context, images: attached })) {
+      this.navigator.startTurn(text || `(${images.length} image${images.length > 1 ? "s" : ""})`);
       return true;
     }
     this.setState("exited", `${productName()} isn't running. Click Restart.`);
@@ -261,7 +262,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         this.updateContext();
         break;
       case "send":
-        this.sendText(m.text, m.includeContext);
+        this.sendText(m.text, m.includeContext, m.images ?? []);
         break;
       case "interrupt":
         this.interrupt();
@@ -308,6 +309,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       case "openLink":
         if (/^https?:\/\//i.test(m.href)) void vscode.env.openExternal(vscode.Uri.parse(m.href));
         break;
+      case "pasteImage":
+        break; // VS Code's webview gives the page clipboard images itself
     }
   }
 

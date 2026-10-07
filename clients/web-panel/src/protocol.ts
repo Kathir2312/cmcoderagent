@@ -396,11 +396,22 @@ export interface IdeSelection {
   text: string;
 }
 
+/**
+ * An image the user pasted, dropped or picked. cmcoder checks the bytes
+ * (PNG, JPEG, GIF or WebP only) and makes a large one smaller.
+ */
+export interface ImageAttachment {
+  data: string;
+  media_type?: string | null;
+  name?: string | null;
+}
+
 /** Start a turn. Only one turn runs at a time. */
 export interface UserMessage {
   type: "user_message";
-  text: string;
+  text?: string;
   context?: IdeContext | null;
+  images?: ImageAttachment[];
 }
 
 /** Stop the running turn (like Ctrl+C in the CLI). */

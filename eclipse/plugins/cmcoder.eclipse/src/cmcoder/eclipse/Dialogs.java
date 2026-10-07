@@ -25,6 +25,26 @@ import cmcoder.ide.core.Protocol;
 
 /** The pickers the chat asks for (H11, H13, H18). UI thread only. */
 final class Dialogs {
+
+    /** The clipboard's image as PNG, or null (none, or unreadable). On the UI thread. */
+    static byte[] clipboardPng() {
+        org.eclipse.swt.dnd.Clipboard clipboard = new org.eclipse.swt.dnd.Clipboard(org.eclipse.swt.widgets.Display.getCurrent());
+        try {
+            Object contents = clipboard.getContents(org.eclipse.swt.dnd.ImageTransfer.getInstance());
+            if (!(contents instanceof org.eclipse.swt.graphics.ImageData)) return null;
+            org.eclipse.swt.graphics.ImageLoader loader = new org.eclipse.swt.graphics.ImageLoader();
+            loader.data = new org.eclipse.swt.graphics.ImageData[] {(org.eclipse.swt.graphics.ImageData) contents};
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            loader.save(out, org.eclipse.swt.SWT.IMAGE_PNG);
+            return out.toByteArray();
+        } catch (RuntimeException e) { // a busy clipboard, an odd format: no image
+            Activator a = Activator.get();
+            if (a != null) a.log("Couldn't read the clipboard's image: " + e);
+            return null;
+        } finally {
+            clipboard.dispose();
+        }
+    }
     private Dialogs() {}
 
     private static Shell shell() {

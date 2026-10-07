@@ -14,7 +14,7 @@ import type {
   ToolUse,
 } from "../protocol";
 import { bridge, fromHost, hostSettings } from "../bridge";
-import type { FromWebview, ToWebview } from "../messages";
+import type { FromWebview, ImageAttachment, ToWebview } from "../messages";
 
 const host = bridge<FromWebview>();
 const post = (m: FromWebview) => host.post(m);
@@ -106,9 +106,12 @@ app.innerHTML = `
       <input type="checkbox" checked> <span></span>
     </label>
     <div class="commands" role="listbox" hidden></div>
+    <div class="images" hidden></div>
     <textarea rows="3"></textarea>
     <div class="actions">
       <button class="attach secondary" title="Attach a file (@)">@</button>
+      <button class="image secondary" title="Attach an image (or paste one with Ctrl+V, or drop it here)">Image</button>
+      <input class="image-file" type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden>
       <span class="usage"></span>
       <button class="stop secondary" hidden title="Stop (Esc)">Stop</button>
       <button class="send">Send</button>
@@ -134,6 +137,9 @@ const agentsPanel = $<HTMLElement>(".agents");
 const sessionsPanel = $<HTMLElement>(".sessions");
 const historyButton = $<HTMLButtonElement>(".history");
 const attachButton = $<HTMLButtonElement>(".attach");
+const imageButton = $<HTMLButtonElement>(".image");
+const imageFile = $<HTMLInputElement>(".image-file");
+const imagesStrip = $<HTMLElement>(".images");
 const contextChip = $<HTMLLabelElement>(".context");
 const commandsPopup = $<HTMLElement>(".commands");
 const contextBox = contextChip.querySelector("input") as HTMLInputElement;
@@ -221,16 +227,118 @@ function renderProgress(): void {
   progressLine.querySelector(".meta")!.textContent = `(${parts.join(" · ")})`;
 }
 
+// --- images: pasted, dropped or picked; shown above the input until sent ----------
+
+const MAX_IMAGES = 5; // as cmcoder takes per message
+const MAX_IMAGE_BYTES = 20 * 1024 * 1024; // cmcoder makes larger ones smaller, up to this
+const IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
+let pendingImages: ImageAttachment[] = [];
+
+function thumbnail(img: ImageAttachment): HTMLImageElement {
+  const t = document.createElement("img");
+  t.className = "thumb";
+  t.alt = img.name || "image";
+  t.title = img.name || "Pasted image";
+  // Only the image types above, and base64 only: nothing else becomes a URL here.
+  if (IMAGE_TYPES.has(img.mediaType) && /^[A-Za-z0-9+/]*={0,2}$/.test(img.data)) {
+    t.src = `data:${img.mediaType};base64,${img.data}`;
+  }
+  return t;
+}
+
+function renderImages(): void {
+  imagesStrip.hidden = pendingImages.length === 0;
+  imagesStrip.replaceChildren(
+    ...pendingImages.map((img, i) => {
+      const item = el("div", "item");
+      item.append(thumbnail(img));
+      const remove = el("button", "secondary remove", "×");
+      remove.title = "Remove this image";
+      remove.onclick = () => {
+        pendingImages.splice(i, 1);
+        renderImages();
+      };
+      item.append(remove);
+      return item;
+    }),
+  );
+}
+
+function addImage(img: ImageAttachment): void {
+  if (!IMAGE_TYPES.has(img.mediaType)) {
+    showStatus(`${img.name || "That"} isn't a PNG, JPEG, GIF or WebP image.`);
+    return;
+  }
+  if (pendingImages.length >= MAX_IMAGES) {
+    showStatus(`At most ${MAX_IMAGES} images per message.`);
+    return;
+  }
+  pendingImages.push(img);
+  renderImages();
+}
+
+function addImageFile(file: File): void {
+  if (!IMAGE_TYPES.has(file.type)) {
+    showStatus(`${file.name || "That"} isn't a PNG, JPEG, GIF or WebP image.`);
+    return;
+  }
+  if (file.size > MAX_IMAGE_BYTES) {
+    showStatus(`${file.name || "The image"} is larger than 20 MB.`);
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    const url = String(reader.result ?? "");
+    addImage({ data: url.slice(url.indexOf(",") + 1), mediaType: file.type, name: file.name || "" });
+  };
+  reader.readAsDataURL(file);
+}
+
+function imageFiles(list: DataTransferItemList | FileList | null | undefined): File[] {
+  const out: File[] = [];
+  const items: (File | DataTransferItem)[] = list ? Array.from(list as ArrayLike<File | DataTransferItem>) : [];
+  for (const item of items) {
+    const file = item instanceof File ? item : item.kind === "file" ? item.getAsFile() : null;
+    if (file && file.type.startsWith("image/")) out.push(file);
+  }
+  return out;
+}
+
+input.addEventListener("paste", (e) => {
+  const files = imageFiles(e.clipboardData?.items);
+  if (files.length) {
+    e.preventDefault(); // not the file's name as text
+    files.forEach(addImageFile);
+  } else if (!e.clipboardData?.getData("text/plain")) {
+    // Some browsers (JavaFX's) don't give the page the clipboard's image: ask the IDE.
+    post({ kind: "pasteImage" });
+  }
+});
+app.addEventListener("dragover", (e) => {
+  if (Array.from(e.dataTransfer?.types ?? []).includes("Files")) e.preventDefault();
+});
+app.addEventListener("drop", (e) => {
+  const files = imageFiles(e.dataTransfer?.files);
+  if (!files.length) return;
+  e.preventDefault();
+  files.forEach(addImageFile);
+});
+imageButton.onclick = () => imageFile.click();
+imageFile.onchange = () => {
+  imageFiles(imageFile.files).forEach(addImageFile);
+  imageFile.value = "";
+};
+
 // --- messages typed while it works: sent together when the turn ends ---------
 
-const queue: { text: string; includeContext: boolean }[] = [];
+const queue: { text: string; includeContext: boolean; images: ImageAttachment[] }[] = [];
 
 function renderQueue(): void {
   queuedBox.hidden = queue.length === 0;
   queuedBox.replaceChildren(
     ...queue.map((q, i) => {
       const row = el("div", "item");
-      row.append(el("span", "text", `↳ ${q.text}`));
+      row.append(el("span", "text", `↳ ${q.text}${q.images.length ? ` (+${q.images.length} image${q.images.length > 1 ? "s" : ""})` : ""}`));
       const remove = el("button", "secondary remove", "×");
       remove.title = "Don't send this";
       remove.onclick = () => {
@@ -248,13 +356,16 @@ function flushQueue(interrupted: boolean): void {
   if (!queue.length) return;
   const items = queue.splice(0);
   renderQueue();
-  const text = items.map((q) => q.text).join("\n\n");
+  const text = items.map((q) => q.text).filter(Boolean).join("\n\n");
+  const images = items.flatMap((q) => q.images).slice(0, MAX_IMAGES);
   if (interrupted) {
     input.value = text + (input.value ? `\n\n${input.value}` : "");
+    pendingImages = [...images, ...pendingImages].slice(0, MAX_IMAGES);
+    renderImages();
     input.focus();
     return;
   }
-  submit(text, items.some((q) => q.includeContext));
+  submit(text, items.some((q) => q.includeContext), images);
 }
 
 function showStatus(text?: string): void {
@@ -513,6 +624,9 @@ function onEvent(ev: AgentEvent): void {
       reviewNote(ev);
       if (!ev.final) setActivity("Fixing what the reviewer found");
       break;
+    case "images_described":
+      note(`◦ ${ev.model} described ${ev.count === 1 ? "the image" : `${ev.count} images`} for the model, which can't see images`, "info");
+      break;
     case "code_context": {
       const where = ev.items.slice(0, 4).map((i) => `${i.path}:${i.start_line}-${i.end_line}`).join(", ");
       const more = ev.items.length > 4 ? ` and ${ev.items.length - 4} more` : "";
@@ -726,24 +840,32 @@ function renderTodos(todos: Record<string, unknown>[]): void {
 
 function send(): void {
   const text = input.value.trim();
-  if (!text || !ready) return;
+  if ((!text && !pendingImages.length) || !ready) return;
+  const images = pendingImages;
+  pendingImages = [];
+  renderImages();
   const includeContext = !contextChip.hidden && contextBox.checked;
   input.value = "";
   commandsPopup.hidden = true;
   contextBox.checked = true; // turning it off counts for one message
   if (busy) {
-    queue.push({ text, includeContext }); // sent when this turn ends
+    queue.push({ text, includeContext, images }); // sent when this turn ends
     renderQueue();
     return;
   }
-  submit(text, includeContext);
+  submit(text, includeContext, images);
 }
 
-function submit(text: string, includeContext: boolean): void {
+function submit(text: string, includeContext: boolean, images: ImageAttachment[] = []): void {
   const bubble = append(el("div", "msg user", text));
+  if (images.length) {
+    const thumbs = el("div", "thumbs");
+    thumbs.append(...images.map(thumbnail));
+    bubble.append(thumbs);
+  }
   if (includeContext) bubble.append(el("div", "attached", `📎 ${contextText.textContent}`));
   setBusy(true);
-  post({ kind: "send", text, includeContext });
+  post(images.length ? { kind: "send", text, includeContext, images } : { kind: "send", text, includeContext });
 }
 
 function renderSessions(sessions: { id: string; title: string; updated: number; messages: number }[]): void {
@@ -895,6 +1017,10 @@ window.addEventListener("message", (e: MessageEvent<ToWebview>) => {
       reply = undefined;
       usageLabel.textContent = "";
       setBusy(false);
+      break;
+    case "image":
+      addImage({ data: m.data, mediaType: m.mediaType, name: m.name });
+      input.focus();
       break;
     case "prefill":
       input.value = m.text + input.value;

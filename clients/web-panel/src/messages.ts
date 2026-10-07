@@ -5,6 +5,13 @@ import type { AgentEvent } from "./protocol";
 
 export type AgentState = "starting" | "ready" | "exited";
 
+/** An image the user pasted, dropped or picked: base64 without the data: prefix. */
+export interface ImageAttachment {
+  data: string;
+  mediaType: string;
+  name: string;
+}
+
 export type ToWebview =
   /** A protocol event from cmcoder. */
   | { kind: "event"; event: AgentEvent }
@@ -16,11 +23,15 @@ export type ToWebview =
   /** What the editor context would be for the next message (null: none). */
   | { kind: "context"; label: string | null }
   /** A permission request was answered outside the panel (e.g. in the diff editor). */
-  | { kind: "permissionAnswered"; requestId: string; text: string };
+  | { kind: "permissionAnswered"; requestId: string; text: string }
+  /** An image from the system clipboard, read by the IDE (answer to pasteImage). */
+  | ({ kind: "image" } & ImageAttachment);
 
 export type FromWebview =
   | { kind: "ready" }
-  | { kind: "send"; text: string; includeContext: boolean }
+  | { kind: "send"; text: string; includeContext: boolean; images?: ImageAttachment[] }
+  /** A paste brought no image the page could read: ask the IDE for the clipboard's image. */
+  | { kind: "pasteImage" }
   | { kind: "interrupt" }
   | { kind: "stopSubagent"; id: string }
   | { kind: "openNavigator" }

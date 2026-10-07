@@ -148,12 +148,36 @@ namespace Cmcoder.Core
         private static string Text(JObject o) => o.ToString(Formatting.None);
 
         /// <summary>A user message; <paramref name="context"/> is the editor context (or null), from <see cref="EditorContext"/>.</summary>
-        public static string UserMessage(string text, JObject? context)
+        public static string UserMessage(string text, JObject? context) => UserMessage(text, context, new List<JObject>());
+
+        /// <summary>A user message with images, each <c>{data, media_type, name}</c> (see <see cref="Images"/>).</summary>
+        public static string UserMessage(string text, JObject? context, IList<JObject> images)
         {
             var m = Message("user_message");
             m["text"] = text;
             m["context"] = context ?? (JToken)JValue.CreateNull();
+            if (images.Count > 0) m["images"] = new JArray(images);
             return Text(m);
+        }
+
+        /// <summary>The panel's images (<c>{data, mediaType, name}</c>) as the protocol's; cmcoder checks the bytes.</summary>
+        public static IList<JObject> Images(JArray? fromPanel)
+        {
+            var output = new List<JObject>();
+            if (fromPanel == null) return output;
+            foreach (var item in fromPanel)
+            {
+                if (!(item is JObject i) || output.Count == 5) continue;
+                var data = Json.Str(i, "data");
+                if (string.IsNullOrEmpty(data)) continue;
+                output.Add(new JObject
+                {
+                    ["data"] = data,
+                    ["media_type"] = Json.Str(i, "mediaType"),
+                    ["name"] = Json.Str(i, "name"),
+                });
+            }
+            return output;
         }
 
         public static string Interrupt() => Text(Message("interrupt"));
@@ -259,6 +283,7 @@ namespace Cmcoder.Core
             {
                 UserMessage("hello", context),
                 UserMessage("hello", null),
+                UserMessage("", null, Images(new JArray(new JObject { ["data"] = "iVBORw0KGgo=", ["mediaType"] = "image/png", ["name"] = "shot.png" }))),
                 Interrupt(),
                 Shutdown(),
                 PermissionResponse("r1", true, false, null),

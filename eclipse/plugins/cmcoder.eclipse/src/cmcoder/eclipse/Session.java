@@ -311,6 +311,14 @@ public final class Session {
         }
 
         @Override
+        public void clipboardImage(Consumer<byte[]> png) {
+            ui(() -> {
+                byte[] bytes = Dialogs.clipboardPng();
+                run(h -> png.accept(bytes));
+            });
+        }
+
+        @Override
         public void log(String line) {
             Activator a = Activator.get();
             if (a != null) a.log(line);

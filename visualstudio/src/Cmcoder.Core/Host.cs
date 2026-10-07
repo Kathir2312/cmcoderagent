@@ -283,10 +283,13 @@ namespace Cmcoder.Core
                         break;
                     case "send":
                     {
-                        var text = Json.Str(m, "text");
-                        if (!string.IsNullOrEmpty(text)) SendText(text!, Json.Bool(m, "includeContext"));
+                        var text = Json.Str(m, "text") ?? "";
+                        var images = Protocol.Images(m?["images"] as JArray);
+                        if (text.Length > 0 || images.Count > 0) SendText(text, Json.Bool(m, "includeContext"), images);
                         break;
                     }
+                    case "pasteImage":
+                        break; // WebView2 gives the page clipboard images itself
                     case "interrupt":
                         Send(Protocol.Interrupt());
                         break;
@@ -356,14 +359,17 @@ namespace Cmcoder.Core
         }
 
         /// <summary>Sends a message, with the editor context when asked and allowed (H7).</summary>
-        public bool SendText(string text, bool includeContext)
+        public bool SendText(string text, bool includeContext) => SendText(text, includeContext, new List<JObject>());
+
+        /// <summary>A message with images the user attached (see <see cref="Protocol.Images"/>).</summary>
+        public bool SendText(string text, bool includeContext, IList<JObject> images)
         {
             lock (gate)
             {
                 var context = includeContext && ide.AutoContext ? ide.EditorContext() : null;
-                if (Send(Protocol.UserMessage(text, context)))
+                if (Send(Protocol.UserMessage(text, context, images)))
                 {
-                    navigator.StartTurn(text);
+                    navigator.StartTurn(text.Length > 0 ? text : $"({images.Count} image{(images.Count == 1 ? "" : "s")})");
                     return true;
                 }
                 SetState("exited", config.Product + " isn't running. Click Restart.");

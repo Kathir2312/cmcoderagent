@@ -287,6 +287,14 @@ public final class Session {
         }
 
         @Override
+        public void clipboardImage(Consumer<byte[]> png) {
+            SwingUtilities.invokeLater(() -> {
+                byte[] bytes = Dialogs.clipboardPng();
+                run(h -> png.accept(bytes));
+            });
+        }
+
+        @Override
         public void log(String line) {
             Plugin.log(line);
         }

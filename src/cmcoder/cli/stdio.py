@@ -30,6 +30,7 @@ from ..core.ide import IDE_TOOLS, format_ide_context
 from ..core.permissions import MODES, Decision, ModeNotAllowed
 from ..core.sessions import list_sessions
 from ..core.subagents import agents_command
+from ..images import Image, ImageError, from_base64
 from ..mcp_client import status_lines
 from ..protocol import events as ev
 from ..protocol import messages as msg
@@ -186,7 +187,15 @@ class StdioServer:
                 if message.context
                 else None
             )
-            self.turn = asyncio.create_task(self._run_turn(message.text, note))
+            try:
+                images = [
+                    await asyncio.to_thread(from_base64, a.data, a.name or "")
+                    for a in message.images
+                ]
+            except ImageError as e:
+                self.error("images", str(e))
+                return
+            self.turn = asyncio.create_task(self._run_turn(message.text, note, images))
         elif isinstance(message, msg.Interrupt):
             await self._stop_turn()
         elif isinstance(message, msg.PermissionResponse):
@@ -283,13 +292,13 @@ class StdioServer:
         )
 
     async def _turn_events(
-        self, text: str, context: str | None, started: float
+        self, text: str, context: str | None, started: float, images: list[Image]
     ) -> AsyncIterator[ev.Event]:
         """A prompt, or a slash command: `/compact`, a custom command or an MCP prompt."""
         agent = self.agent
         assert agent is not None
         if not text.startswith("/"):
-            async for event in agent.run(text, context):
+            async for event in agent.run(text, context, images=images):
                 yield event
             return
         name, arguments = split_line(text)
@@ -312,22 +321,26 @@ class StdioServer:
         for w in warnings:
             yield ev.Warning(message=w)
         if expansion is not None:
-            async for event in agent.run(expansion.prompt, context, allow=expansion.allowed_tools):
+            async for event in agent.run(
+                expansion.prompt, context, allow=expansion.allowed_tools, images=images
+            ):
                 yield event
         elif name in BUILT_IN:
             message = f"/{name} isn't available here; use the panel's buttons or the terminal."
             yield ev.Warning(message=message)
             yield self._result("error", message, True, started)
         else:  # not a command (e.g. a path): an ordinary prompt
-            async for event in agent.run(text, context):
+            async for event in agent.run(text, context, images=images):
                 yield event
 
-    async def _run_turn(self, text: str, context: str | None = None) -> None:
+    async def _run_turn(
+        self, text: str, context: str | None = None, images: list[Image] | None = None
+    ) -> None:
         agent = self.agent
         assert agent is not None
         started = time.monotonic()
         try:
-            async for event in self._turn_events(text, context, started):
+            async for event in self._turn_events(text, context, started, images or []):
                 self.emit(event)
                 if isinstance(event, ev.ToolResult) and event.name == "TodoWrite":
                     self.emit(ev.TodoUpdate(todos=agent.ctx.todos))

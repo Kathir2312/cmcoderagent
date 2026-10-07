@@ -31,6 +31,27 @@ import cmcoder.ide.core.Protocol;
 
 /** The pickers the chat asks for (H11, H13, H18). Swing thread only. */
 final class Dialogs {
+
+    /** The system clipboard's image as PNG, or null (none, or unreadable). On the EDT. */
+    static byte[] clipboardPng() {
+        try {
+            java.awt.datatransfer.Clipboard clipboard = java.awt.Toolkit.getDefaultToolkit().getSystemClipboard();
+            if (!clipboard.isDataFlavorAvailable(java.awt.datatransfer.DataFlavor.imageFlavor)) return null;
+            java.awt.Image image = (java.awt.Image) clipboard.getData(java.awt.datatransfer.DataFlavor.imageFlavor);
+            int w = image.getWidth(null), h = image.getHeight(null);
+            if (w <= 0 || h <= 0) return null;
+            java.awt.image.BufferedImage copy = new java.awt.image.BufferedImage(w, h, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+            java.awt.Graphics2D g = copy.createGraphics();
+            g.drawImage(image, 0, 0, null);
+            g.dispose();
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            javax.imageio.ImageIO.write(copy, "png", out);
+            return out.toByteArray();
+        } catch (Exception | Error e) { // a busy clipboard, an odd format: no image
+            Plugin.log("Couldn't read the clipboard's image: " + e);
+            return null;
+        }
+    }
     private static final int MAX_FILES = 20000;
 
     private Dialogs() {}

@@ -153,9 +153,44 @@ public final class Protocol {
 
     /** A user message; {@code context} is the editor context (or null), as built by {@link EditorContext}. */
     public static String userMessage(String text, Map<String, Object> context) {
+        return userMessage(text, context, Collections.emptyList());
+    }
+
+    /** A user message with images, each {@code {data, media_type, name}} (see {@link #images}). */
+    public static String userMessage(String text, Map<String, Object> context, List<Map<String, Object>> images) {
         Map<String, Object> m = message("user_message");
         m.put("text", text);
         m.put("context", context);
+        if (!images.isEmpty()) m.put("images", images);
+        return Json.write(m);
+    }
+
+    /** The panel's images ({@code {data, mediaType, name}}) as the protocol's; cmcoder checks the bytes. */
+    public static List<Map<String, Object>> images(List<Object> fromPanel) {
+        List<Map<String, Object>> out = new ArrayList<>();
+        if (fromPanel == null) return out;
+        for (Object o : fromPanel) {
+            if (!(o instanceof Map) || out.size() == 5) continue;
+            @SuppressWarnings("unchecked")
+            Map<String, Object> i = (Map<String, Object>) o;
+            String data = Json.string(i, "data");
+            if (data == null || data.isEmpty()) continue;
+            Map<String, Object> image = new LinkedHashMap<>();
+            image.put("data", data);
+            image.put("media_type", Json.string(i, "mediaType"));
+            image.put("name", Json.string(i, "name"));
+            out.add(image);
+        }
+        return out;
+    }
+
+    /** A clipboard image read by the IDE, for the panel (answer to its pasteImage). */
+    public static String panelImage(byte[] png) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("kind", "image");
+        m.put("data", java.util.Base64.getEncoder().encodeToString(png));
+        m.put("mediaType", "image/png");
+        m.put("name", "");
         return Json.write(m);
     }
 
@@ -257,12 +292,21 @@ public final class Protocol {
     }
 
     /** Every message builder with sample arguments (for the schema test). */
+    private static Map<String, Object> sampleImage() {
+        Map<String, Object> panel = new LinkedHashMap<>();
+        panel.put("data", "iVBORw0KGgo=");
+        panel.put("mediaType", "image/png");
+        panel.put("name", "shot.png");
+        return panel;
+    }
+
     public static List<String> samples() {
         Map<String, Object> context = EditorContext.of("/p/a.py", EditorContext.selection("/p/a.py", 3, 5, "x = 1"),
                 Collections.singletonList(EditorContext.diagnostic("/p/a.py", 3, "error", "bad", "pyright")));
         return Arrays.asList(
                 userMessage("hello", context),
                 userMessage("hello", null),
+                userMessage("", null, images(Collections.singletonList(sampleImage()))),
                 interrupt(),
                 shutdown(),
                 permissionResponse("r1", true, false, null),
