@@ -1,0 +1,4 @@
+# Made-up keys in tests, checked 2026-10-07 (docs/security/scan-2026-10-07.md). Not secrets.
+1a7b452d7de95777760ee61b38edfd0f95313b39:tests/test_rag_stdio.py:generic-api-key:71
+5fce9670e86f315b7cbcf038f6531546b9db0c4d:tests/test_rag_cli.py:generic-api-key:93
+d7b05427e87db120523b276707b65558d568e8d7:tests/test_openai_compat.py:generic-api-key:233

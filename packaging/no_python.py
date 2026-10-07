@@ -122,7 +122,8 @@ def check(env: Mapping[str, str], folder: Path) -> None:
         shell = [os.environ.get("COMSPEC", "cmd.exe"), "/d", "/c", "python --version"]
     else:
         shell = ["/bin/sh", "-c", "python --version"]
-    result = subprocess.run(shell, env=dict(env), capture_output=True)
+    # A fixed command; env is this test tool's own.
+    result = subprocess.run(shell, env=dict(env), capture_output=True)  # nosemgrep
     if result.returncode != EXIT_CODE:
         raise RuntimeError(f"python ran ({result.returncode}): the trap isn't first on PATH")
 

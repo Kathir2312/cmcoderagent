@@ -77,7 +77,8 @@ public final class AgentProcess {
         command.add("--protocol");
         command.add("stdio");
         command.addAll(extraArgs);
-        ProcessBuilder pb = new ProcessBuilder(command).directory(cwd.toFile());
+        // An argument list, no shell; the program is the bundled cmcoder or the user's own full path.
+        ProcessBuilder pb = new ProcessBuilder(command).directory(cwd.toFile()); // nosemgrep
         Map<String, String> environment = pb.environment();
         for (Map.Entry<String, String> e : env.entrySet()) {
             if (e.getValue() == null) environment.remove(e.getKey());

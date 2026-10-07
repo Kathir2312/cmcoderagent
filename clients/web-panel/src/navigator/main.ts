@@ -4,7 +4,7 @@
 // its steps and report; Stop a running subagent from its node.
 
 import type { AgentEvent, SubagentStatus } from "../protocol";
-import { bridge, hostSettings } from "../bridge";
+import { bridge, fromHost, hostSettings } from "../bridge";
 import type { FromNavigator, ToNavigator } from "../messages";
 
 const host = bridge<FromNavigator>();
@@ -365,6 +365,7 @@ window.setInterval(() => {
 // --- messages from the extension -------------------------------------------------
 
 window.addEventListener("message", (e: MessageEvent<ToNavigator>) => {
+  if (!fromHost(e)) return;
   const m = e.data;
   if (m.kind === "reset") {
     Object.assign(state, { prompt: m.prompt, model: m.model, busy: m.busy, outcome: "", mainTools: 0, selected: undefined });

@@ -38,6 +38,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Read-only token; only the bundle job (the GitHub release on a tag) may write.
+# No caches in this workflow: the files it builds are what developers install.
+permissions:
+  contents: read
+
 jobs:
   build:
     name: build (${{ matrix.target }})
@@ -50,17 +55,21 @@ jobs:
           - { os: windows-latest, target: win32-x64 }
           - { os: macos-latest, target: darwin-arm64 }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
       - name: bubblewrap (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update && sudo apt-get install -y bubblewrap
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
         with:
+          enable-cache: false
           python-version: "3.12"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
+          package-manager-cache: false
           node-version: 22
       - run: uv sync
       - name: Build the standalone cmcoder
@@ -70,11 +79,10 @@ jobs:
         run: |
           exe=dist/cmcoder/cmcoder; [ "$RUNNER_OS" = Windows ] && exe=dist/cmcoder/cmcoder.exe
           CMCODER_TEST_BINARY=$exe CMCODER_TEST_NO_PYTHON=1 uv run pytest -q tests/test_standalone.py
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
           distribution: temurin
           java-version: "21"
-          cache: maven
       - name: The IDE core for Eclipse/NetBeans with this cmcoder (no Python in reach)
         shell: bash
         run: |
@@ -82,7 +90,7 @@ jobs:
           mvn=mvn; [ "$RUNNER_OS" = Windows ] && mvn=mvn.cmd
           export CMCODER_TEST_PYTHON="$(uv run python -c 'import sys; print(sys.executable)')"
           CMCODER_TEST_BINARY=$exe uv run python packaging/no_python.py run -- $mvn -B -f clients/jvm-core/pom.xml verify
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           dotnet-version: "8.0.x"
       - name: The Visual Studio core with this cmcoder (no Python in reach)
@@ -109,11 +117,6 @@ jobs:
           cd eclipse
           CMCODER_TEST_BUNDLED=1 "${x[@]}" uv run python ../packaging/no_python.py run -- $mvn -B verify
           rm -rf fragments/cmcoder.eclipse.$frag/bin/cmcoder
-      - name: NetBeans (the newest release; cached)
-        uses: actions/cache@v4
-        with:
-          path: ${{ runner.temp }}/netbeans-31
-          key: netbeans-31-bin
       - name: The NetBeans plugin in a real NetBeans, with this cmcoder inside (no Python in reach)
         shell: bash
         run: |
@@ -144,7 +147,7 @@ jobs:
           sh=bash; [ "$RUNNER_OS" = Windows ] && sh="$(cygpath -w /usr/bin/bash.exe)"
           CMCODER_GATE_SHOTS="$RUNNER_TEMP/gate-shots" "${x[@]}" uv run python packaging/no_python.py run -- "$sh" netbeans/gate/run-gate.sh \
             --nbm gate.nbm --netbeans "$nb/netbeans" --python "$py" --jdk "$JAVA_HOME"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: cmcoder-netbeans-${{ matrix.target }}.nbm
           path: dist/cmcoder-netbeans-${{ matrix.target }}.nbm
@@ -166,18 +169,18 @@ jobs:
             -File visualstudio/gate/run-gate.ps1 -Vsix "$GATE_VSIX" -Python "$py"
       - name: Screenshots from the IDE gates (chat, a diff, the navigator)
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: gate-screenshots-${{ matrix.target }}
           path: ${{ runner.temp }}/gate-shots
           if-no-files-found: ignore
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: failure() && runner.os == 'Windows'
         with:
           name: vs-gate-screen
           path: ${{ runner.temp }}/vs-gate-screen.png
           if-no-files-found: ignore
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: runner.os == 'Windows'
         with:
           name: cmcoder-visualstudio.vsix
@@ -208,7 +211,7 @@ jobs:
           CMCODER_GATE_SHOTS="$RUNNER_TEMP/vscode-shots" xvfb-run -a -s "-screen 0 1280x800x24" npm run test:integration
       - name: Screenshots from VS Code (chat, a diff, the navigator)
         if: always() && runner.os == 'Linux'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: gate-screenshots-vscode
           path: ${{ runner.temp }}/vscode-shots
@@ -229,19 +232,19 @@ jobs:
             [ "$RUNNER_OS" = Linux ] && echo "VS Code extension in a real VS Code, cmcoder inside"
             true
           } > "$f"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: gate-${{ matrix.target }}
           path: gate-${{ matrix.target }}.txt
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: cmcoder-${{ matrix.target }}
           path: dist/cmcoder
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: cmcoder-terminal-${{ matrix.target }}
           path: dist/terminal/cmcoder-${{ matrix.target }}.zip
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: cmcoder-${{ matrix.target }}.vsix
           path: vscode/cmcoder-${{ matrix.target }}.vsix
@@ -253,8 +256,10 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           pattern: cmcoder-*-*
           path: programs
@@ -267,13 +272,13 @@ jobs:
             cp -R "$src" "$dst"
           done
           chmod +x eclipse/fragments/*/bin/cmcoder/cmcoder
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
           distribution: temurin
           java-version: "21"
-          cache: maven
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
+          package-manager-cache: false
           node-version: 22
       - name: The shared chat panel
         working-directory: clients/web-panel
@@ -290,7 +295,7 @@ jobs:
             jar=$(ls plugins/cmcoder.eclipse.${f%%:*}_*.jar)
             unzip -l "$jar" | grep -q " bin/cmcoder/${f##*:}$" || { echo "no cmcoder in $jar"; exit 1; }
           done
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: cmcoder-eclipse
           path: eclipse/site/target/cmcoder-eclipse-*.zip
@@ -303,18 +308,21 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: artifacts
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
         with:
+          enable-cache: false
           python-version: "3.12"
       - name: Assemble the bundle
         run: |
           uv run --no-project python packaging/bundle.py --artifacts artifacts --out bundle
           cat bundle/GATE-REPORT.md >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: cmcoder-release-bundle
           path: bundle

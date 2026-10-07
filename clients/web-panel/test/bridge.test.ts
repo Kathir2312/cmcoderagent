@@ -88,3 +88,20 @@ test("the test driver reads and operates the panel, answering in JSON", async ()
   assert.match(await run("dance", "body"), /unknown action/);
   await p.close();
 });
+
+test("messages are taken only from the page itself or its host frame, never from another window", async () => {
+  const p = await page("", "window.chrome={webview:{postMessage(m){window.sent.push(m)}}}");
+  await p.addScriptTag({ content: readFileSync(join(root, "dist", "chat.js"), "utf8") });
+  // A frame inside the page (as a hostile page could be) posts to it: ignored.
+  await p.evaluate(() => {
+    const f = document.createElement("iframe");
+    f.srcdoc = `<script>parent.postMessage({ kind: "state", state: "stopped", message: "FROM-A-FRAME" }, "*")</script>`;
+    document.body.append(f);
+  });
+  await p.waitForTimeout(300);
+  assert.equal(await p.evaluate(() => document.body.innerText.includes("FROM-A-FRAME")), false);
+  // The IDE's own way (Eclipse, NetBeans, Visual Studio): taken.
+  await p.evaluate(() => window.postMessage({ kind: "state", state: "stopped", message: "FROM-THE-IDE" }, "*"));
+  await p.waitForFunction(() => document.body.innerText.includes("FROM-THE-IDE"));
+  await p.close();
+});

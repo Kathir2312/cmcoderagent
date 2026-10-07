@@ -138,7 +138,8 @@ public final class Actions {
         List<String> command = new ArrayList<>();
         command.add(program.toString());
         command.addAll(Arrays.asList(args));
-        ProcessBuilder pb = new ProcessBuilder(command).redirectErrorStream(true);
+        // An argument list, no shell; the program is the bundled cmcoder or the user's own full path.
+        ProcessBuilder pb = new ProcessBuilder(command).redirectErrorStream(true); // nosemgrep
         if (project != null) pb.directory(project.toFile());
         pb.environment().put("NO_COLOR", "1");
         try {

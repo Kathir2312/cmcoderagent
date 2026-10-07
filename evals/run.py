@@ -97,7 +97,8 @@ def run_stdio(
     """Drives `cmcoder --protocol stdio` like the VS Code extension does, for one
     prompt. Permission requests are denied, as `-p` does. Returns (the events
     as stream-json lines, stderr, timed out)."""
-    proc = subprocess.Popen(
+    # Python 3.11+ only (the Python 3.6 rules don't apply); an argument list, no shell.
+    proc = subprocess.Popen(  # nosemgrep
         [*cmd, "--protocol", "stdio"],
         cwd=cwd,
         env=env,

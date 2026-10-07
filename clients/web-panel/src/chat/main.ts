@@ -13,7 +13,7 @@ import type {
   ToolResult,
   ToolUse,
 } from "../protocol";
-import { bridge, hostSettings } from "../bridge";
+import { bridge, fromHost, hostSettings } from "../bridge";
 import type { FromWebview, ToWebview } from "../messages";
 
 const host = bridge<FromWebview>();
@@ -858,6 +858,7 @@ document.addEventListener("click", (e) => {
 // --- messages from the extension ----------------------------------------------
 
 window.addEventListener("message", (e: MessageEvent<ToWebview>) => {
+  if (!fromHost(e)) return;
   const m = e.data;
   switch (m.kind) {
     case "event":

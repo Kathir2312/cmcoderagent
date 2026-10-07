@@ -16,9 +16,10 @@ from __future__ import annotations
 import json
 import re
 import sys
-import xml.etree.ElementTree as ET  # nosec B405: our own branding file, at build time
 from pathlib import Path
 from typing import Any
+
+import defusedxml.ElementTree as ET  # no DTDs, entities or external references
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
@@ -69,7 +70,7 @@ def check_mono_svg(path: Path) -> list[str]:
         # No DTDs: nothing for an SVG icon to need, and no entity expansion.
         return [f"{path.name}: <!DOCTYPE>/<!ENTITY> isn't allowed"]
     try:
-        root = ET.fromstring(text)  # nosec B314: checked above; our own branding file
+        root = ET.fromstring(text)
     except ET.ParseError as e:
         return [f"{path.name}: not valid SVG ({e})"]
     out = []
