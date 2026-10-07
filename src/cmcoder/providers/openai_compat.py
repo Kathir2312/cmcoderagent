@@ -18,6 +18,7 @@ from typing import Any
 import httpx
 
 from .auth import AuthError, AuthProvider
+from .content import user_content
 from .messages import (
     Message,
     ReasoningDelta,
@@ -228,7 +229,7 @@ def no_tool_support(err: ProviderError) -> bool:
     return isinstance(err, BadRequest) and bool(_NO_TOOL_SUPPORT.search(str(err)))
 
 
-def to_wire_messages(messages: list[Message]) -> list[dict[str, Any]]:
+def to_wire_messages(messages: list[Message], vision: bool = False) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for m in messages:
         if m.role == "assistant":
@@ -247,6 +248,8 @@ def to_wire_messages(messages: list[Message]) -> list[dict[str, Any]]:
             out.append(item)
         elif m.role == "tool":
             out.append({"role": "tool", "tool_call_id": m.tool_call_id, "content": m.content})
+        elif m.role == "user":
+            out.append({"role": "user", "content": user_content(m, vision)})
         else:
             out.append({"role": m.role, "content": m.content})
     return out
@@ -427,7 +430,12 @@ class OpenAICompatProvider:
     ) -> dict[str, Any]:
         prompted = profile.tool_calling == "prompted" and bool(tools)
         # Prompted: tools described in the system prompt, calls and results as text.
-        wire = to_prompted_wire(messages, tools) if prompted else to_wire_messages(messages)
+        vision = bool(profile.vision)
+        wire = (
+            to_prompted_wire(messages, tools, vision)
+            if prompted
+            else to_wire_messages(messages, vision)
+        )
         body: dict[str, Any] = {"model": model, "messages": wire, "stream": True}
         if tools and not prompted:
             body["tools"] = to_wire_tools(tools)
@@ -453,7 +461,15 @@ class OpenAICompatProvider:
             elif profile.thinking_switch == "prompt":
                 for item in reversed(wire):
                     if item["role"] == "user":
-                        item["content"] = f"{item['content']} /no_think"
+                        content = item["content"]
+                        if isinstance(content, list):  # with images: the text part, or a new one
+                            texts = [p for p in content if p.get("type") == "text"]
+                            if texts:
+                                texts[0]["text"] += " /no_think"
+                            else:
+                                content.insert(0, {"type": "text", "text": "/no_think"})
+                        else:
+                            item["content"] = f"{content} /no_think"
                         break
         body.update(profile.extra_body)
         return body

@@ -187,6 +187,20 @@ class Doctor:
                 "No smallFastModel set",
                 "Quick jobs (titles, summaries) will use the main model.",
             )
+        if s.model:
+            main = s.model.partition(":")[2] or s.model
+            if s.vision_model:
+                self.report(OK, f"Images: described by {s.vision_model} when {main} can't see them")
+            elif resolve_profile(main, s.model_profiles).vision:
+                self.report(OK, f"Images: {main} sees them")
+            else:
+                self.report(
+                    INFO,
+                    f"Images: {main} can't see images, and no visionModel is set",
+                    'Pasted images need a model that sees them: set "visionModel" to one on '
+                    "your gateway (a Qwen-VL, for example). If the gateway says otherwise, "
+                    'set "vision" in modelProfiles.',
+                )
 
     async def check_network(self, provider_name: str) -> bool:
         cfg = self.settings.providers[provider_name]

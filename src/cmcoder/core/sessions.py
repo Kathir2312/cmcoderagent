@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import Any
 
 from ..config.settings import config_dir
+from ..images import Image
 from ..providers.messages import Message, ToolCall
 
 INTERRUPTED_RESULT = "Interrupted: the session ended before this tool finished."
@@ -68,6 +69,7 @@ def message_from_dict(d: dict[str, Any]) -> Message:
         name=d.get("name"),
         reasoning=d.get("reasoning", ""),
         turn=d.get("turn"),
+        images=[Image(**i) for i in d.get("images") or []],
     )
 
 

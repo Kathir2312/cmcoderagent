@@ -232,6 +232,16 @@ export interface CodeContext {
   tokens: number;
 }
 
+/**
+ * The main model can't see images: the vision model (settings `visionModel`)
+ * described the user's images, and the descriptions went to it instead.
+ */
+export interface ImagesDescribed {
+  type: "images_described";
+  model: string;
+  count: number;
+}
+
 /** Code search's state for this project (VS Code's status bar). */
 export interface IndexStatus {
   type: "index_status";
@@ -352,6 +362,7 @@ export type AgentEvent =
   | Rewound
   | History
   | CodeContext
+  | ImagesDescribed
   | IndexStatus
   | IndexProgress
   | RagCandidatesList

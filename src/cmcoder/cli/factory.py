@@ -261,6 +261,7 @@ async def build_agent(settings: Settings, opts: AgentOptions) -> Agent:
             add_local_allow_rule(root, rule)
 
     summarizer = await build_summarizer(settings, provider)
+    vision = await build_vision(settings, provider, summarizer)
     session = SessionLog(root) if settings.persist_sessions else None
     if session is not None:
         try:
@@ -294,6 +295,7 @@ async def build_agent(settings: Settings, opts: AgentOptions) -> Agent:
         ask=opts.ask,
         on_rule_saved=save_rule,
         summarizer=summarizer,
+        vision=vision,
         on_context_window=lambda m, n: save_learned_window(provider.base_url, m, n, ERROR_SOURCE),
         auto_compact=settings.auto_compact,
         compact_threshold=settings.auto_compact_threshold,
@@ -462,6 +464,27 @@ async def resolve_subagent_model(
         raise SettingsError(f"provider {name!r} isn't the main or the small model's provider")
     profile = await resolve_model_profile(settings, provider, model)
     return ModelChoice(provider, model, profile)
+
+
+async def build_vision(
+    settings: Settings, main_provider: OpenAICompatProvider, summarizer: Summarizer | None
+) -> Summarizer | None:
+    """The model that describes images for a main model that can't see them
+    (settings `visionModel`); None when it isn't set or can't be resolved."""
+    if not settings.vision_model:
+        return None
+    try:
+        name, model = settings.resolve_model(settings.vision_model)
+    except SettingsError:
+        return None
+    if name == main_provider.name:
+        provider = main_provider
+    elif summarizer is not None and name == summarizer.provider.name:
+        provider = summarizer.provider
+    else:
+        provider = build_provider(settings, name)
+    profile = await resolve_model_profile(settings, provider, model)
+    return Summarizer(provider, model, profile)
 
 
 async def build_summarizer(

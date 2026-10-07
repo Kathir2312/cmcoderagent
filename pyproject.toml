@@ -16,6 +16,7 @@ dependencies = [
     "textual>=0.80",
     "mcp>=2.3,<3",
     "numpy>=1.26",
+    "pillow>=10",  # pasted images: made smaller, read from the clipboard
 ]
 
 [project.scripts]
@@ -27,7 +28,6 @@ dev = [
     "pytest-asyncio>=0.23",
     "ruff>=0.5",
     "pyright>=1.1.370",
-    "pillow>=10",
     "defusedxml>=0.7",  # packaging/brand.py reads the branding SVG
 ]
 

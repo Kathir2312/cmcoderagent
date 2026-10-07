@@ -243,6 +243,9 @@ class Settings(_Model):
     providers: dict[str, ProviderConfig] = Field(default_factory=dict)
     model: str | None = None
     small_fast_model: str | None = Field(None, alias="smallFastModel")
+    # A model that sees images ("provider:model"), for a main model that doesn't:
+    # it describes the user's images and the description goes to the main model.
+    vision_model: str | None = Field(None, alias="visionModel")
     # The model of the built-in `explore` subagent (default: smallFastModel).
     subagent_model: str | None = Field(None, alias="subagentModel")
     model_profiles: list[dict[str, Any]] = Field(default_factory=list, alias="modelProfiles")
@@ -480,6 +483,8 @@ def env_layer(environ: dict[str, str] | None = None) -> dict[str, Any]:
         layer["model"] = env["CMCODER_MODEL"]
     if env.get("CMCODER_SMALL_FAST_MODEL"):
         layer["smallFastModel"] = env["CMCODER_SMALL_FAST_MODEL"]
+    if env.get("CMCODER_VISION_MODEL"):
+        layer["visionModel"] = env["CMCODER_VISION_MODEL"]
     sandbox = env.get("CMCODER_SANDBOX", "").strip().lower()
     if sandbox in ("0", "false", "off", "no"):
         layer["sandbox"] = {"enabled": False}
@@ -761,7 +766,10 @@ def load_settings(
         settings = Settings.model_validate(merged)
     except ValueError as e:
         hint = ""
-        if any(f"providers.{k}" in str(e) for k in ("model", "smallFastModel", "permissions")):
+        if any(
+            f"providers.{k}" in str(e)
+            for k in ("model", "smallFastModel", "visionModel", "permissions")
+        ):
             hint = (
                 "\nhint: `model` and `smallFastModel` go at the top level of settings.json, "
                 'next to "providers", not inside it (see docs/settings.example.json).'

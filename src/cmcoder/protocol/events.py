@@ -254,6 +254,19 @@ class CodeContext(_Event):
         return f"Added code from the index: {where}{more} (≈{self.tokens:,} tokens)"
 
 
+class ImagesDescribed(_Event):
+    """The main model can't see images: the vision model (settings `visionModel`)
+    described the user's images, and the descriptions went to it instead."""
+
+    type: Literal["images_described"] = "images_described"
+    model: str  # the vision model
+    count: int
+
+    def summary(self) -> str:
+        what = "1 image" if self.count == 1 else f"{self.count} images"
+        return f"{self.model} described {what} for the main model (it can't see images)"
+
+
 class IndexStatus(_Event):
     """Code search's state for this project (VS Code's status bar)."""
 
@@ -393,6 +406,7 @@ Event = Annotated[
     | Rewound
     | History
     | CodeContext
+    | ImagesDescribed
     | IndexStatus
     | IndexProgress
     | RagCandidatesList

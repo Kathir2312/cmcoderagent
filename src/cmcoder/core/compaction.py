@@ -15,6 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from ..images import as_text
 from ..providers.messages import Message, StreamDone, Usage
 from ..providers.openai_compat import ContextTooLong
 from ..providers.profiles import ModelProfile
@@ -112,7 +113,8 @@ def render(m: Message) -> str:
     if is_summary(m):
         return "## Earlier summary\n" + m.content[len(SUMMARY_HEADER) :].strip()
     if m.role == "user":
-        return f"## User\n{m.content}"
+        images = "".join(f"\n{as_text(img, n)}" for n, img in enumerate(m.images, 1))
+        return f"## User\n{m.content}{images}"
     if m.role == "assistant":
         parts = ["## Assistant"]
         if m.content:

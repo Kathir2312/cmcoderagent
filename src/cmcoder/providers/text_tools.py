@@ -24,6 +24,7 @@ import re
 import uuid
 from typing import Any
 
+from .content import user_content
 from .messages import Message, ToolCall, ToolSpec
 
 OPEN, CLOSE = "<tool_call>", "</tool_call>"
@@ -123,7 +124,9 @@ def tools_prompt(tools: list[ToolSpec]) -> str:
     )
 
 
-def to_prompted_wire(messages: list[Message], tools: list[ToolSpec]) -> list[dict[str, Any]]:
+def to_prompted_wire(
+    messages: list[Message], tools: list[ToolSpec], vision: bool = False
+) -> list[dict[str, Any]]:
     """The conversation for a server that gets no `tools` parameter: tools in
     the system prompt, calls and results as text."""
     out: list[dict[str, Any]] = []
@@ -144,6 +147,8 @@ def to_prompted_wire(messages: list[Message], tools: list[ToolSpec]) -> list[dic
                 prev["content"] += "\n" + block  # several results: one user message
             else:
                 out.append({"role": "user", "content": block, "_tool_results": True})
+        elif m.role == "user":
+            out.append({"role": "user", "content": user_content(m, vision)})
         else:
             out.append({"role": m.role, "content": m.content})
     if not any(m["role"] == "system" for m in out):

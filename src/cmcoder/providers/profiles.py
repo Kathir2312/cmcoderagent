@@ -46,6 +46,10 @@ class ModelProfile(BaseModel):
     # options: num_ctx (Ollama silently drops what doesn't fit its window, so it
     # must match cmcoder's) and think (the thinking switch).
     backend: Literal["default", "ollama"] = "default"
+    # Whether the model can see images. Unset: what the gateway reports
+    # (LiteLLM's supports_vision, Open WebUI's vision capability), else a guess
+    # from the name (VISION_NAME). A setting wins: {"match": "...", "vision": true}.
+    vision: bool | None = None
     # Where context_window came from, shown by `cmcoder doctor` (not a setting).
     context_window_source: str = Field("built-in default", exclude=True)
 
@@ -78,6 +82,17 @@ BUILTIN_PROFILES: list[dict[str, Any]] = [
         "topP": 0.95,
     },
 ]
+
+# Names of models that see images: Qwen-VL / Qwen-Omni, LLaVA, Pixtral, Gemma 3,
+# Llama 4, InternVL, MiniCPM-V, and names that say "vision".
+VISION_NAME = re.compile(
+    r"(^|[^a-z])(vl|vision|llava|pixtral|omni|internvl|minicpm-?v|gemma-?3|llama-?4)([^a-z]|$)"
+)
+
+
+def looks_like_vision(model: str) -> bool:
+    return bool(VISION_NAME.search(model.lower()))
+
 
 _SIZE_RE = re.compile(r"(?<![\d.])(\d+(?:\.\d+)?)b(?![a-z])")
 
@@ -122,9 +137,11 @@ def resolve_profile(
         data = {k: v for k, v in p.items() if not k.startswith("_")}
         break
     user_window: int | None = None
+    user_set: set[str] = set()
     for o in overrides or []:
         if fnmatch.fnmatch(model.lower(), str(o.get("match", "*")).lower()):
             data.update(o)
+            user_set |= set(o)
             if o.get("contextWindow"):
                 user_window = int(o["contextWindow"])
     if server_info:
@@ -137,11 +154,15 @@ def resolve_profile(
             data["maxOutput"] = int(server_info["max_output_tokens"])
         if server_info.get("supports_function_calling") is False:
             data["toolCalling"] = "prompted"
+        if isinstance(server_info.get("supports_vision"), bool) and "vision" not in user_set:
+            data["vision"] = server_info["supports_vision"]
     if learned_window:
         data["contextWindow"], source = learned_window
     if user_window:
         data["contextWindow"], source = user_window, "settings (modelProfiles)"
     data.setdefault("match", model)
+    if data.get("vision") is None:
+        data["vision"] = looks_like_vision(model)
     profile = ModelProfile.model_validate(data)
     profile.context_window_source = source
     return profile

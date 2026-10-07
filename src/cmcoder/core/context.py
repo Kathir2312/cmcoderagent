@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 
+from ..images import TOKENS_PER_IMAGE
 from ..providers.messages import Message, ToolSpec
 
 DEFAULT_CHARS_PER_TOKEN = 3.0  # conservative for code
@@ -29,7 +30,9 @@ _MESSAGE_OVERHEAD_CHARS = 20
 
 def message_chars(m: Message) -> int:
     calls = sum(len(c.name) + len(c.arguments) + 40 for c in m.tool_calls)
-    return len(m.content) + calls + _MESSAGE_OVERHEAD_CHARS
+    # An image costs about TOKENS_PER_IMAGE (a description: its own length).
+    images = sum(len(i.description) or TOKENS_PER_IMAGE * 4 for i in m.images)
+    return len(m.content) + calls + images + _MESSAGE_OVERHEAD_CHARS
 
 
 class ContextBudget:

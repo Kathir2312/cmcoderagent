@@ -9,6 +9,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
+from ..images import Image
+
 Role = Literal["system", "user", "assistant", "tool"]
 
 
@@ -33,6 +35,8 @@ class Message:
     reasoning: str = ""
     # On user messages: the turn number in the session (for /rewind). Not sent.
     turn: int | None = None
+    # On user messages: images the user attached (see images.py).
+    images: list[Image] = field(default_factory=list)
 
     @classmethod
     def system(cls, content: str) -> Message:

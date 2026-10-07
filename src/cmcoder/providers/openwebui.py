@@ -81,6 +81,10 @@ class OpenWebUIProvider(OpenAICompatProvider):
             info = m.get("info")
             if isinstance(info, dict) and info.get("base_model_id"):
                 entry["base_model"] = str(info["base_model_id"])
+            meta = info.get("meta") if isinstance(info, dict) else None
+            caps = meta.get("capabilities") if isinstance(meta, dict) else None
+            if isinstance(caps, dict) and isinstance(caps.get("vision"), bool):
+                entry["supports_vision"] = caps["vision"]
             out[str(m["id"])] = entry
         return out
 

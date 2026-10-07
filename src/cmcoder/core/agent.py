@@ -16,6 +16,7 @@ from typing import Any, Protocol
 from pydantic import ValidationError
 
 from ..config.settings import RagAutoContextConfig
+from ..images import Image
 from ..mcp_client import McpManager, McpServer
 from ..protocol import events as ev
 from ..providers.messages import (
@@ -64,6 +65,7 @@ from .sessions import SessionLog
 from .steer import file_work_redirect
 from .subagents import ModelChoice, SubagentRun, SubagentRuntime, TaskDone, TaskTool
 from .titles import make_title
+from .vision import VisionError, describe
 
 TITLE_WAIT_ON_CLOSE = 2.0  # seconds a pending title may still take when closing
 # Automatic code context: not for messages shorter than this, and at most this
@@ -230,6 +232,7 @@ class Agent:
         ask: AskFn | None = None,
         on_rule_saved: Callable[[str], None] | None = None,
         summarizer: Summarizer | None = None,
+        vision: Summarizer | None = None,
         on_context_window: Callable[[str, int], None] | None = None,
         session: SessionLog | None = None,
         auto_compact: bool = True,
@@ -284,6 +287,8 @@ class Agent:
         self._redirected: str | None = None
         # The small/fast model for summaries; the main model is the fallback.
         self.summarizer = summarizer
+        # The model that describes images for a main model that can't see them.
+        self.vision = vision
         # MCP servers: started at the beginning of the first turn.
         self.mcp = mcp
         # Hooks (core/hooks.py); SessionStart runs with the first turn.
@@ -537,6 +542,8 @@ class Agent:
         providers = [self.provider]
         if self.summarizer is not None and self.summarizer.provider is not self.provider:
             providers.append(self.summarizer.provider)
+        if self.vision is not None and all(self.vision.provider is not p for p in providers):
+            providers.append(self.vision.provider)
         for p in providers:
             aclose = getattr(p, "aclose", None)
             if aclose is not None:
@@ -670,25 +677,62 @@ class Agent:
         return Expansion(name, substitute(command.body, arguments), command.allowed_tools), warnings
 
     async def run(
-        self, prompt: str, context: str | None = None, *, allow: list[str] | None = None
+        self,
+        prompt: str,
+        context: str | None = None,
+        *,
+        allow: list[str] | None = None,
+        images: list[Image] | None = None,
     ) -> AsyncIterator[ev.Event]:
         """Run one user turn. Yields protocol events, ending with a Result.
 
         `context` (e.g. the editor's open file and selection) goes into the
         user message ahead of the prompt; titles and history use the prompt.
-        `allow`: extra allow rules for this turn only (a command's allowed-tools)."""
+        `allow`: extra allow rules for this turn only (a command's allowed-tools).
+        `images`: what the user attached (images.prepare has checked them)."""
         self.policy.set_turn_allow(allow or [])
         telemetry = self.telemetry
         if telemetry is not None:
             telemetry.turn_started(self.session_id + ("/sub" if self.is_subagent else ""))
         try:
-            async for event in self._run(prompt, context):
+            async for event in self._run(prompt, context, images or []):
                 if telemetry is not None:
                     sid = self.session_id + ("/sub" if self.is_subagent else "")
                     telemetry.observe(event, self.model, sid)
                 yield event
         finally:
             self.policy.set_turn_allow([])
+
+    async def _describe_images(
+        self, message: Message, prompt: str
+    ) -> AsyncIterator[ev.ImagesDescribed | ev.Error]:
+        """The main model can't see images: the vision model describes them.
+        Yields ImagesDescribed, or an Error (and the turn doesn't start)."""
+        helper = self.vision
+        if helper is None:
+            yield ev.Error(
+                kind="images",
+                message=f'{self.model} can\'t see images. Set "visionModel" in your '
+                "settings to a model on your gateway that can (it describes images for "
+                f"{self.model}), or switch to such a model with /model.",
+            )
+            return
+        count = 0
+        for image in message.images:
+            if image.description:
+                continue
+            try:
+                image.description, _usage = await describe(helper, image, prompt)
+            except (ProviderError, VisionError) as e:
+                yield ev.Error(
+                    kind="images",
+                    message=f"The vision model {helper.model} couldn't describe the image: {e}",
+                )
+                return
+            image.described_by = helper.model
+            count += 1
+        if count:
+            yield ev.ImagesDescribed(model=helper.model, count=count)
 
     async def _auto_context(self, prompt: str) -> tuple[str, ev.CodeContext] | None:
         """The best matches from the code index for this message, within the
@@ -744,12 +788,34 @@ class Agent:
         )
         return text, event
 
-    async def _run(self, prompt: str, context: str | None) -> AsyncIterator[ev.Event]:
+    async def _run(
+        self, prompt: str, context: str | None, images: list[Image]
+    ) -> AsyncIterator[ev.Event]:
         started = time.monotonic()
         self.turn += 1
         user_message = Message.user(f"{context}\n\n{prompt}" if context else prompt)
         user_message.turn = self.turn
+        user_message.images = list(images)
         self.messages.append(user_message)
+        if images and not self.profile.vision:
+            problem = None
+            async for event in self._describe_images(user_message, prompt):
+                if isinstance(event, ev.Error):
+                    problem = event.message
+                yield event
+            if problem is not None:
+                self.messages.pop()
+                self.turn -= 1
+                yield ev.Result(
+                    subtype="error",
+                    is_error=True,
+                    result=problem,
+                    num_turns=0,
+                    duration_ms=int((time.monotonic() - started) * 1000),
+                    usage={},
+                    session_id=self.session_id,
+                )
+                return
         turn_start = len(self.messages) - 1  # what this turn did, for the critic
         for message in self.startup_warnings:
             yield ev.Warning(message=message)
