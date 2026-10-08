@@ -10,6 +10,7 @@ from typing import Any
 
 import pytest
 
+from cmcoder.compat import find_shell
 from cmcoder.core.agent import PermissionAnswer, PermissionRequest
 from cmcoder.core.permissions import (
     Decision,
@@ -307,7 +308,7 @@ def test_the_organisation_can_turn_auto_off() -> None:
 
 
 async def test_paths_are_checked_from_where_the_shell_is(code: Path, ctx: ToolContext) -> None:
-    shell = PersistentShell(code, "bash")
+    shell = PersistentShell(code, find_shell() or "bash")  # Git Bash on Windows, as cmcoder uses
     ctx.shell = shell
     try:
         await shell.run("cd src", 10)
