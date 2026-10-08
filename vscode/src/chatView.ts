@@ -55,10 +55,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     const enabled = vscode.workspace.getConfiguration("cmcoder").get<boolean>("autoContext", true);
     const context = includeContext && enabled ? editorContext(currentEditor()) : null;
     const attached = images.map((i) => ({ data: i.data, media_type: i.mediaType, name: i.name || null }));
+    const kb = Math.round(images.reduce((n, i) => n + i.data.length, 0) * 0.75 / 1024);
+    const what = `${text.length} characters${images.length ? `, ${images.length} image(s), ${kb} KB` : ""}`;
     if (this.agent?.send({ type: "user_message", text, context, images: attached })) {
+      this.log.appendLine(`Message sent to ${productName()}: ${what}`);
       this.navigator.startTurn(text || `(${images.length} image${images.length > 1 ? "s" : ""})`);
       return true;
     }
+    this.log.appendLine(`Message not sent (${what}): ${productName()} isn't running`);
     this.setState("exited", `${productName()} isn't running. Click Restart.`);
     return false;
   }
@@ -208,6 +212,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         this.log.appendLine(`The vision model ${event.model} described ${event.count} image(s).`);
         break;
       case "result":
+        this.log.appendLine(`Turn ended: ${event.subtype} after ${(event.duration_ms / 1000).toFixed(1)} s`);
         await this.clearReviews(); // an interrupted turn leaves no open requests
         break;
       case "rewind_points":

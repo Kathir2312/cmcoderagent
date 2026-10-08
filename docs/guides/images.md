@@ -79,7 +79,12 @@ way round), say so in `modelProfiles`:
      `/image C:\Users\me\Pictures\shot.png`.
 3. **IDE chat: is it cmcoder's chat?** VS Code has its own Chat view too
    (Copilot): open cmcoder's from the cmcoder icon in the activity bar. The
-   image shows as a thumbnail above the input before you send.
+   image shows as a thumbnail above the input before you send. If a message
+   can't go, the line above the input says why ("Not sent: …") and your text
+   and image stay. In VS Code, **cmcoder: Show Log** has a line for every
+   message that went ("Message sent to cmcoder: 21 characters, 1 image(s),
+   350 KB") and for every answer that ended ("Turn ended: success after
+   12.3 s"): no "Message sent" line means the message never left the chat.
 4. **The message went but nothing came back.** Errors show in the chat (✗).
    In VS Code, **cmcoder: Show Log** also has them (`Error (images): …`), with
    cmcoder's version at the start.

@@ -39,7 +39,7 @@ async function connected(page: Page, flavour: Flavour): Promise<void> {
   await page.waitForFunction(() => (window as unknown as { sent: unknown[] }).sent.length > 0);
 }
 
-async function panel(flavour: Flavour, product?: string): Promise<{ page: Page; send: (m: ToWebview) => Promise<void>; ev: (e: AgentEvent) => Promise<void>; sent: () => Promise<FromWebview[]> }> {
+async function panel(flavour: Flavour, product?: string, started = true): Promise<{ page: Page; send: (m: ToWebview) => Promise<void>; ev: (e: AgentEvent) => Promise<void>; sent: () => Promise<FromWebview[]> }> {
   const page = await browser.newPage();
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
@@ -70,6 +70,7 @@ async function panel(flavour: Flavour, product?: string): Promise<{ page: Page; 
   const ev = (event: AgentEvent) => send({ kind: "event", event });
   const sent = () => page.evaluate(() => (window as unknown as { sent: FromWebview[] }).sent);
   page.on("close", () => assert.deepEqual(errors, []));
+  if (!started) return { page, send, ev, sent };
   await send({ kind: "state", state: "ready" });
   await ev({
     type: "system_init",
@@ -544,7 +545,8 @@ test("an older cmcoder that can't take images: the panel says so and keeps them"
   const before = (await sent()).length;
   await page.press("textarea", "Enter");
   assert.equal((await sent()).length, before, "not sent: it would ignore the image");
-  assert.match((await page.textContent(".note.error")) ?? "", /too old for images: update it/);
+  assert.match((await page.textContent(".note.error")) ?? "", /too old for images\. Update it/);
+  assert.match((await page.textContent(".status")) ?? "", /Not sent: this cmcoder program is too old for images/);
   assert.equal(await page.locator("footer .images .thumb").count(), 1, "the image is kept");
   assert.equal(await page.inputValue("textarea"), "what's this?", "and the text");
   assert.equal(await page.isVisible(".stop"), false, "not busy");
@@ -552,6 +554,43 @@ test("an older cmcoder that can't take images: the panel says so and keeps them"
   await page.click("footer .images .item .remove");
   await page.press("textarea", "Enter");
   assert.deepEqual((await sent()).at(-1), { kind: "send", text: "what's this?", includeContext: false });
+  await page.close();
+});
+
+test("Send never does nothing silently: it says why the message didn't go", async () => {
+  const { page, send, ev, sent } = await panel("vscode", undefined, false);
+  await send({ kind: "state", state: "starting" });
+  await transfer(page, "paste", [{ name: "shot.png", type: "image/png", b64: PNG }]);
+  await page.waitForSelector("footer .images .thumb");
+  await page.fill("textarea", "what the screen shows");
+  await page.press("textarea", "Enter");
+  assert.match((await page.textContent(".status")) ?? "", /Not sent yet: cmcoder is still starting/);
+  assert.equal(await page.inputValue("textarea"), "what the screen shows", "the text stays");
+  assert.equal(await page.locator("footer .images .thumb").count(), 1, "and the image");
+  await send({ kind: "state", state: "exited", message: "cmcoder stopped." });
+  await page.click(".send");
+  assert.match((await page.textContent(".status")) ?? "", /Not sent: cmcoder isn't running\. Click Restart/);
+  assert.equal((await sent()).filter((m) => m.kind === "send").length, 0);
+  // Started: it goes, and the status line clears.
+  await send({ kind: "state", state: "ready" });
+  await ev({ type: "system_init", protocol_version: 1, session_id: "s", cwd: "/p", model: "m", provider: "corp", tools: [], permission_mode: "default", critique: false, version: "0.1.0", features: ["images"] });
+  await page.press("textarea", "Enter");
+  assert.equal((await sent()).filter((m) => m.kind === "send").length, 1);
+  assert.equal(await page.isVisible(".status"), false);
+  await page.close();
+});
+
+test("a page that reloaded after cmcoder started still sends images", async () => {
+  // The host says "ready" again, but this page never saw system_init.
+  const { page, send, sent } = await panel("vscode", undefined, false);
+  await send({ kind: "state", state: "ready" });
+  await transfer(page, "paste", [{ name: "shot.png", type: "image/png", b64: PNG }]);
+  await page.waitForSelector("footer .images .thumb");
+  await page.fill("textarea", "what the screen shows");
+  await page.press("textarea", "Enter");
+  const last = (await sent()).at(-1) as { kind: string; images?: unknown[] };
+  assert.equal(last.kind, "send");
+  assert.equal(last.images?.length, 1);
   await page.close();
 });
 

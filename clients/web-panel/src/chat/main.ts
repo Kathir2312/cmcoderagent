@@ -14,7 +14,7 @@ import type {
   ToolUse,
 } from "../protocol";
 import { bridge, fromHost, hostSettings } from "../bridge";
-import type { FromWebview, ImageAttachment, ToWebview } from "../messages";
+import type { AgentState, FromWebview, ImageAttachment, ToWebview } from "../messages";
 
 const host = bridge<FromWebview>();
 const post = (m: FromWebview) => host.post(m);
@@ -152,10 +152,13 @@ for (const mode of MODES) modeSelect.append(new Option(mode, mode));
 let busy = false;
 let rewound: string | undefined; // the note to show once the rewound history is drawn
 let ready = false;
+let agentState: AgentState = "starting";
 let reply: { el: HTMLElement; text: string } | undefined; // the streaming reply
 let renderQueued = false;
 const toolCards = new Map<string, HTMLElement>();
-let features: string[] = []; // what this cmcoder can do, from system_init
+// What this cmcoder can do, from its system_init; unknown until one arrives
+// (the page may have reloaded after it: then nothing is refused).
+let features: string[] | undefined;
 const permissionCards = new Map<string, HTMLElement>();
 // Tool calls the user denied here: their card already says so.
 const deniedHere = new Set<string>();
@@ -847,11 +850,23 @@ function renderTodos(todos: Record<string, unknown>[]): void {
 
 function send(): void {
   const text = input.value.trim();
-  if ((!text && !pendingImages.length) || !ready) return;
-  if (pendingImages.length && !features.includes("images")) {
-    note(`✗ This ${PRODUCT} program is too old for images: update it, or remove the images to send the text.`, "error");
+  if (!text && !pendingImages.length) return;
+  // Never ignore Send silently: say why it didn't go (the text and images stay).
+  if (!ready) {
+    showStatus(
+      agentState === "exited"
+        ? `Not sent: ${PRODUCT} isn't running. Click Restart in the chat.`
+        : `Not sent yet: ${PRODUCT} is still starting. Press Enter again in a moment.`,
+    );
     return;
   }
+  if (pendingImages.length && features && !features.includes("images")) {
+    const why = `Not sent: this ${PRODUCT} program is too old for images. Update it, or remove the images to send the text.`;
+    showStatus(why);
+    note(`✗ ${why}`, "error");
+    return;
+  }
+  showStatus();
   const images = pendingImages;
   pendingImages = [];
   renderImages();
@@ -999,6 +1014,7 @@ window.addEventListener("message", (e: MessageEvent<ToWebview>) => {
       break;
     case "state":
       ready = m.state === "ready";
+      agentState = m.state;
       if (m.state !== "ready") critiqueBox.disabled = true; // until the next system_init
       if (m.state === "starting") showStatus(`Starting ${PRODUCT}…`);
       else if (m.state === "ready") showStatus();
