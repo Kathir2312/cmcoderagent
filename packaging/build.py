@@ -24,13 +24,15 @@ import brand  # noqa: E402
 
 
 def build_id() -> str:
-    """"<commit> <UTC date>", e.g. "aa3dc83 2026-10-07" ("+changes" if the tree isn't clean)."""
+    """The commit and UTC date, e.g. "aa3dc83 2026-10-07" ("+changes" if the tree isn't clean)."""
     import datetime
     import subprocess
 
     def git(*args: str) -> str:
         try:
-            out = subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True, check=True)
+            out = subprocess.run(
+                ["git", *args], cwd=ROOT, capture_output=True, text=True, check=True
+            )
         except (OSError, subprocess.CalledProcessError):
             return ""
         return out.stdout.strip()
