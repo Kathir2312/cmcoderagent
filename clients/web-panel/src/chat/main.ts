@@ -33,6 +33,7 @@ function panelError(message: string): void {
   box.textContent = `✗ The chat panel failed: ${message}\nReload the window to start it again; ${product}'s log has this too.`;
   (document.querySelector(".log") ?? document.body).append(box);
 }
+let warnedForeign = false;
 window.addEventListener("error", (e) => panelError(`${e.message} (${(e.filename || "").split("/").pop()}:${e.lineno})`));
 window.addEventListener("unhandledrejection", (e) => panelError(String(e.reason)));
 
@@ -1039,7 +1040,14 @@ document.addEventListener("click", (e) => {
 // --- messages from the extension ----------------------------------------------
 
 window.addEventListener("message", (e: MessageEvent<ToWebview>) => {
-  if (!fromHost(e)) return;
+  if (!fromHost(e)) {
+    // Say so, once, if it looked like the IDE's: a chat that hears nothing looks stuck.
+    if (!warnedForeign && typeof e.data?.kind === "string") {
+      warnedForeign = true;
+      panelError(`ignored a message from a window that isn't the IDE (origin ${e.origin || "unknown"})`);
+    }
+    return;
+  }
   const m = e.data;
   switch (m.kind) {
     case "event":

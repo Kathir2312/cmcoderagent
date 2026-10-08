@@ -59,12 +59,19 @@ export function bridge<Out>(): Bridge<Out> {
 
 /**
  * Whether a "message" event comes from the IDE: Eclipse, NetBeans and Visual
- * Studio post from inside the page (window.postMessage), VS Code from the
- * webview's frame around it (window.parent). Any other window (a frame, a
- * pop-up) is ignored.
+ * Studio post from inside the page (window.postMessage), VS Code from one of
+ * the frames it wraps the page in (how deep depends on its version), or as an
+ * event without a sending window. A frame inside the page, or any other
+ * window, is ignored.
  */
 export function fromHost(e: MessageEvent): boolean {
-  return e.source === window || e.source === window.parent;
+  const from = e.source;
+  if (from === null || from === window) return true;
+  for (let w: Window = window; w.parent !== w; ) {
+    w = w.parent;
+    if (from === w) return true;
+  }
+  return false;
 }
 
 /** Values the IDE puts on <body> for the panel: data-product, data-icon. */

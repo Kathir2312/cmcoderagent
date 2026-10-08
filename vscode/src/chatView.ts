@@ -332,6 +332,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         break; // VS Code's webview gives the page clipboard images itself
       case "panelError":
         this.log.appendLine(`Chat panel error: ${m.message}`);
+        console.error(`${productName()} chat panel error: ${m.message}`); // also in test runs' output
         break;
       case "panelState":
         this.log.appendLine(`Chat panel: ${productName()} ${m.state === "ready" ? "ready, messages can be sent" : m.state}`);

@@ -100,8 +100,42 @@ test("messages are taken only from the page itself or its host frame, never from
   });
   await p.waitForTimeout(300);
   assert.equal(await p.evaluate(() => document.body.innerText.includes("FROM-A-FRAME")), false);
+  // ... and said so, to the IDE's log and in the chat (a chat that hears nothing looks stuck).
+  assert.match(JSON.stringify(await sent(p)), /panelError.*ignored a message from a window that isn't the IDE/);
   // The IDE's own way (Eclipse, NetBeans, Visual Studio): taken.
   await p.evaluate(() => window.postMessage({ kind: "state", state: "stopped", message: "FROM-THE-IDE" }, "*"));
   await p.waitForFunction(() => document.body.innerText.includes("FROM-THE-IDE"));
+  await p.close();
+});
+
+test("VS Code: messages from the frames it wraps the page in, however deep, are taken", async () => {
+  // VS Code puts the webview's page in frames of its own; the one that posts the
+  // extension's messages isn't always the page's direct parent.
+  const p = await browser.newPage();
+  const chat = readFileSync(join(root, "dist", "chat.js"), "utf8");
+  await p.setContent(`<!DOCTYPE html><html><body><iframe id="outer"></iframe></body></html>`);
+  await p.evaluate((chat) => {
+    const outer = (document.getElementById("outer") as HTMLIFrameElement).contentDocument!;
+    outer.body.innerHTML = '<iframe id="inner"></iframe>';
+    const inner = (outer.getElementById("inner") as HTMLIFrameElement).contentWindow!;
+    const w = inner as unknown as Window & { sent: unknown[]; acquireVsCodeApi: () => unknown };
+    w.sent = [];
+    w.acquireVsCodeApi = () => ({ postMessage: (m: unknown) => w.sent.push(m) });
+    inner.document.body.innerHTML = '<div id="app"></div>';
+    const script = inner.document.createElement("script");
+    script.textContent = chat;
+    inner.document.body.append(script);
+    // The top window (two frames up) posts, as VS Code's frames do.
+    window.postMessage; // (the page itself)
+    (window as unknown as { inner: Window }).inner = inner;
+  }, chat);
+  await p.evaluate(() => {
+    const inner = (window as unknown as { inner: Window }).inner;
+    inner.postMessage({ kind: "state", state: "exited", message: "FROM-VS-CODE" }, "*");
+  });
+  await p.waitForFunction(() => {
+    const inner = (window as unknown as { inner: Window & { sent: { kind: string }[] } }).inner;
+    return inner.document.body.innerText.includes("FROM-VS-CODE") && inner.sent.some((m) => m.kind === "panelState");
+  });
   await p.close();
 });
