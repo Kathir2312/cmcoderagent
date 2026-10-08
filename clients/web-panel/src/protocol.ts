@@ -69,6 +69,8 @@ export interface SystemInit {
   tools: string[];
   permission_mode: string;
   critique: boolean;
+  version: string;
+  features: string[];
 }
 
 export interface AssistantDelta {

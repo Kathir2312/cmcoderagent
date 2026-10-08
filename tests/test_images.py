@@ -13,6 +13,7 @@ from typing import Any
 import pytest
 from PIL import Image as Pil
 
+from cmcoder.config.settings import Settings
 from cmcoder.core.agent import Agent
 from cmcoder.core.compaction import Summarizer, render
 from cmcoder.core.context import message_chars
@@ -34,6 +35,8 @@ from cmcoder.providers.openai_compat import to_wire_messages
 from cmcoder.providers.profiles import ModelProfile, looks_like_vision, resolve_profile
 from cmcoder.providers.text_tools import to_prompted_wire
 from cmcoder.tools.base import ToolContext
+
+from .conftest import API_KEY, make_provider
 
 
 def png(width: int = 40, height: int = 20, mode: str = "RGB") -> bytes:
@@ -272,3 +275,65 @@ async def test_without_a_vision_model_the_turn_says_why_and_doesnt_start(tmp_pat
     assert isinstance(events[-1], ev.Result) and events[-1].is_error
     assert not main.calls
     assert len(a.messages) == 1 and a.turn == 0  # the message wasn't kept
+
+
+# --- cmcoder doctor: does the model see images? --------------------------------------------
+
+
+async def doctor_images(server: Any, model: str, **extra: Any) -> str:
+    from rich.console import Console
+
+    from cmcoder.cli.doctor import Doctor
+
+    settings = Settings.model_validate(
+        {"providers": {"mock": {"baseUrl": server.base_url}}, "model": f"mock:{model}", **extra}
+    )
+    console = Console(record=True, width=300)
+    doctor = Doctor(settings, console)
+    provider = make_provider(server)
+    try:
+        await doctor.check_images(provider, model)
+    finally:
+        await provider.aclose()
+    await doctor.check_vision_model()
+    return console.export_text()
+
+
+def image_requests(server: Any) -> list[dict[str, Any]]:
+    return [
+        r for r in server.requests if isinstance(r.get("messages", [{}])[-1].get("content"), list)
+    ]
+
+
+async def test_doctor_finds_a_model_that_sees_images_unknown_to_cmcoder(mock_server: Any) -> None:
+    server = mock_server([{"content": "Green."}])
+    out = await doctor_images(server, "qwen3-27b")
+    assert "qwen3-27b: sees images, but cmcoder doesn't know it" in out
+    assert 'Add {"match": "qwen3-27b", "vision": true} to modelProfiles' in out
+    content = image_requests(server)[0]["messages"][-1]["content"]
+    assert content[-1]["image_url"]["url"].startswith("data:image/png;base64,")
+
+
+async def test_doctor_a_model_that_sees_images(mock_server: Any) -> None:
+    out = await doctor_images(mock_server([{"content": "green"}]), "qwen2.5-vl-7b")
+    assert "qwen2.5-vl-7b: sees images" in out and "doesn't know" not in out
+
+
+async def test_doctor_a_text_only_model_without_a_vision_model(mock_server: Any) -> None:
+    out = await doctor_images(mock_server([{"content": "I can't see images."}]), "qwen3-27b")
+    assert "qwen3-27b: can't see images, and no visionModel is set" in out
+    assert 'It said: "I can\'t see images."' in out
+
+
+async def test_doctor_checks_the_vision_model_too(
+    mock_server: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("CMCODER_API_KEY", API_KEY)
+    server = mock_server([{"content": "Text only here."}, {"content": "Blue."}])
+    out = await doctor_images(server, "qwen3-27b", visionModel="mock:qwen2.5-vl-7b")
+    assert "qwen3-27b: can't see images; mock:qwen2.5-vl-7b describes them for it" in out
+    assert "visionModel qwen2.5-vl-7b: didn't see the test image" in out  # it said blue
+    assert "It said: 'Blue.'" in out
+    server = mock_server([{"content": "Nothing."}, {"content": "It is green."}])
+    out = await doctor_images(server, "qwen3-27b", visionModel="mock:qwen2.5-vl-7b")
+    assert "visionModel qwen2.5-vl-7b: sees images" in out

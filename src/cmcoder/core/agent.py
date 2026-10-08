@@ -15,6 +15,7 @@ from typing import Any, Protocol
 
 from pydantic import ValidationError
 
+from .. import VERSION_TEXT
 from ..config.settings import RagAutoContextConfig
 from ..images import Image
 from ..mcp_client import McpManager, McpServer
@@ -213,6 +214,10 @@ def format_validation_error(e: ValidationError) -> str:
     return "; ".join(parts)
 
 
+# What this cmcoder can do beyond the base protocol (system_init.features).
+FEATURES = ("images",)
+
+
 class Agent:
     def __init__(
         self,
@@ -337,6 +342,8 @@ class Agent:
             tools=list(self.tools),
             permission_mode=self.policy.mode,
             critique=self.critique,
+            version=VERSION_TEXT,
+            features=list(FEATURES),
         )
 
     def _new_checkpoints(self) -> Checkpoints:

@@ -29,6 +29,11 @@ class SystemInit(_Event):
     tools: list[str]
     permission_mode: str
     critique: bool = False  # the critic reviews answers (see critique_changed)
+    # Which cmcoder this is ("0.1.0 (aa3dc83 2026-10-07)"), for the IDE's log.
+    version: str = ""
+    # What it can do beyond the base protocol: "images" (user_message images).
+    # An older cmcoder sends none, and front ends then don't send images to it.
+    features: list[str] = Field(default_factory=list)
 
 
 class AssistantDelta(_Event):

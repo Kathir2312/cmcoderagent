@@ -10,6 +10,7 @@ from __future__ import annotations
 import io
 import os
 import re
+import sys
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
@@ -17,6 +18,35 @@ from ..images import MAX_IMAGES, MAX_INPUT_BYTES, Image, ImageError, prepare
 
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
 PLACEHOLDER = re.compile(r"\[Image #(\d+)\]")
+# A message about an image ("analyse the image") with none attached: the paste
+# didn't work (Windows Terminal and VS Code keep Ctrl+V; a text-only clipboard).
+MENTION = re.compile(
+    r"\b(?:the|this|that|these|attached|pasted|my)\s+(?:image|screenshot|screen shot|picture"
+    r"|snapshot|photo)s?\b|\b(?:image|screenshot)s?\s+(?:attached|above|below)\b",
+    re.IGNORECASE,
+)
+NO_IMAGE_ATTACHED = (
+    "No image is attached to this message. Press Alt+V to paste the clipboard's image "
+    "(Ctrl+V pastes only text in Windows Terminal and VS Code), drop the image file "
+    "here, or type /image. Press Enter again to send the message as it is."
+)
+
+
+def only_placeholders(text: str) -> bool:
+    """`/image [Image #1]`: the file was dropped after typing /image, so it's attached."""
+    return bool(PLACEHOLDER.search(text)) and not PLACEHOLDER.sub("", text).strip()
+
+
+def mentions_image(text: str) -> bool:
+    return bool(MENTION.search(PLACEHOLDER.sub("", text)))
+
+
+def no_clipboard_image() -> str:
+    """What to do when the clipboard has no image."""
+    how = {"nt": " (Win+Shift+S copies a screenshot)"}.get(os.name, "")
+    if sys.platform.startswith("linux"):
+        how = " (on Linux, reading it needs wl-paste or xclip)"
+    return f"No image in the clipboard{how}. Copy one, or attach a file: /image path/to/shot.png"
 
 
 def clipboard_image() -> bytes | None:
@@ -66,6 +96,20 @@ def image_path(text: str) -> Path | None:
     except OSError:
         return None
     return path
+
+
+def read_image(arg: str) -> tuple[bytes, str]:
+    """/image [path]: the clipboard's image, or an image file; ImageError if there isn't one."""
+    if not arg:
+        raw = clipboard_image()
+        if raw is None:
+            raise ImageError(no_clipboard_image())
+        return raw, ""
+    path = image_path(arg)
+    if path is None:
+        limit = MAX_INPUT_BYTES // (1024 * 1024)
+        raise ImageError(f"Not an image file (PNG, JPEG, GIF or WebP, up to {limit} MB): {arg}")
+    return path.read_bytes(), path.name
 
 
 class PendingImages:

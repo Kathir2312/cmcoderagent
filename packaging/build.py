@@ -23,6 +23,24 @@ sys.path.insert(0, str(ROOT / "packaging"))
 import brand  # noqa: E402
 
 
+def build_id() -> str:
+    """"<commit> <UTC date>", e.g. "aa3dc83 2026-10-07" ("+changes" if the tree isn't clean)."""
+    import datetime
+    import subprocess
+
+    def git(*args: str) -> str:
+        try:
+            out = subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True, check=True)
+        except (OSError, subprocess.CalledProcessError):
+            return ""
+        return out.stdout.strip()
+
+    commit = git("rev-parse", "--short=7", "HEAD") or "unknown"
+    if git("status", "--porcelain", "--untracked-files=no"):
+        commit += "+changes"
+    return f"{commit} {datetime.datetime.now(datetime.UTC):%Y-%m-%d}"
+
+
 def main() -> None:
     try:
         import PyInstaller.__main__
@@ -39,6 +57,11 @@ def main() -> None:
     data = [brand.BRANDING / n for n in ("brand.json", "logo.txt", "icon.png")]
     data.append(generated / "cmcoder.ico")
     add_data = [f"--add-data={p}{os.pathsep}cmcoder/_brand" for p in data if p.is_file()]
+    # Which build this is, for `cmcoder version`, the banner and the IDEs' logs.
+    build_file = ROOT / "build" / "BUILD"
+    build_file.parent.mkdir(exist_ok=True)
+    build_file.write_text(build_id(), encoding="utf-8")
+    add_data.append(f"--add-data={build_file}{os.pathsep}cmcoder")
     windows = []
     if sys.platform == "win32":
         windows = [

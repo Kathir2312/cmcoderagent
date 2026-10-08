@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import os
 import platform
 import socket
@@ -15,6 +16,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+from PIL import Image as PilImage
 from rich.console import Console
 from rich.text import Text
 
@@ -29,6 +31,7 @@ from ..config.settings import (
     managed_settings_path,
 )
 from ..core.hooks import HookRunner
+from ..images import prepare
 from ..mcp_client import McpManager
 from ..providers.auth import ApiKeyAuth
 from ..providers.messages import Message, StreamDone, TextDelta, ToolSpec
@@ -336,11 +339,81 @@ class Doctor:
                     INFO, "Server does not expose /model/info; using built-in model profiles"
                 )
             if probe:
+                small = self._small_fast_model()
                 for m in models:
                     if m in available:
                         await self.probe_model(provider, m, info.get(m))
+                        if (provider_name, m) != small:  # images never go to that one
+                            await self.check_images(provider, m)
         finally:
             await provider.aclose()
+
+    def _small_fast_model(self) -> tuple[str, str] | None:
+        s = self.settings
+        if not s.small_fast_model or s.small_fast_model == s.model:
+            return None
+        try:
+            return s.resolve_model(s.small_fast_model)
+        except Exception:
+            return None
+
+    async def check_images(self, provider: OpenAICompatProvider, model: str) -> None:
+        """Shows the model a test image: does it see images, and does cmcoder know?"""
+        profile = await resolve_model_profile(self.settings, provider, model, probe=False)
+        sees, said = await sees_images(provider, model, profile)
+        helper = self.settings.vision_model
+        rule = f'{{"match": "{model}", "vision": {"true" if sees else "false"}}}'
+        if sees and profile.vision:
+            self.report(OK, f"{model}: sees images", f"it named the test image's colour: {said}")
+        elif sees:
+            instead = f" instead of being described by {helper}" if helper else ""
+            self.report(
+                WARN,
+                f"{model}: sees images, but cmcoder doesn't know it",
+                f"Add {rule} to modelProfiles in your settings, so pasted images go "
+                f"straight to it{instead}.",
+            )
+        elif profile.vision:
+            self.report(
+                WARN,
+                f"{model}: didn't see the test image, but cmcoder sends it images",
+                f'It said: {said}\nAdd {rule} to modelProfiles, and set "visionModel" to a '
+                "model that sees images.",
+            )
+        elif helper:
+            self.report(OK, f"{model}: can't see images; {helper} describes them for it")
+        else:
+            self.report(
+                INFO,
+                f"{model}: can't see images, and no visionModel is set",
+                f"It said: {said}\nPasted images need a model that sees them: set "
+                '"visionModel" to one on your gateway (a Qwen-VL, for example).',
+            )
+
+    async def check_vision_model(self) -> None:
+        """visionModel: is it there, and does it see images?"""
+        ref = self.settings.vision_model
+        if not ref:
+            return
+        try:
+            provider_name, model = self.settings.resolve_model(ref)
+            provider = build_provider(self.settings, provider_name)
+        except Exception as e:
+            self.report(FAIL, f"visionModel {ref}: {e}")
+            return
+        try:
+            profile = await resolve_model_profile(self.settings, provider, model, probe=False)
+            sees, said = await sees_images(provider, model, profile)
+        finally:
+            await provider.aclose()
+        if sees:
+            self.report(OK, f"visionModel {model}: sees images", f"it said: {said}")
+        else:
+            self.report(
+                FAIL,
+                f"visionModel {model}: didn't see the test image",
+                f"It said: {said}\nChoose a model that sees images (a Qwen-VL, for example).",
+            )
 
     async def check_context_window(
         self, provider: OpenAICompatProvider, model: str
@@ -727,6 +800,8 @@ class Doctor:
         for provider_name, models in by_provider.items():
             if await self.check_network(provider_name):
                 await self.check_api(provider_name, models, probe)
+        if probe:
+            await self.check_vision_model()
         await self.check_mcp(probe)
         self.check_hooks()
         self.check_sandbox()
@@ -743,6 +818,36 @@ class Doctor:
             return 1
         self.console.print("[bold green]All checks passed.[/bold green]")
         return 0
+
+
+# The image check: a plain square of one colour, which a model that sees images names.
+TEST_COLOUR = ("green", (0, 170, 0))
+
+
+async def sees_images(
+    provider: OpenAICompatProvider, model: str, profile: ModelProfile
+) -> tuple[bool, str]:
+    """Whether `model` named the test image's colour, and what it said (or the error)."""
+    raw = io.BytesIO()
+    PilImage.new("RGB", (64, 64), TEST_COLOUR[1]).save(raw, "PNG")
+    message = Message.user("What colour is this image? Answer with one word.")
+    message.images = [prepare(raw.getvalue(), "test.png")]
+    done: StreamDone | None = None
+    try:
+        async for sev in provider.stream_chat(
+            model,
+            [message],
+            [],
+            profile.model_copy(update={"vision": True}),
+            thinking=False,
+            max_tokens=1024,
+        ):
+            if isinstance(sev, StreamDone):
+                done = sev
+    except ProviderError as e:
+        return False, f"(the request failed: {e})"
+    said = " ".join((done.message.content if done else "").split())[:200]
+    return TEST_COLOUR[0] in said.lower(), repr(said)
 
 
 def _name(parts: Any) -> str:

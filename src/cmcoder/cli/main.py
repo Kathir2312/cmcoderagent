@@ -13,7 +13,7 @@ import typer
 from rich.console import Console
 from rich.markup import escape
 
-from .. import __version__
+from .. import VERSION_TEXT
 from ..compat import stdin_has_data, use_utf8_stdio
 from ..config.settings import (
     Settings,
@@ -198,7 +198,7 @@ def main(
     from .factory import AgentOptions
 
     if version:
-        console.print(__version__)
+        console.print(VERSION_TEXT)
         raise typer.Exit()
     if permission_mode and permission_mode not in MODES:
         err_console.print(f"[red]error:[/red] --permission-mode must be one of {', '.join(MODES)}")
@@ -498,7 +498,7 @@ def terminal_profile(
 
 @sub_app.command(help="Print the version.")
 def version() -> None:
-    console.print(__version__)
+    console.print(VERSION_TEXT)
 
 
 from .mcp_cmd import mcp_app  # noqa: E402

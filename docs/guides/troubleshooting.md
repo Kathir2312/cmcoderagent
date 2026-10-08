@@ -34,6 +34,9 @@ needs Python, and cmcoder never tries to install it. If something asks for
 | Model not found | `cmcoder models` lists the gateway's names; fix `model` in your settings |
 | "… can't see images. Set "visionModel" …" | your model is text only: set `visionModel` to a model that reads images ([images.md](images.md)) |
 | Alt+V: "no image in the clipboard" (Linux terminal) | install `wl-clipboard` (Wayland) or `xclip` (X11) |
+| Terminal: the model says it sees no image | no `[Image #1]` in your prompt means nothing was attached: in Windows Terminal and VS Code's terminal Ctrl+V pastes only text, so press **Alt+V** or type `/image` ([images.md](images.md#when-an-image-doesnt-get-through)) |
+| Chat: "too old for images" | the chat's cmcoder is older than the chat: install the current extension, and empty a **cmcoder program** / `cmcoder.executable` setting |
+| Which cmcoder am I running? | `cmcoder --version` shows the version and the build (commit and date); in a chat, hover over the model name |
 | Eclipse: the chat is blank (Windows) | install the Microsoft Edge WebView2 Runtime |
 | Eclipse: the chat is blank (Linux) | install WebKitGTK: `sudo apt install libwebkit2gtk-4.1-0` (or your distribution's package) |
 | Eclipse: plugin won't install | Eclipse older than 2024-06, or not on Java 21 |
@@ -46,7 +49,7 @@ needs Python, and cmcoder never tries to install it. If something asks for
 
 | Where | How |
 |---|---|
-| VS Code | **cmcoder: Show Log** |
+| VS Code | **cmcoder: Show Log** (cmcoder's version, then any errors) |
 | Eclipse | Ctrl+3 → **cmcoder: Show Log** (Console view) |
 | NetBeans | **Tools → cmcoder → Show cmcoder Log** (Output window) |
 | Terminal / all | `~/.cmcoder/logs/` (MCP servers: `mcp-<name>.log`) |

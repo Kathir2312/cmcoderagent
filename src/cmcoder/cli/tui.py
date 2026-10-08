@@ -28,7 +28,7 @@ from textual.widgets import Button, Footer, Input, Label, Markdown, Static, Tree
 from textual.widgets.tree import TreeNode
 from textual.worker import Worker
 
-from .. import __version__, brand
+from .. import VERSION_TEXT, brand
 from ..config.settings import Settings, ignored_settings_message
 from ..core.agent import Agent, PermissionAnswer, PermissionRequest
 from ..core.commands import BUILT_IN, help_lines
@@ -41,7 +41,16 @@ from ..protocol import events as ev
 from ..rag.index import Progress
 from .agent_map import STATE_STYLES, AgentMap, ParallelTasks, review_lines
 from .factory import AgentOptions, build_agent, index_command
-from .pasted_images import PendingImages, clipboard_image, image_path
+from .pasted_images import (
+    NO_IMAGE_ATTACHED,
+    PendingImages,
+    clipboard_image,
+    image_path,
+    mentions_image,
+    no_clipboard_image,
+    only_placeholders,
+    read_image,
+)
 from .repl import Repl, output_preview, short_rule, subagent_line
 from .symbols import sym as S
 
@@ -74,8 +83,10 @@ HELP = """\
 /agents map        the agent navigator (also Ctrl+G): the turn's agents as a tree
 /critic [on|off]   a critic agent reviews each answer before you see it
 /todos             show the todo list
+/image [path]      attach the clipboard's image, or an image file
 /exit              quit
 Keys: Enter send · Ctrl+C interrupt (twice when idle: quit) · Shift+Tab cycle mode · Ctrl+G agent navigator
+Alt+V pastes the clipboard's image (Ctrl+V too, where the terminal lets it through); dropping an image file attaches it.
 /resume and /rewind: use the classic UI (cmcoder without --tui) for now."""
 
 UPDATE_EVERY = 0.08  # seconds between Markdown re-renders while streaming
@@ -304,7 +315,7 @@ class CmcoderApp(App[int]):
         Binding("shift+tab", "cycle_mode", "Mode", priority=True),
         Binding("ctrl+g", "navigator", "Agent navigator"),
         Binding("ctrl+d", "quit", "Quit"),
-        # Windows Terminal keeps Ctrl+V for pasting text: Alt+V works everywhere.
+        # Windows Terminal and VS Code keep Ctrl+V for pasting text: Alt+V works everywhere.
         Binding("ctrl+v", "paste_image", "Paste image", show=False),
         Binding("alt+v", "paste_image", "Paste image", show=False),
     ]
@@ -325,6 +336,7 @@ class CmcoderApp(App[int]):
         self.tasks = ParallelTasks()
         self.map = AgentMap()  # this turn's subagents, shown above the input
         self.pending_images = PendingImages()  # attached to the message being typed
+        self._image_tip_for = ""  # the message last held back for having no image
 
     # -- layout -------------------------------------------------------------------
 
@@ -347,7 +359,7 @@ class CmcoderApp(App[int]):
         self.write(
             Text.assemble(
                 (f"{self.brand.product_name} ", f"bold {self.brand.accent_color}"),
-                f"{__version__}  ·  {a.model} ({a.provider.name}: {cfg.base_url})\n",
+                f"{VERSION_TEXT}  ·  {a.model} ({a.provider.name}: {cfg.base_url})\n",
                 (f"cwd {a.ctx.cwd}", "dim"),
                 (
                     f"\nproject {a.ctx.project_root}" if a.ctx.project_root != a.ctx.cwd else "",
@@ -447,7 +459,7 @@ class CmcoderApp(App[int]):
     def action_paste_image(self) -> None:
         raw = clipboard_image()
         if raw is None:
-            self.notify("No image in the clipboard.", severity="warning")
+            self.notify(no_clipboard_image(), severity="warning")
         else:
             self.attach_image(raw, "")
 
@@ -455,8 +467,24 @@ class CmcoderApp(App[int]):
     async def _submitted(self, event: Input.Submitted) -> None:
         line = event.value.strip()
         event.input.value = ""
+        if line == "/image" or line.startswith("/image "):  # keeps the images so far
+            arg = line[len("/image") :].strip()
+            if only_placeholders(arg):
+                event.input.value = f"{arg} "
+                return
+            try:
+                self.attach_image(*read_image(arg))
+            except ImageError as e:
+                self.notify(str(e), severity="warning")
+            return
         images = self.pending_images.take(line)
         if not line:
+            return
+        if not images and line != self._image_tip_for and mentions_image(line):
+            # Most likely the paste didn't work: say how, once.
+            self._image_tip_for = line
+            self.write(NO_IMAGE_ATTACHED, "warn")
+            event.input.value = line
             return
         if self.turn is not None and self.turn.is_running:
             if line == "/agents" or line.startswith("/agents "):  # e.g. stop one subagent

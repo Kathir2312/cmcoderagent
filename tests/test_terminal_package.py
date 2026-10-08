@@ -103,7 +103,8 @@ def test_install_update_run_and_uninstall_on_macos_and_linux(tmp_path: Path) -> 
         ["sh", "-c", ". ~/.profile && cmcoder --version"], env=env, capture_output=True, text=True
     )
     assert shell.returncode == 0, shell.stderr
-    assert shell.stdout.strip() == ("9.9.9" if not BINARY else terminal.version())
+    # The standalone build says "0.1.0 (<commit> <date>)".
+    assert shell.stdout.split()[0] == ("9.9.9" if not BINARY else terminal.version())
     if BINARY:
         doctor = subprocess.run(
             [str(link), "doctor", "--no-probe"], env=env, capture_output=True, text=True

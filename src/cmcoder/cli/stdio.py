@@ -9,6 +9,7 @@ ever goes to stdout: stray prints are sent to stderr.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import re
 import sys
@@ -163,6 +164,8 @@ class StdioServer:
                     message = msg.parse_message(line)
                 except ValidationError as e:
                     self.error("protocol", f"Invalid message: {_first_error(e)}")
+                    if _is_user_message(line):  # the client waits for this turn's result
+                        self.emit(self._result("error", "Invalid message.", True, time.monotonic()))
                     continue
                 if isinstance(message, msg.Shutdown):
                     break
@@ -194,6 +197,7 @@ class StdioServer:
                 ]
             except ImageError as e:
                 self.error("images", str(e))
+                self.emit(self._result("error", str(e), True, time.monotonic()))
                 return
             self.turn = asyncio.create_task(self._run_turn(message.text, note, images))
         elif isinstance(message, msg.Interrupt):
@@ -687,6 +691,14 @@ def _label(agent: Agent, name: str, arguments: str) -> str:
         return tool.describe(tool.Input.model_validate(data), agent.ctx)
     except ValidationError:
         return name
+
+
+def _is_user_message(line: bytes) -> bool:
+    try:
+        data = json.loads(line)
+    except ValueError:
+        return False
+    return isinstance(data, dict) and data.get("type") == "user_message"
 
 
 def _first_error(e: ValidationError) -> str:

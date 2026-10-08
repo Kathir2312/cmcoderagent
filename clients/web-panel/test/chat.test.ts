@@ -81,6 +81,8 @@ async function panel(flavour: Flavour, product?: string): Promise<{ page: Page; 
     tools: [],
     permission_mode: "default",
     critique: false,
+    version: "0.1.0 (abc1234 2026-10-08)",
+    features: ["images"],
   });
   return { page, send, ev, sent };
 }
@@ -441,7 +443,7 @@ for (const flavour of FLAVOURS) {
     // cmcoder stopped: the box can't be used until it's back.
     await send({ kind: "state", state: "exited", message: "stopped" });
     assert.equal(await box.isDisabled(), true);
-    await ev({ type: "system_init", protocol_version: 1, session_id: "t", cwd: "/p", model: "m", provider: "corp", tools: [], permission_mode: "default", critique: true });
+    await ev({ type: "system_init", protocol_version: 1, session_id: "t", cwd: "/p", model: "m", provider: "corp", tools: [], permission_mode: "default", critique: true, version: "0.1.0", features: [] });
     assert.equal(await box.isEnabled(), true);
     assert.equal(await box.isChecked(), true);
     await page.close();
@@ -527,6 +529,29 @@ test("a paste with no image and no text asks the IDE for the clipboard's image (
   const before = (await sent()).length;
   await transfer(page, "paste", [], "some text");
   assert.equal((await sent()).length, before);
+  await page.close();
+});
+
+test("an older cmcoder that can't take images: the panel says so and keeps them", async () => {
+  const { page, ev, sent } = await panel("vscode");
+  assert.match((await page.getAttribute(".model", "title")) ?? "", /cmcoder 0\.1\.0 \(abc1234 2026-10-08\)$/);
+  // An older cmcoder's system_init has no features (nor version).
+  await ev({ type: "system_init", protocol_version: 1, session_id: "t", cwd: "/p", model: "m", provider: "corp", tools: [], permission_mode: "default" } as unknown as AgentEvent);
+  assert.match((await page.getAttribute(".model", "title")) ?? "", /cmcoder \(an older version\)$/);
+  await transfer(page, "paste", [{ name: "shot.png", type: "image/png", b64: PNG }]);
+  await page.waitForSelector("footer .images .thumb");
+  await page.fill("textarea", "what's this?");
+  const before = (await sent()).length;
+  await page.press("textarea", "Enter");
+  assert.equal((await sent()).length, before, "not sent: it would ignore the image");
+  assert.match((await page.textContent(".note.error")) ?? "", /too old for images: update it/);
+  assert.equal(await page.locator("footer .images .thumb").count(), 1, "the image is kept");
+  assert.equal(await page.inputValue("textarea"), "what's this?", "and the text");
+  assert.equal(await page.isVisible(".stop"), false, "not busy");
+  // Without the image, the text goes.
+  await page.click("footer .images .item .remove");
+  await page.press("textarea", "Enter");
+  assert.deepEqual((await sent()).at(-1), { kind: "send", text: "what's this?", includeContext: false });
   await page.close();
 });
 

@@ -6,6 +6,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import io
+import json
 import os
 import sys
 from pathlib import Path
@@ -117,11 +118,36 @@ async def test_something_that_isnt_an_image_is_refused(mock_server: Any, project
     server = mock_server([])
     agent = await start(project, server, "qwen2.5-vl-7b")
     try:
-        await agent.until("system_init")
+        init = await agent.until("system_init")
+        assert "images" in init["features"] and init["version"].startswith("0.")
         svg = base64.b64encode(b"<svg onload='alert(1)'/>").decode()
         await agent.send(type="user_message", text="see", images=[{"data": svg, "name": "x.png"}])
         error = await agent.until("error")
         assert error["kind"] == "images" and "isn't a PNG, JPEG, GIF or WebP" in error["message"]
+        # The turn ends: the panel's Send button comes back.
+        assert (await agent.until("result"))["is_error"] is True
+    finally:
+        await agent.close()
+    assert not chat_requests(server)
+
+
+async def test_a_message_the_agent_cant_read_still_ends_the_turn(
+    mock_server: Any, project: Path
+) -> None:
+    server = mock_server([])
+    agent = await start(project, server, "qwen2.5-vl-7b")
+    try:
+        await agent.until("system_init")
+        too_many = [{"data": png_b64()}] * 6
+        await agent.send_raw(json.dumps({"type": "user_message", "text": "", "images": too_many}))
+        assert (await agent.until("error"))["kind"] == "protocol"
+        assert (await agent.until("result"))["is_error"] is True
+        # Other bad messages have no turn to end.
+        await agent.send_raw(json.dumps({"type": "set_mode", "mode": 5}))
+        assert (await agent.until("error"))["kind"] == "protocol"
+        await agent.send(type="list_sessions")
+        await agent.until("session_list")
+        assert [e["type"] for e in agent.events].count("result") == 1
     finally:
         await agent.close()
     assert not chat_requests(server)

@@ -180,6 +180,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     this.events.fire(event);
     switch (event.type) {
       case "system_init":
+        this.log.appendLine(`${productName()} ${event.version || "(an older version)"}: ${event.model} (${event.provider})`);
         this.setState("ready");
         this.agent?.send({ type: "ide_capabilities", tools: IDE_TOOLS });
         this.updateContext();
@@ -197,6 +198,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         this.agent?.send({ type: "ide_tool_result", request_id: event.request_id, ...result });
         break;
       }
+      case "error":
+        this.log.appendLine(`Error (${event.kind}): ${event.message}`);
+        break;
       case "result":
         await this.clearReviews(); // an interrupted turn leaves no open requests
         break;

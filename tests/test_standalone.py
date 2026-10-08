@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -83,6 +84,8 @@ def run(project: Path, server: Any, *args: str, stdin: str | None = None, **env:
 def test_version_and_doctor(project: Path) -> None:
     r = run(project, None, "--version")
     assert r.returncode == 0 and r.stdout.strip()
+    # The build is named: "0.1.0 (aa3dc83 2026-10-07)", not "(source)".
+    assert re.fullmatch(r"\S+ \([0-9a-f]{7}(\+changes)? \d{4}-\d\d-\d\d\)", r.stdout.strip())
     r = run(project, None, "doctor", "--no-probe")
     assert "Bash sandbox" in r.stdout and "Traceback" not in r.stdout + r.stderr
 

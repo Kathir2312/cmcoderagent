@@ -155,6 +155,7 @@ let ready = false;
 let reply: { el: HTMLElement; text: string } | undefined; // the streaming reply
 let renderQueued = false;
 const toolCards = new Map<string, HTMLElement>();
+let features: string[] = []; // what this cmcoder can do, from system_init
 const permissionCards = new Map<string, HTMLElement>();
 // Tool calls the user denied here: their card already says so.
 const deniedHere = new Set<string>();
@@ -556,8 +557,10 @@ function onEvent(ev: AgentEvent): void {
   }
   switch (ev.type) {
     case "system_init":
+      // An older cmcoder sends neither: it can't take images.
+      features = ev.features ?? [];
       modelLabel.textContent = ev.model;
-      modelLabel.title = `${ev.model} (${ev.provider}) · ${ev.cwd}`;
+      modelLabel.title = `${ev.model} (${ev.provider}) · ${ev.cwd} · ${PRODUCT} ${ev.version || "(an older version)"}`;
       modeSelect.value = ev.permission_mode;
       critiqueBox.checked = ev.critique ?? false;
       critiqueBox.disabled = false;
@@ -841,6 +844,10 @@ function renderTodos(todos: Record<string, unknown>[]): void {
 function send(): void {
   const text = input.value.trim();
   if ((!text && !pendingImages.length) || !ready) return;
+  if (pendingImages.length && !features.includes("images")) {
+    note(`✗ This ${PRODUCT} program is too old for images: update it, or remove the images to send the text.`, "error");
+    return;
+  }
   const images = pendingImages;
   pendingImages = [];
   renderImages();

@@ -26,7 +26,7 @@ from rich.spinner import Spinner
 from rich.syntax import Syntax
 from rich.text import Text
 
-from .. import __version__, brand
+from .. import VERSION_TEXT, brand
 from ..compat import InterruptHandler
 from ..config.settings import Settings, config_dir, ignored_settings_message
 from ..core.agent import Agent, PermissionAnswer, PermissionRequest
@@ -43,7 +43,15 @@ from ..providers.openai_compat import OpenAICompatProvider
 from ..rag.index import Progress
 from .agent_map import AgentMap, ParallelTasks, review_lines
 from .factory import AgentOptions, build_agent, index_command, resolve_model_profile
-from .pasted_images import PendingImages, clipboard_image, image_path
+from .pasted_images import (
+    NO_IMAGE_ATTACHED,
+    PendingImages,
+    clipboard_image,
+    image_path,
+    mentions_image,
+    only_placeholders,
+    read_image,
+)
 from .symbols import sym as S
 
 # Lines the permission prompt needs besides the preview: panel border and
@@ -122,10 +130,13 @@ HELP = """\
   /agents [n|stop n] agent types and this session's subagents: status, steps, reports
   /agents map        the last turn's agents as a mind map
   /critic [on|off]   a critic agent reviews each answer before you see it
+  /image [path]      attach the clipboard's image, or an image file, to your next message
   /exit              quit
 
 [bold]Keys[/bold]
   Enter              send            Alt+Enter / Esc Enter   new line
+  Alt+V              paste the clipboard's image (Ctrl+V too, where the terminal lets it
+                     through); dropping an image file on the terminal attaches it
   Shift+Tab          cycle permission mode
   Ctrl+C             interrupt the current turn (twice at the prompt to quit);
                      with subagents running: stop one of them, or everything
@@ -188,6 +199,7 @@ class Repl:
         # Images attached to the message being typed (Ctrl+V / Alt+V, a pasted path).
         self.pending_images = PendingImages()
         self._image_note = ""  # shown in the toolbar until the next message
+        self._image_tip_for = ""  # the message last held back for having no image
         self._chooser: asyncio.Task[None] | None = None
         self._live: Live | None = None
         self._buffer = ""
@@ -718,7 +730,7 @@ class Repl:
         ctx = self._last_prompt_tokens
         pct = f" · context {100 * ctx // max(1, self.agent.profile.context_window)}%" if ctx else ""
         n = len(self.pending_images.images)
-        images = f" · {n} image{'s' if n > 1 else ''} attached" if n else ""
+        images = f" · {n} image{'s' if n > 1 else ''} attached" if n else " · alt+v: paste image"
         note = f" · {self._image_note}" if self._image_note else ""
         mode = self.agent.policy.mode
         return f" {self.agent.model} · mode: {mode} (shift+tab){pct}{images}{note}"
@@ -813,40 +825,13 @@ class Repl:
             self._stop_status()
             self._stop_live()
 
-    async def main(self, initial_prompt: str | None = None) -> int:
-        self.opts.ask = self.ask
-        self.agent = await build_agent(self.settings, self.opts)
-        agent = self.agent
-        cfg = self.settings.providers[agent.provider.name]
-        b = brand.load()
-        self.console.set_window_title(f"{b.product_name} · {agent.ctx.project_root.name}")
-        if b.logo:
-            self.console.print(Text(b.logo, style=b.accent_color))
-        self.console.print(
-            Panel.fit(
-                f"[bold]{escape(b.product_name)}[/bold] {__version__}\n"
-                f"model    {agent.model}  [dim]({agent.provider.name}: {cfg.base_url})[/dim]\n"
-                f"cwd      {agent.ctx.cwd}\n"
-                + (
-                    f"project  {agent.ctx.project_root}\n"
-                    if agent.ctx.project_root != agent.ctx.cwd
-                    else ""
-                )
-                + f"mode     {agent.policy.mode}\n"
-                + ("policy   managed settings in effect\n" if self.settings.managed_path else "")
-                + "[dim]/help for commands · Ctrl+C interrupts · /exit quits[/dim]",
-                border_style=b.accent_color,
-            )
-        )
-        if warning := ignored_settings_message(self.settings):
-            self.console.print(Text(f"{S().warn} {warning}", style="yellow"))
-        if len(agent.messages) > 1:
-            self._show_resumed()
+    def key_bindings(self) -> KeyBindings:
         bindings = KeyBindings()
 
         @bindings.add("s-tab")
         def _cycle_mode(event: Any) -> None:
-            policy = agent.policy
+            assert self.agent is not None
+            policy = self.agent.policy
             modes = policy.available_modes()  # skips bypassPermissions when disabled
             policy.mode = modes[(modes.index(policy.mode) + 1) % len(modes)]
             event.app.invalidate()
@@ -867,13 +852,13 @@ class Repl:
                 buffer.insert_text(f"{space}{placeholder} ")
             event.app.invalidate()
 
-        # Windows Terminal keeps Ctrl+V for pasting text: Alt+V works everywhere.
+        # Windows Terminal and VS Code keep Ctrl+V for pasting text: Alt+V works everywhere.
         @bindings.add("c-v")
         @bindings.add("escape", "v")
         def _paste_image(event: Any) -> None:
             raw = clipboard_image()
             if raw is None:
-                self._image_note = "no image in the clipboard"
+                self._image_note = "no image in the clipboard (/image says more)"
                 event.app.invalidate()
             else:
                 attach(event, raw, "")
@@ -886,11 +871,65 @@ class Repl:
                 return
             event.current_buffer.insert_text(event.data.replace("\r\n", "\n").replace("\r", "\n"))
 
+        return bindings
+
+    def _image_command(self, arg: str) -> None:
+        """/image [path]: attach the clipboard's image, or an image file, to the next message."""
+        if only_placeholders(arg):
+            self._next_input = f"{self._next_input}{arg} "
+            return
+        try:
+            placeholder = self.pending_images.add(*read_image(arg))
+        except ImageError as e:
+            self.console.print(Text(str(e), style="yellow"))
+            return
+        self._next_input = f"{self._next_input}{placeholder} "
+        self.console.print(Text(f"Attached {placeholder}: now type your message.", style="dim"))
+
+    def _hold_for_image(self, line: str, images: list[Image]) -> bool:
+        """True to hold back a message that talks about an image when none is
+        attached, once: the paste most likely didn't work."""
+        if images or line == self._image_tip_for or not mentions_image(line):
+            return False
+        self._image_tip_for = line
+        self.console.print(Text(NO_IMAGE_ATTACHED, style="yellow"))
+        self._next_input = line
+        return True
+
+    async def main(self, initial_prompt: str | None = None) -> int:
+        self.opts.ask = self.ask
+        self.agent = await build_agent(self.settings, self.opts)
+        agent = self.agent
+        cfg = self.settings.providers[agent.provider.name]
+        b = brand.load()
+        self.console.set_window_title(f"{b.product_name} · {agent.ctx.project_root.name}")
+        if b.logo:
+            self.console.print(Text(b.logo, style=b.accent_color))
+        self.console.print(
+            Panel.fit(
+                f"[bold]{escape(b.product_name)}[/bold] {VERSION_TEXT}\n"
+                f"model    {agent.model}  [dim]({agent.provider.name}: {cfg.base_url})[/dim]\n"
+                f"cwd      {agent.ctx.cwd}\n"
+                + (
+                    f"project  {agent.ctx.project_root}\n"
+                    if agent.ctx.project_root != agent.ctx.cwd
+                    else ""
+                )
+                + f"mode     {agent.policy.mode}\n"
+                + ("policy   managed settings in effect\n" if self.settings.managed_path else "")
+                + "[dim]/help for commands · Ctrl+C interrupts · /exit quits[/dim]",
+                border_style=b.accent_color,
+            )
+        )
+        if warning := ignored_settings_message(self.settings):
+            self.console.print(Text(f"{S().warn} {warning}", style="yellow"))
+        if len(agent.messages) > 1:
+            self._show_resumed()
         hist = config_dir() / "history"
         hist.parent.mkdir(parents=True, exist_ok=True)
         self.session = PromptSession(
             history=FileHistory(str(hist)),
-            key_bindings=bindings,
+            key_bindings=self.key_bindings(),
             bottom_toolbar=self._toolbar,
             completer=SlashCompleter(agent),
             complete_while_typing=True,
@@ -915,6 +954,9 @@ class Repl:
                 else:
                     line, pending = pending, None
                 line = line.strip()
+                if line == "/image" or line.startswith("/image "):  # keeps the images so far
+                    self._image_command(line[len("/image") :].strip())
+                    continue
                 images = self.pending_images.take(line)
                 self._image_note = ""
                 if not line:
@@ -922,6 +964,8 @@ class Repl:
                 if line.startswith("/"):
                     if not await self._command(line):
                         break
+                    continue
+                if self._hold_for_image(line, images):
                     continue
                 await self._run_turn(line, images=images)
         finally:
