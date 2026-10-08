@@ -627,7 +627,11 @@ function onEvent(ev: AgentEvent): void {
       reviewNote(ev);
       if (!ev.final) setActivity("Fixing what the reviewer found");
       break;
+    case "images_describing":
+      setActivity(`Reading the image${ev.count > 1 ? "s" : ""}`, `with ${ev.model}`);
+      break;
     case "images_described":
+      setActivity();
       note(`◦ ${ev.model} described ${ev.count === 1 ? "the image" : `${ev.count} images`} for the model, which can't see images`, "info");
       break;
     case "code_context": {

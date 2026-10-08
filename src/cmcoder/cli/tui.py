@@ -592,7 +592,7 @@ class CmcoderApp(App[int]):
         elif isinstance(event, ev.ReviewResult):
             for text, style in review_lines(event):
                 self.write(text, {"green": "tool", "yellow": "warn"}.get(style, "dim"))
-        elif isinstance(event, ev.CodeContext | ev.ImagesDescribed):
+        elif isinstance(event, ev.CodeContext | ev.ImagesDescribing | ev.ImagesDescribed):
             self.write(f"{S().note} {event.summary()}", "dim")
         elif isinstance(event, ev.Compacted):
             self._prompt_tokens = 0

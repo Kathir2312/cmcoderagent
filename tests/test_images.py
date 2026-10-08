@@ -3,6 +3,7 @@ vision helper for a main model that can't see images."""
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import io
 import json
@@ -30,7 +31,7 @@ from cmcoder.images import (
     sniff,
 )
 from cmcoder.protocol import events as ev
-from cmcoder.providers.messages import Message, StreamDone, Usage
+from cmcoder.providers.messages import Message, StreamDone, TextDelta, Usage
 from cmcoder.providers.openai_compat import to_wire_messages
 from cmcoder.providers.profiles import ModelProfile, looks_like_vision, resolve_profile
 from cmcoder.providers.text_tools import to_prompted_wire
@@ -244,6 +245,11 @@ async def test_a_text_only_model_gets_the_vision_models_description(tmp_path: Pa
     events = await run(a, "what's this error?", [small_image()])
     described = [e for e in events if isinstance(e, ev.ImagesDescribed)]
     assert described and described[0].model == "qwen2.5-vl-7b" and described[0].count == 1
+    # The chat says it's reading the image first (it can take a while).
+    kinds = [type(e) for e in events]
+    assert kinds.index(ev.ImagesDescribing) < kinds.index(ev.ImagesDescribed)
+    describing = events[kinds.index(ev.ImagesDescribing)]
+    assert describing.summary() == "qwen2.5-vl-7b is reading the image…"
     # The vision model saw the image, with the user's message for context.
     _, sent, profile = vision.calls[0]
     assert profile.vision is True and sent[-1].images
@@ -253,6 +259,57 @@ async def test_a_text_only_model_gets_the_vision_models_description(tmp_path: Pa
     assert message.images[0].description == "A traceback: KeyError: 'x'"
     assert message.images[0].described_by == "qwen2.5-vl-7b"
     assert to_wire_messages([message], vision=False)[0]["content"].count("KeyError") == 1
+    assert isinstance(events[-1], ev.Result) and events[-1].subtype == "success"
+
+
+class Slow(Recording):
+    """A vision model that answers in pieces `gap` seconds apart, then stops
+    `stall` seconds (a hung model: forever) before the end."""
+
+    def __init__(self, pieces: int, gap: float, stall: float | None = None) -> None:
+        super().__init__("A traceback: KeyError: 'x'")
+        self.pieces, self.gap, self.stall = pieces, gap, stall
+
+    async def stream_chat(
+        self, model: str, messages: list[Message], tools: list[Any], profile: Any, **kw: Any
+    ) -> AsyncIterator[Any]:
+        self.calls.append((model, [*messages], profile))
+        for _ in range(self.pieces):
+            await asyncio.sleep(self.gap)
+            yield TextDelta("…")
+        if self.stall is not None:
+            await asyncio.sleep(self.stall)
+        yield StreamDone(Message(role="assistant", content=self.reply), Usage(1, 1), "stop")
+
+
+@pytest.mark.parametrize(
+    "vision",
+    [Slow(0, 0, stall=3600), Slow(2, 0.05, stall=3600)],
+    ids=["no answer at all", "stops mid-answer"],
+)
+async def test_a_silent_vision_model_is_given_up_on(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, vision: Slow
+) -> None:
+    monkeypatch.setattr("cmcoder.core.vision.IDLE_SECONDS", 0.3)
+    main = Recording("unused")
+    a = agent(tmp_path, "qwen3-27b", main, vision)
+    events = await asyncio.wait_for(run(a, "what's this?", [small_image()]), 10)
+    errors = [e for e in events if isinstance(e, ev.Error)]
+    assert errors and errors[0].kind == "images"
+    assert "couldn't describe the image: no answer from qwen2.5-vl-7b within" in errors[0].message
+    assert "cmcoder doctor" in errors[0].message
+    assert isinstance(events[-1], ev.Result) and events[-1].is_error
+    assert not main.calls  # the turn didn't start
+
+
+async def test_a_slow_but_steady_vision_model_is_waited_for(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("cmcoder.core.vision.IDLE_SECONDS", 0.3)
+    main = Recording("It's a KeyError.")
+    a = agent(tmp_path, "qwen3-27b", main, Slow(8, 0.1))  # 0.8 s in all, never 0.3 s silent
+    events = await run(a, "what's this?", [small_image()])
+    assert any(isinstance(e, ev.ImagesDescribed) for e in events)
     assert isinstance(events[-1], ev.Result) and events[-1].subtype == "success"
 
 

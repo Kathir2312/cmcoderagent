@@ -85,6 +85,8 @@ async def test_a_text_only_model_gets_the_vision_models_description(
     try:
         await agent.until("system_init")
         await agent.send(type="user_message", text="", images=[{"data": png_b64()}])
+        describing = await agent.until("images_describing")  # the chat shows it
+        assert (describing["model"], describing["count"]) == ("qwen2.5-vl-7b", 1)
         described = await agent.until("images_described")
         assert (described["model"], described["count"]) == ("qwen2.5-vl-7b", 1)
         assert (await agent.until("result"))["subtype"] == "success"

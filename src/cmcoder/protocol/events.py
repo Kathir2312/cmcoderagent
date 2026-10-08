@@ -259,6 +259,18 @@ class CodeContext(_Event):
         return f"Added code from the index: {where}{more} (≈{self.tokens:,} tokens)"
 
 
+class ImagesDescribing(_Event):
+    """The main model can't see images: the vision model (settings `visionModel`)
+    is reading the user's images now (ImagesDescribed, or an Error, follows)."""
+
+    type: Literal["images_describing"] = "images_describing"
+    model: str  # the vision model
+    count: int
+
+    def summary(self) -> str:
+        return f"{self.model} is reading the image{'s' if self.count > 1 else ''}…"
+
+
 class ImagesDescribed(_Event):
     """The main model can't see images: the vision model (settings `visionModel`)
     described the user's images, and the descriptions went to it instead."""
@@ -411,6 +423,7 @@ Event = Annotated[
     | Rewound
     | History
     | CodeContext
+    | ImagesDescribing
     | ImagesDescribed
     | IndexStatus
     | IndexProgress

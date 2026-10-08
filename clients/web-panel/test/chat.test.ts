@@ -557,7 +557,14 @@ test("an older cmcoder that can't take images: the panel says so and keeps them"
 
 test("the vision model's description is noted in the chat", async () => {
   const { page, ev } = await panel("vscode");
+  await page.fill("textarea", "what is this?");
+  await page.press("textarea", "Enter");
+  // While it reads the images, the progress line says so.
+  await ev({ type: "images_describing", model: "qwen2.5-vl-7b", count: 2 });
+  assert.equal(await page.textContent(".progress .verb"), "Reading the images…");
+  assert.equal(await page.textContent(".progress .detail"), "with qwen2.5-vl-7b");
   await ev({ type: "images_described", model: "qwen2.5-vl-7b", count: 2 });
+  assert.notEqual(await page.textContent(".progress .verb"), "Reading the images…");
   assert.equal(await page.textContent(".note.info"), "◦ qwen2.5-vl-7b described 2 images for the model, which can't see images");
   await page.close();
 });

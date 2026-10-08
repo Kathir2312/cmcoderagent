@@ -201,6 +201,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       case "error":
         this.log.appendLine(`Error (${event.kind}): ${event.message}`);
         break;
+      case "images_describing":
+        this.log.appendLine(`The vision model ${event.model} is reading ${event.count} image(s)…`);
+        break;
+      case "images_described":
+        this.log.appendLine(`The vision model ${event.model} described ${event.count} image(s).`);
+        break;
       case "result":
         await this.clearReviews(); // an interrupted turn leaves no open requests
         break;

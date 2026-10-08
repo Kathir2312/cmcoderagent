@@ -30,6 +30,7 @@ from ..config.settings import (
     is_approved,
     managed_settings_path,
 )
+from ..core import vision
 from ..core.hooks import HookRunner
 from ..images import prepare
 from ..mcp_client import McpManager
@@ -832,20 +833,12 @@ async def sees_images(
     PilImage.new("RGB", (64, 64), TEST_COLOUR[1]).save(raw, "PNG")
     message = Message.user("What colour is this image? Answer with one word.")
     message.images = [prepare(raw.getvalue(), "test.png")]
-    done: StreamDone | None = None
     try:
-        async for sev in provider.stream_chat(
-            model,
-            [message],
-            [],
-            profile.model_copy(update={"vision": True}),
-            thinking=False,
-            max_tokens=1024,
-        ):
-            if isinstance(sev, StreamDone):
-                done = sev
+        done = await vision.ask(provider, model, [message], profile, max_tokens=1024)
     except ProviderError as e:
         return False, f"(the request failed: {e})"
+    except vision.VisionError as e:
+        return False, f"({e})"
     said = " ".join((done.message.content if done else "").split())[:200]
     return TEST_COLOUR[0] in said.lower(), repr(said)
 

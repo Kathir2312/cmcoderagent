@@ -35,6 +35,7 @@ needs Python, and cmcoder never tries to install it. If something asks for
 | "… can't see images. Set "visionModel" …" | your model is text only: set `visionModel` to a model that reads images ([images.md](images.md)) |
 | Alt+V: "no image in the clipboard" (Linux terminal) | install `wl-clipboard` (Wayland) or `xclip` (X11) |
 | Terminal: the model says it sees no image | no `[Image #1]` in your prompt means nothing was attached: in Windows Terminal and VS Code's terminal Ctrl+V pastes only text, so press **Alt+V** or type `/image` ([images.md](images.md#when-an-image-doesnt-get-through)) |
+| "Reading the image…" for a long time, then "no answer from … within 120 s" | your `visionModel` isn't answering (still loading, or not served by the gateway): `cmcoder doctor` checks it; ask your AI team for a model that reads images ([images.md](images.md)) |
 | Chat: "too old for images" | the chat's cmcoder is older than the chat: install the current extension, and empty a **cmcoder program** / `cmcoder.executable` setting |
 | Which cmcoder am I running? | `cmcoder --version` shows the version and the build (commit and date); in a chat, hover over the model name |
 | Eclipse: the chat is blank (Windows) | install the Microsoft Edge WebView2 Runtime |

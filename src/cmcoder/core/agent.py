@@ -712,9 +712,10 @@ class Agent:
 
     async def _describe_images(
         self, message: Message, prompt: str
-    ) -> AsyncIterator[ev.ImagesDescribed | ev.Error]:
+    ) -> AsyncIterator[ev.ImagesDescribing | ev.ImagesDescribed | ev.Error]:
         """The main model can't see images: the vision model describes them.
-        Yields ImagesDescribed, or an Error (and the turn doesn't start)."""
+        Yields ImagesDescribing, then ImagesDescribed, or an Error (and the
+        turn doesn't start)."""
         helper = self.vision
         if helper is None:
             yield ev.Error(
@@ -724,6 +725,8 @@ class Agent:
                 f"{self.model}), or switch to such a model with /model.",
             )
             return
+        if waiting := sum(not image.description for image in message.images):
+            yield ev.ImagesDescribing(model=helper.model, count=waiting)
         count = 0
         for image in message.images:
             if image.description:

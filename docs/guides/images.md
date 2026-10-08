@@ -83,6 +83,12 @@ way round), say so in `modelProfiles`:
 4. **The message went but nothing came back.** Errors show in the chat (✗).
    In VS Code, **cmcoder: Show Log** also has them (`Error (images): …`), with
    cmcoder's version at the start.
+   - While your vision model reads the image, the chat says "**Reading the
+     image… with** *model*" (the terminal: "*model* is reading the image…").
+     If it gets no answer for 2 minutes, cmcoder gives up and says so: "*no
+     answer from* model *within 120 s*". The vision model is still loading,
+     or your gateway lists it but doesn't serve it: `cmcoder doctor` checks
+     it, and your AI team can tell you which model to use.
 5. **Does your model see images?** Run `cmcoder doctor`. It shows your model a
    small test image and says what happened:
    - "*sees images*": all set.

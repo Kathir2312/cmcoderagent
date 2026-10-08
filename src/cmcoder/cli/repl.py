@@ -338,6 +338,8 @@ class Repl:
                 c.print(Text(f"  {event.hint}", style="red"))
         elif isinstance(event, ev.CodeContext | ev.ImagesDescribed):
             c.print(Text(f"{S().note} {event.summary()}", style="dim"))
+        elif isinstance(event, ev.ImagesDescribing):
+            self._start_status(event.summary())
         elif isinstance(event, ev.Compacted):
             self._stop_status()
             how = "Compacted" if event.trigger == "manual" else "Context nearly full: compacted"

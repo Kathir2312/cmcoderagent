@@ -236,6 +236,16 @@ export interface CodeContext {
 
 /**
  * The main model can't see images: the vision model (settings `visionModel`)
+ * is reading the user's images now (ImagesDescribed, or an Error, follows).
+ */
+export interface ImagesDescribing {
+  type: "images_describing";
+  model: string;
+  count: number;
+}
+
+/**
+ * The main model can't see images: the vision model (settings `visionModel`)
  * described the user's images, and the descriptions went to it instead.
  */
 export interface ImagesDescribed {
@@ -364,6 +374,7 @@ export type AgentEvent =
   | Rewound
   | History
   | CodeContext
+  | ImagesDescribing
   | ImagesDescribed
   | IndexStatus
   | IndexProgress
