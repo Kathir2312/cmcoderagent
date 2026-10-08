@@ -27,7 +27,7 @@ REVIEW = """\
 ---
 description: Review a file for bugs
 argument-hint: <file>
-allowed-tools: Read, Bash(echo checked:*)
+allowed-tools: Read, Bash(touch checked:*)
 ---
 Review $1 for bugs. Notes: $ARGUMENTS
 """
@@ -86,7 +86,7 @@ def bash(command: str) -> dict[str, Any]:
 def test_files_frontmatter_and_arguments() -> None:
     meta, body = parse_file(REVIEW)
     assert meta["description"] == "Review a file for bugs" and meta["argument-hint"] == "<file>"
-    assert split_tools(meta["allowed-tools"]) == ["Read", "Bash(echo checked:*)"]
+    assert split_tools(meta["allowed-tools"]) == ["Read", "Bash(touch checked:*)"]
     assert split_tools("Bash(a, b), Read") == ["Bash(a, b)", "Read"]
     assert substitute(body, '"my file.py" carefully') == (
         'Review my file.py for bugs. Notes: "my file.py" carefully'
@@ -118,9 +118,9 @@ async def test_a_command_expands_and_allows_its_tools_for_one_turn(
     command(user_commands(), "review", REVIEW)
     server = mock_server(
         [
-            bash("echo checked first"),
+            bash("touch checked first"),
             {"content": "Looks fine."},
-            bash("echo checked"),
+            bash("touch checked"),
             {"content": "ok"},
         ]
     )
@@ -131,7 +131,7 @@ async def test_a_command_expands_and_allows_its_tools_for_one_turn(
         assert expansion is not None and warnings == []
         assert expansion.prompt == "Review app.py for bugs. Notes: app.py now"
         events = [e async for e in agent.run(expansion.prompt, allow=expansion.allowed_tools)]
-        assert asker.asked == []  # Bash(echo checked:*) came with the command
+        assert asker.asked == []  # Bash(touch checked:*) came with the command
         assert events[-1].result == "Looks fine."
         assert server.requests[0]["messages"][-1]["content"] == expansion.prompt
         # The next turn has no command: the same call asks again.
@@ -149,7 +149,7 @@ async def test_a_repository_command_grants_tools_only_when_trusted(
     mock_server: Any, project: Path, trusted: bool, locked: bool, asks: int
 ) -> None:
     command(project_commands(project), "review", REVIEW)
-    server = mock_server([bash("echo checked"), {"content": "ok"}])
+    server = mock_server([bash("touch checked"), {"content": "ok"}])
     asker = Asker()
     agent = make_agent(server, project, trusted=trusted, ask=asker, locked=locked)
     try:

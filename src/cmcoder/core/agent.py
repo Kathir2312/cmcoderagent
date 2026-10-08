@@ -60,7 +60,7 @@ from .permissions import (
     Decision,
     PermissionCheck,
     PermissionPolicy,
-    suggest_rule,
+    suggest_rules,
 )
 from .sessions import SessionLog
 from .steer import file_work_redirect
@@ -1469,7 +1469,8 @@ class Agent:
             yield finish(ToolResult(f"Permission denied: {check.reason}", is_error=True))
             return
         if check.decision == Decision.ASK:
-            rule = suggest_rule(tool, args, self.ctx)
+            rules = suggest_rules(tool, args, self.ctx)
+            rule = ", ".join(rules)  # what the user sees
             if self.ask is None:
                 if check.high_risk:
                     reason = (
@@ -1523,9 +1524,10 @@ class Agent:
                         and not check.high_risk
                         and not self.policy.allow_rules_locked
                     ):
-                        self.policy.add_allow(rule)
-                        if self.on_rule_saved:
-                            self.on_rule_saved(rule)
+                        for r in rules:
+                            self.policy.add_allow(r)
+                            if self.on_rule_saved:
+                                self.on_rule_saved(r)
 
         if tool.name in FILE_EDIT_TOOLS:
             target = tool.permission_target(args, self.ctx)

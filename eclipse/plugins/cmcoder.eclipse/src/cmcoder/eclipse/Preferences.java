@@ -40,6 +40,7 @@ public final class Preferences extends FieldEditorPreferencePage implements IWor
             {"cmcoder's default", ""},
             {"default: ask before edits and commands", "default"},
             {"acceptEdits: edits without asking", "acceptEdits"},
+            {"auto: ask only for risky actions", "auto"},
             {"plan: read only, plan first", "plan"},
         }, getFieldEditorParent()));
         addField(new BooleanFieldEditor(AUTO_CONTEXT,

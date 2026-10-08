@@ -632,3 +632,13 @@ test("the vision model's description is noted in the chat", async () => {
   assert.equal(await page.textContent(".note.info"), "◦ qwen2.5-vl-7b described 2 images for the model, which can't see images");
   await page.close();
 });
+
+test("the mode picker offers auto (ask only for risky actions), each mode explained", async () => {
+  const { page, sent } = await panel("vscode");
+  const options = await page.$$eval("header select.mode option", (os) => (os as HTMLOptionElement[]).map((o) => [o.value, o.title]));
+  assert.deepEqual(options.map((o) => o[0]), ["default", "acceptEdits", "auto", "plan", "bypassPermissions"]);
+  assert.match(options[2][1], /Asks only for risky actions/);
+  await page.selectOption("header select.mode", "auto");
+  assert.deepEqual((await sent()).at(-1), { kind: "setMode", mode: "auto" });
+  await page.close();
+});

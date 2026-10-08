@@ -67,6 +67,9 @@ def child_env(cwd: Path) -> dict[str, str]:
 class PersistentShell:
     def __init__(self, cwd: Path, shell: str, sandbox: Sandbox | None = None) -> None:
         self.initial_cwd = cwd
+        # Where the shell is now (`cd` carries over between commands), as it
+        # reported after the last one; None until then, or after a restart.
+        self.current_cwd: Path | None = None
         self.shell = shell
         self.sandbox = sandbox  # run the shell inside it
         self._proc: asyncio.subprocess.Process | None = None
@@ -108,6 +111,7 @@ class PersistentShell:
 
     def _kill(self) -> None:
         proc, self._proc = self._proc, None
+        self.current_cwd = None  # a new shell starts in initial_cwd
         if proc is None:
             return
         if proc.returncode is None:
@@ -150,7 +154,9 @@ class PersistentShell:
                 "__cmc_rc= __cmc_ps=\n"
                 "eval \"$__cmc_cmd\"$'\\n''__cmc_rc=$? __cmc_ps=\"${PIPESTATUS[*]}\"' < /dev/null\n"
                 "__cmc_rc=${__cmc_rc:-$?}\n"
-                f'printf \'\\n{marker}%d %s\\n\' "$__cmc_rc" "$__cmc_ps"\n'
+                # The folder too (Git Bash: as C:/..., which Windows paths understand).
+                f'printf \'\\n{marker}%d %s\\t%s\\n\' "$__cmc_rc" "$__cmc_ps" '
+                '"$(pwd -W 2>/dev/null || pwd)"\n'
             )
             try:
                 proc.stdin.write(script.encode())
@@ -184,11 +190,14 @@ class PersistentShell:
                         if before.strip():
                             chunks.append(before)
                         code: int | None
+                        status, _, where = after.partition(b"\t")
                         try:
-                            codes = [int(x) for x in after.split()] or [0]
+                            codes = [int(x) for x in status.split()] or [0]
                             code, pipe = codes[0], codes[1:]
                         except ValueError:
                             code, pipe = None, []
+                        where_text = where.strip().decode("utf-8", "replace")
+                        self.current_cwd = Path(where_text) if where_text else None
                         output = _decode(chunks)
                         # Drop the newline printf put before the marker.
                         output = output[:-1] if output.endswith("\n") else output

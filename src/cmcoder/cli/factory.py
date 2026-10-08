@@ -230,6 +230,7 @@ async def build_agent(settings: Settings, opts: AgentOptions) -> Agent:
             deny=[*perms.deny, *(opts.disallowed_tools or [])],
             high_risk=perms.high_risk_commands,
             bypass_disabled=perms.disable_bypass_permissions_mode == "disable",
+            auto_disabled=perms.disable_auto_mode == "disable",
             allow_rules_locked=locked,
         )
     except ModeNotAllowed as e:

@@ -123,7 +123,8 @@ HELP = """\
   /compact [focus]   summarise the conversation so far to free context
                      (e.g. /compact keep the failing test names)
   /model [name]      show or switch the model (e.g. /model qwen3-27b)
-  /mode [mode]       show or set the permission mode: default, acceptEdits, plan, bypassPermissions
+  /mode [mode]       show or set the permission mode: default, acceptEdits, auto (ask only
+                     for risky actions), plan, bypassPermissions
   /cost              token usage for this session
   /mcp               MCP servers: status and tools
   /index [status]    build or update the code index (code search), or show it

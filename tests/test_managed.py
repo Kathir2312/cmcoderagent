@@ -238,7 +238,7 @@ def test_bypass_mode_cannot_be_switched_on_later() -> None:
     policy = PermissionPolicy("default", bypass_disabled=True)
     with pytest.raises(ModeNotAllowed):
         policy.mode = "bypassPermissions"  # /mode bypassPermissions
-    assert policy.available_modes() == ["default", "acceptEdits", "plan"]  # Shift+Tab cycle
+    assert policy.available_modes() == ["default", "acceptEdits", "auto", "plan"]  # Shift+Tab cycle
     assert policy.mode == "default"
 
 

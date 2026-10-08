@@ -108,7 +108,9 @@ def test_permission_prompt_and_allow_always(mock_server: Any, project: Path) -> 
 def test_ctrl_c_interrupts_running_command(
     mock_server: Any, project: Path, with_prompt: bool
 ) -> None:
-    server = mock_server([{"tool_calls": [{"name": "Bash", "arguments": {"command": "sleep 30"}}]}])
+    # (A plain `sleep` is read-only and wouldn't ask: the `touch` does.)
+    command = "sleep 30; touch slept"
+    server = mock_server([{"tool_calls": [{"name": "Bash", "arguments": {"command": command}}]}])
     args = () if with_prompt else ("--permission-mode", "bypassPermissions")
     term = Term(project, server, *args)
     try:
@@ -117,7 +119,7 @@ def test_ctrl_c_interrupts_running_command(
         if with_prompt:
             assert term.expect(PROMPT)
             term.send("1\r")
-        assert term.expect(rb"Bash\(sleep 30\)")
+        assert term.expect(rb"Bash\(sleep 30")
         time.sleep(1.0)
         started = time.time()
         term.send("\x03")

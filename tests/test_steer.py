@@ -152,7 +152,8 @@ async def test_repeating_the_command_lets_it_through(mock_server: Any, project: 
     events = await run(make_agent(server, project, ask=ask), "show the readme")
     results = [e for e in events if isinstance(e, ev.ToolResult)]
     assert "use the Read tool" in results[0].content
-    assert len(asked) == 1 and results[1].content.strip() == "hello"
+    # It runs (read-only, inside the project: no question either).
+    assert asked == [] and results[1].content.strip() == "hello"
 
 
 async def test_steering_can_be_turned_off(mock_server: Any, project: Path) -> None:
@@ -169,7 +170,9 @@ async def test_steering_can_be_turned_off(mock_server: Any, project: Path) -> No
         return PermissionAnswer(allow=False)
 
     await run(make_agent(server, project, ask=ask, steer=False), "make notes")
-    assert len(asked) == 1  # old behaviour: the user is asked about the heredoc
+    # The old behaviour: the heredoc runs as a command. In acceptEdits, writing a
+    # file of the project through a redirection counts as an edit: no question.
+    assert asked == [] and (project / "notes.md").read_text() == "# Notes\n"
 
 
 def test_prompt_and_tool_descriptions_point_to_file_tools(project: Path) -> None:

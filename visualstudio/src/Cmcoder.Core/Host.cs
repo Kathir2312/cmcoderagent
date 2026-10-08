@@ -21,7 +21,7 @@ namespace Cmcoder.Core
         /// <summary>Only these addresses are opened, in the system browser (H18).</summary>
         internal static readonly Regex WebLink = new Regex(@"^https?://\S+$", RegexOptions.IgnoreCase);
 
-        internal static readonly HashSet<string> Modes = new HashSet<string> { "default", "acceptEdits", "plan", "bypassPermissions" };
+        internal static readonly HashSet<string> Modes = new HashSet<string> { "default", "acceptEdits", "auto", "plan", "bypassPermissions" };
 
         /// <summary>How to start cmcoder for this project.</summary>
         public sealed class Config

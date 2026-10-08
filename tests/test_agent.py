@@ -169,12 +169,8 @@ async def test_high_risk_approval_is_never_remembered(mock_server: Any, project:
 async def test_ask_allow_always_saves_rule(mock_server: Any, project: Path) -> None:
     server = mock_server(
         [
-            {"tool_calls": [{"name": "Bash", "arguments": {"command": "git stash list"}}]},
-            {
-                "tool_calls": [
-                    {"name": "Bash", "arguments": {"command": "git stash list --oneline"}}
-                ]
-            },
+            {"tool_calls": [{"name": "Bash", "arguments": {"command": "git stash push"}}]},
+            {"tool_calls": [{"name": "Bash", "arguments": {"command": "git stash push -q"}}]},
             {"content": "done"},
         ]
     )

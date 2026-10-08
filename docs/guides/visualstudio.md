@@ -93,7 +93,7 @@ a note telling cmcoder what to do instead).
 | Stop cmcoder | **Esc**, or **Stop** |
 | Start over | **Tools → cmcoder → New Conversation** |
 | Go back to an earlier conversation | **History** at the top of the chat |
-| Change how much it asks | the picker at the top: **default** (ask) / **acceptEdits** / **plan** (read only) |
+| Change how much it asks | the picker at the top: **default** (ask) / **acceptEdits** (edits without asking) / **auto** (asks only for risky actions) / **plan** (read only). Read-only commands (`grep`, `find`, `cat`, `git log` …, piped too) never ask |
 | A second check of each answer | tick **Critique** at the top |
 | See background helpers (subagents) | **Tools → cmcoder → Open Agent Navigator** |
 | Search code by meaning (big projects) | **Code search** above the chat, or **Tools → cmcoder → Code Search…** ([code-search.md](code-search.md)) |

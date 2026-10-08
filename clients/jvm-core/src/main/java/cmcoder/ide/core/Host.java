@@ -25,7 +25,7 @@ public final class Host {
     static final Pattern SESSION_ID = Pattern.compile("^[A-Za-z0-9][A-Za-z0-9-]{0,63}$");
     /** Only these addresses are opened, in the system browser (H18). */
     static final Pattern WEB_LINK = Pattern.compile("^https?://\\S+$", Pattern.CASE_INSENSITIVE);
-    static final Set<String> MODES = new HashSet<>(Arrays.asList("default", "acceptEdits", "plan", "bypassPermissions"));
+    static final Set<String> MODES = new HashSet<>(Arrays.asList("default", "acceptEdits", "auto", "plan", "bypassPermissions"));
 
     /** How to start cmcoder for this project. */
     public static final class Config {

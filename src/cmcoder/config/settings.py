@@ -23,7 +23,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
-PermissionModeName = Literal["default", "acceptEdits", "plan", "bypassPermissions"]
+PermissionModeName = Literal["default", "acceptEdits", "auto", "plan", "bypassPermissions"]
 
 
 class _Model(BaseModel):
@@ -234,6 +234,7 @@ class PermissionsConfig(_Model):
     disable_bypass_permissions_mode: Literal["disable"] | None = Field(
         None, alias="disableBypassPermissionsMode"
     )
+    disable_auto_mode: Literal["disable"] | None = Field(None, alias="disableAutoMode")
     allow_managed_permission_rules_only: bool = Field(
         False, alias="allowManagedPermissionRulesOnly"
     )
@@ -348,7 +349,11 @@ def managed_settings_path() -> Path:
 
 # Keys that only count in the managed file: in any other file they would let
 # a project (or a user) speak for the organisation.
-_MANAGED_ONLY_PERMISSIONS = ("disableBypassPermissionsMode", "allowManagedPermissionRulesOnly")
+_MANAGED_ONLY_PERMISSIONS = (
+    "disableBypassPermissionsMode",
+    "disableAutoMode",
+    "allowManagedPermissionRulesOnly",
+)
 _MANAGED_ONLY_TOP = (
     "lockProviders",
     "allowedMcpServers",
@@ -542,13 +547,13 @@ def env_api_key(environ: dict[str, str] | None = None) -> str | None:
 #
 # - `providers` is never read from a project: gateways belong in your user
 #   settings (or the managed settings).
-# - `env`, allow rules and the acceptEdits/bypassPermissions modes are used
+# - `env`, allow rules and the acceptEdits/auto/bypassPermissions modes are used
 #   only when the project is trusted: `cmcoder trust`, `--trust-project`
 #   (the VS Code extension passes it for workspaces VS Code trusts), or
 #   rules cmcoder wrote itself ("Always" answers) in settings.local.json.
 
 _PROJECT_NEVER = ("providers",)
-_PERMISSIVE_MODES = ("acceptEdits", "bypassPermissions")
+_PERMISSIVE_MODES = ("acceptEdits", "auto", "bypassPermissions")
 
 
 def trust_file() -> Path:

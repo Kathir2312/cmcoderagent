@@ -34,9 +34,9 @@ public final class Options extends OptionsPanelController {
     static final String DIFF_REVIEW = "diffReview";
     static final String TRUST_PROJECT = "trustProject";
 
-    private static final String[] MODES = {"", "default", "acceptEdits", "plan"};
+    private static final String[] MODES = {"", "default", "acceptEdits", "auto", "plan"};
     private static final String[] MODE_LABELS = {"cmcoder's default", "default: ask before edits and commands",
-        "acceptEdits: edits without asking", "plan: read only, plan first"};
+        "acceptEdits: edits without asking", "auto: ask only for risky actions", "plan: read only, plan first"};
 
     static Preferences store() {
         return NbPreferences.forModule(Options.class);

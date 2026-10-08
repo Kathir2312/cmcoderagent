@@ -260,7 +260,7 @@ async def test_an_answer_while_waiting_can_cover_the_next_question(project: Path
         await asyncio.sleep(0.05)
         return PermissionAnswer(allow=True, remember=True)
 
-    command = "echo same"
+    command = "touch same"
     provider = Scripted(
         {
             "go": [{"calls": [task("run 1"), task("run 2")]}, {"content": "done"}],

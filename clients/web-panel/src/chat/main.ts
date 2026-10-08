@@ -37,7 +37,14 @@ let warnedForeign = false;
 window.addEventListener("error", (e) => panelError(`${e.message} (${(e.filename || "").split("/").pop()}:${e.lineno})`));
 window.addEventListener("unhandledrejection", (e) => panelError(String(e.reason)));
 
-const MODES = ["default", "acceptEdits", "plan", "bypassPermissions"];
+const MODES = ["default", "acceptEdits", "auto", "plan", "bypassPermissions"];
+const MODE_HELP: Record<string, string> = {
+  default: "Asks before file edits and commands that change something",
+  acceptEdits: "File edits in the project without asking; commands still ask",
+  auto: "Asks only for risky actions: pushes, publishing, package installs, deleting in bulk, files outside the project",
+  plan: "Read only: looks and plans, changes nothing",
+  bypassPermissions: "Asks only for high-risk commands",
+};
 const MARKS: Record<string, string> = { pending: "☐", in_progress: "►", completed: "☑" };
 
 // Model output is Markdown; any raw HTML in it is shown as text, never run.
@@ -163,7 +170,11 @@ const commandsPopup = $<HTMLElement>(".commands");
 const contextBox = contextChip.querySelector("input") as HTMLInputElement;
 const contextText = contextChip.querySelector("span") as HTMLElement;
 
-for (const mode of MODES) modeSelect.append(new Option(mode, mode));
+for (const mode of MODES) {
+  const option = new Option(mode, mode);
+  option.title = MODE_HELP[mode] ?? "";
+  modeSelect.append(option);
+}
 
 // --- state -------------------------------------------------------------------
 

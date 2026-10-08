@@ -326,11 +326,21 @@ permission mode; Ctrl+C interrupts the current turn.
 |---|---|
 | `default` | reads inside the project are allowed; edits and commands ask first |
 | `acceptEdits` | file edits inside the project are allowed; commands still ask |
+| `auto` | asks only for risky actions: high-risk commands, pushes, publishing, deploys, uploads, package installs, protected files, files outside the project or secret |
 | `plan` | read-only; edits and non-read-only commands are refused |
-| `bypassPermissions` | everything allowed except deny rules (use with care) |
+| `bypassPermissions` | everything allowed except deny rules and high-risk commands (use with care) |
+
+**Read-only commands never ask**, in any mode: `grep`, `find`, `cat`, `head`, `tail`, `wc`, `ls`, `tree`, `sort`,
+`rg`, `sed -n 'Np'`, read-only `git` (`status`, `diff`, `log`, `show`, `blame`, `grep`, `ls-files`, …), in pipes and
+chains too (`grep -rn Foo src | head`, `cd src && ls`), as long as they name no file outside the project or secret
+file, write nothing (`> /dev/null` and `2>&1` are fine) and use no writing option (`find -delete`, `sort -o`).
 
 Rules: `Read`, `Edit(src/**)` (also covers Write), `Bash(npm test:*)` (prefix), `Bash(git status)` (exact).
-Deny rules win over allow rules. Prefix rules never approve chained commands (`;`, `&&`, `|`, `$( )`, redirects).
+Deny rules win over allow rules. A command line is checked part by part (`a | b && c`): it runs when every part
+is read-only or allowed by a rule, and a file it writes (`> out.log`) is allowed like an edit; a deny rule for any
+part denies the whole line, also inside `$( )`. A part that runs a hidden command (`$( )`, backticks) is never
+covered by a prefix rule. **Always allow** saves one rule per part that needs it: answering it for
+`dotnet build 2>&1 | tail -30` saves `Bash(dotnet build:*)`, so later builds with other options or pipes run.
 Files such as `.env`, `*.pem`, `*.key` and `secrets/` are never read (or shown in Grep results) unless an allow
 rule names them. Editing `.cmcoder/`, `.git/` or `~/.cmcoder/` always asks, except in `bypassPermissions`.
 

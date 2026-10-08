@@ -82,7 +82,7 @@ own; before it changes a file or runs a command it asks:
 | `cmcoder -r` | pick an earlier conversation to resume |
 | `cmcoder -p "question"` | answer once and exit (for scripts); `--output-format json` for machine-readable output |
 | `-m NAME` | use another model |
-| `--permission-mode plan` | start read only (`default`, `acceptEdits`, `plan`) |
+| `--permission-mode plan` | start read only (`default`, `acceptEdits`, `auto`, `plan`) |
 | `--allowedTools "Bash(git status)"` / `--disallowedTools Bash` | allow or forbid tools for this run |
 | `--trust-project` | use this project's own `.cmcoder` settings (only for projects you trust) |
 | `--tui` | the full-screen interface |

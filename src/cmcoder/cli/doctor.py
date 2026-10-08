@@ -94,6 +94,7 @@ class Doctor:
         p = s.permissions
         enforced = [
             f"bypassPermissions {'disabled' if p.disable_bypass_permissions_mode else 'allowed'}",
+            f"auto mode {'disabled' if p.disable_auto_mode else 'allowed'}",
             f"high-risk commands: {p.high_risk_commands}",
             f"{len(p.deny)} deny rule(s)",
         ]

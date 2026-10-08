@@ -231,8 +231,17 @@
             "",
             "default",
             "acceptEdits",
+            "auto",
             "plan",
             "bypassPermissions"
+          ],
+          "enumDescriptions": [
+            "Your cmcoder settings decide",
+            "Ask before file edits and commands that change something",
+            "File edits in the project without asking; commands still ask",
+            "Ask only for risky actions: pushes, publishing, package installs, deleting in bulk, files outside the project",
+            "Read only: look and plan, change nothing",
+            "Ask only for high-risk commands"
           ],
           "default": "",
           "description": "Permission mode for new conversations (empty: your cmcoder settings decide). User settings only: a workspace can't change it.",

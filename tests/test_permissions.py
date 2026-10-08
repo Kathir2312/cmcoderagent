@@ -96,7 +96,7 @@ def test_explicit_allow_overrides_secret_protection(ctx: ToolContext) -> None:
 def test_suggested_rules(ctx: ToolContext) -> None:
     assert suggest_rule(BashTool(), bash("npm test -- -x"), ctx) == "Bash(npm test:*)"
     assert suggest_rule(BashTool(), bash("pytest -q"), ctx) == "Bash(pytest:*)"
-    assert suggest_rule(BashTool(), bash("a && b"), ctx) == "Bash(a && b)"
+    assert suggest_rule(BashTool(), bash("a && b"), ctx) == "Bash(a:*), Bash(b:*)"
     assert (
         suggest_rule(
             EditTool(), EditInput(file_path="src/x.py", old_string="a", new_string="b"), ctx

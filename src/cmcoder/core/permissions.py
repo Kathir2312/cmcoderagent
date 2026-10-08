@@ -11,13 +11,25 @@ Order of evaluation: deny rules > high-risk shell commands (always ask, in
 every mode; see core/risk.py) > protected paths (always ask before editing
 cmcoder settings or .git, except in bypassPermissions) > allow rules > built-in
 secret-file protection > the permission mode's defaults.
+
+Shell commands are judged part by part (`a | b && c`, see core/readonly.py):
+a command line runs without asking when every part is read-only (in every
+mode) or allowed by a rule, and the files it writes through redirections are
+allowed too. A deny rule that matches any part denies the whole line. Modes:
+
+  default            ask before changes (file edits, commands that aren't read-only)
+  acceptEdits        file edits in the project without asking; commands still ask
+  auto               ask only for risky actions: high-risk and outward commands
+                     (pushes, publishing, deploys, uploads, package installs),
+                     protected files, and files outside the project or secret
+  plan               read only: no edits, no commands that change anything
+  bypassPermissions  everything but high-risk commands
 """
 
 from __future__ import annotations
 
 import re
 import shlex
-from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -27,10 +39,12 @@ import pathspec
 from ..config.settings import config_dir
 from ..sensitive import is_secret
 from ..tools.base import Tool, ToolContext
-from .risk import high_risk_reason
+from .readonly import READERS, Segment, Verdict, classify, parse
+from .risk import high_risk_reason, outward_reason
 
-MODES = ("default", "acceptEdits", "plan", "bypassPermissions")
+MODES = ("default", "acceptEdits", "auto", "plan", "bypassPermissions")
 BYPASS_DISABLED_MESSAGE = "bypassPermissions is disabled by your organisation's managed settings."
+AUTO_DISABLED_MESSAGE = "The auto mode is disabled by your organisation's managed settings."
 
 
 class ModeNotAllowed(ValueError):
@@ -44,46 +58,6 @@ _RULE_RE = re.compile(r"^\s*([A-Za-z_][\w-]*)\s*(?:\((.*)\))?\s*$", re.S)
 # Characters that chain or redirect commands. A prefix rule like Bash(npm test:*)
 # never approves a command containing them ("npm test; rm -rf ~").
 _SHELL_OPERATORS = (";", "&", "|", "`", "$(", ">", "<", "\n", "\r")
-
-# Read-only commands allowed without asking. Each entry maps a command to a
-# check on its arguments, because some read-only commands have writing options
-# (`git branch -D`, `git diff --output=FILE`, `date -s`).
-_GIT_BRANCH_LIST_FLAGS = {
-    "-a",
-    "--all",
-    "-r",
-    "--remotes",
-    "-v",
-    "-vv",
-    "--verbose",
-    "-l",
-    "--list",
-    "--show-current",
-    "--no-color",
-    "--color",
-    "--merged",
-    "--no-merged",
-    "--contains",
-}
-
-
-def _git_read_args(args: list[str]) -> bool:
-    return not any(a.startswith(("--output", "--ext-diff")) for a in args)
-
-
-SAFE_COMMANDS: dict[str, Callable[[list[str]], bool]] = {
-    "ls": lambda args: True,
-    "pwd": lambda args: True,
-    "whoami": lambda args: True,
-    "uname": lambda args: True,
-    "which": lambda args: True,
-    "date": lambda args: all(a.startswith("+") for a in args),
-    "git status": _git_read_args,
-    "git diff": _git_read_args,
-    "git log": _git_read_args,
-    "git show": _git_read_args,
-    "git branch": lambda args: all(a in _GIT_BRANCH_LIST_FLAGS for a in args),
-}
 
 # Paths the agent may not change without asking, even in acceptEdits mode:
 # cmcoder's own settings (an agent could grant itself permissions) and git
@@ -159,21 +133,41 @@ def is_protected(path: Path, root: Path) -> bool:
     return rel is not None and _PROTECTED_SPEC.match_file(rel)
 
 
-def is_safe_command(command: str) -> bool:
-    """Read-only commands that never need approval."""
-    command = command.strip()
-    if not command or has_shell_operators(command):
-        return False
+def _words(spec: str) -> list[str]:
     try:
-        words = shlex.split(command)
+        return shlex.split(spec)
     except ValueError:
-        return False
-    for name, args_ok in SAFE_COMMANDS.items():
-        n = len(name.split())
-        # The command must start with the exact words, e.g. no `git -c x=y diff`.
-        if words[:n] == name.split():
-            return args_ok(words[n:])
-    return False
+        return spec.split()
+
+
+def words_match(spec: str, words: list[str]) -> bool:
+    """A Bash rule's spec against one part of a command line (its words)."""
+    if spec.endswith(":*"):
+        prefix = _words(spec[:-2])
+        return bool(prefix) and words[: len(prefix)] == prefix
+    return words == _words(spec)
+
+
+def _all_parts(command: str, depth: int = 0) -> list[list[str]]:
+    """The words of every part of a command line, those inside $(...) too."""
+    segments = parse(command)
+    if segments is None or depth > 3:
+        return []
+    out: list[list[str]] = []
+    for seg in segments:
+        out.append(seg.words)
+        for inner in seg.inner:
+            out.extend(_all_parts(inner, depth + 1))
+    return out
+
+
+def shell_cwd(args: object, ctx: ToolContext) -> Path:
+    """Where the command will run: the persistent shell keeps `cd` between calls."""
+    shell = (
+        ctx.unsandboxed_shell if getattr(args, "dangerously_disable_sandbox", False) else ctx.shell
+    )
+    cwd = getattr(shell, "current_cwd", None)
+    return cwd if isinstance(cwd, Path) else ctx.cwd
 
 
 class PermissionPolicy:
@@ -185,6 +179,7 @@ class PermissionPolicy:
         high_risk: str = "ask",
         *,
         bypass_disabled: bool = False,
+        auto_disabled: bool = False,
         allow_rules_locked: bool = False,
     ) -> None:
         if high_risk not in HIGH_RISK_MODES:
@@ -193,6 +188,7 @@ class PermissionPolicy:
         # (flag, settings, /mode, Shift+Tab), and only the managed allow rules
         # apply ("always allow" answers are not offered).
         self.bypass_disabled = bypass_disabled
+        self.auto_disabled = auto_disabled
         self.allow_rules_locked = allow_rules_locked
         self._mode = "default"
         self.mode = mode
@@ -214,10 +210,17 @@ class PermissionPolicy:
             )
         if value == "bypassPermissions" and self.bypass_disabled:
             raise ModeNotAllowed(BYPASS_DISABLED_MESSAGE)
+        if value == "auto" and self.auto_disabled:
+            raise ModeNotAllowed(AUTO_DISABLED_MESSAGE)
         self._mode = value
 
     def available_modes(self) -> list[str]:
-        return [m for m in MODES if not (m == "bypassPermissions" and self.bypass_disabled)]
+        return [
+            m
+            for m in MODES
+            if not (m == "bypassPermissions" and self.bypass_disabled)
+            and not (m == "auto" and self.auto_disabled)
+        ]
 
     def add_allow(self, rule: str) -> None:
         if self.allow_rules_locked:
@@ -255,6 +258,12 @@ class PermissionPolicy:
         for rule in self.deny:
             if self._rule_matches(rule, tool, target, ctx):
                 return PermissionCheck(Decision.DENY, f"denied by rule {rule}")
+        if tool.name == "Bash" and isinstance(target, str):
+            # `cd x && git push`, `echo $(curl ...)`: a deny rule for any part denies all.
+            for words in _all_parts(target):
+                for rule in self.deny:
+                    if rule.tool == "Bash" and rule.spec and words_match(rule.spec, words):
+                        return PermissionCheck(Decision.DENY, f"denied by rule {rule}")
         if tool.name == "Bash" and (risk := high_risk_reason(str(target or ""))):
             # Before allow rules and modes: no rule, acceptEdits or
             # bypassPermissions approves these on a person's behalf.
@@ -322,47 +331,134 @@ class PermissionPolicy:
                 return PermissionCheck(Decision.ALLOW)
             return PermissionCheck(Decision.ASK, "reads outside the project directory")
 
+        if tool.name == "Bash":
+            return self._check_bash(str(target or ""), args, ctx)
+
         if self.mode == "bypassPermissions":
             return PermissionCheck(Decision.ALLOW)
-
-        if tool.name == "Bash":
-            if is_safe_command(str(target or "")):
-                return PermissionCheck(Decision.ALLOW)
-            if self.mode == "plan":
-                return PermissionCheck(
-                    Decision.DENY, "plan mode is read-only; propose a plan instead"
-                )
-            if ctx.sandbox is not None and ctx.sandbox.auto_allow:
-                return PermissionCheck(Decision.ALLOW, "runs in the sandbox")
-            return PermissionCheck(Decision.ASK)
 
         if tool.name in FILE_EDIT_TOOLS:
             if self.mode == "plan":
                 return PermissionCheck(
                     Decision.DENY, "plan mode is read-only; propose a plan instead"
                 )
-            if self.mode == "acceptEdits" and inside:
+            if self.mode in ("acceptEdits", "auto") and inside:
                 return PermissionCheck(Decision.ALLOW)
             return PermissionCheck(Decision.ASK)
 
         return PermissionCheck(Decision.ASK)
 
+    def _part_allowed(self, seg: Segment) -> bool:
+        """One part of a command line, by the allow rules (never a part with $(...))."""
+        if seg.dynamic or not seg.words:
+            return False
+        for rule in [*self.allow, *self.turn_allow]:
+            if rule.tool != "Bash":
+                continue
+            if rule.spec is None or rule.spec in ("", "*") or words_match(rule.spec, seg.words):
+                return True
+        return False
 
-def suggest_rule(tool: Tool, args: object, ctx: ToolContext) -> str:
-    """The rule saved when the user answers "always allow"."""
+    def write_allowed(self, path: Path, ctx: ToolContext) -> bool:
+        """A file a command writes through a redirection (`> notes.txt`): like an edit."""
+        root = ctx.project_root
+        if self.mode == "bypassPermissions":
+            return True
+        if is_protected(path, root) or is_secret(path, root):
+            return False
+        for rule in [*self.allow, *self.turn_allow]:
+            if rule.tool == "Edit" and (
+                rule.spec is None or rule.spec in ("", "*") or path_matches(rule.spec, path, root)
+            ):
+                return True
+        return self.mode in ("acceptEdits", "auto") and _rel(path, root) is not None
+
+    def _check_bash(self, command: str, args: object, ctx: ToolContext) -> PermissionCheck:
+        segments = parse(command)
+        verdicts: list[Verdict] = (
+            classify(segments, shell_cwd(args, ctx), ctx.project_root) if segments else []
+        )
+        writes = [w for v in verdicts for w in v.writes]
+        unknown_write = any(v.unknown_write for v in verdicts)
+        reads_ok = all(v.reads_ok for v in verdicts)
+        if segments and reads_ok and not unknown_write:
+            if not writes and all(v.read_only for v in verdicts):
+                return PermissionCheck(Decision.ALLOW, "read-only")
+            if all(
+                v.read_only or self._part_allowed(seg)
+                for seg, v in zip(segments, verdicts, strict=True)
+            ) and all(self.write_allowed(w, ctx) for w in writes):
+                return PermissionCheck(Decision.ALLOW, "allowed by rules")
+        if self.mode == "bypassPermissions":
+            return PermissionCheck(Decision.ALLOW)
+        if self.mode == "plan":
+            return PermissionCheck(Decision.DENY, "plan mode is read-only; propose a plan instead")
+        if ctx.sandbox is not None and ctx.sandbox.auto_allow:
+            return PermissionCheck(Decision.ALLOW, "runs in the sandbox")
+        if self.mode != "auto":
+            return PermissionCheck(Decision.ASK)
+        # auto: everything but what's risky.
+        if reason := outward_reason(command):
+            return PermissionCheck(Decision.ASK, reason)
+        if segments is None:
+            return PermissionCheck(Decision.ASK, "the command doesn't parse")
+        for w in writes:
+            if not self.write_allowed(w, ctx):
+                return PermissionCheck(
+                    Decision.ASK, f"writes {ctx.display(w)} (outside the project, or protected)"
+                )
+        if unknown_write:
+            return PermissionCheck(Decision.ASK, "writes to a file named by a variable")
+        if not reads_ok or any(
+            not v.read_only and seg.words[:1] and seg.words[0] in READERS
+            for seg, v in zip(segments, verdicts, strict=True)
+        ):
+            return PermissionCheck(Decision.ASK, "reads files outside the project or secret files")
+        return PermissionCheck(Decision.ALLOW, "auto mode")
+
+
+def _part_rule(seg: Segment, read_program: bool) -> str:
+    """The rule "always allow" saves for one part of a command line."""
+    words = seg.words
+    if read_program or words[0] == "cd":
+        # `cat /etc/hosts`: only this one (a rule for all of cat would cover secrets).
+        return f"Bash({shlex.join(words)})"
+    if len(words) >= 2 and re.fullmatch(r"[A-Za-z][\w.-]*", words[1]):
+        return f"Bash({words[0]} {words[1]}:*)"
+    return f"Bash({words[0]}:*)"
+
+
+def _path_rule(name: str, target: Path, ctx: ToolContext) -> str:
+    rel = _rel(target, ctx.project_root)
+    if rel is None:
+        return f"{name}({target.as_posix()})"
+    parent = Path(rel).parent.as_posix()
+    return f"{name}({parent}/**)" if parent != "." else f"{name}(/{rel})"
+
+
+def suggest_rules(tool: Tool, args: object, ctx: ToolContext) -> list[str]:
+    """The rules saved when the user answers "always allow": for a command line,
+    one per part that isn't read-only, and one per file it writes."""
     target = tool.permission_target(args, ctx)
     if tool.name == "Bash" and isinstance(target, str):
-        if has_shell_operators(target):
-            return f"Bash({target})"
-        words = target.split()
-        if len(words) >= 2 and re.fullmatch(r"[A-Za-z][\w.-]*", words[1]):
-            return f"Bash({words[0]} {words[1]}:*)"
-        return f"Bash({words[0]}:*)" if words else "Bash"
+        segments = parse(target)
+        if not segments or any(seg.dynamic for seg in segments):
+            return [f"Bash({target})"]
+        verdicts = classify(segments, shell_cwd(args, ctx), ctx.project_root)
+        if any(v.unknown_write for v in verdicts):
+            return [f"Bash({target})"]
+        rules = [
+            _part_rule(seg, seg.words[0] in READERS)
+            for seg, v in zip(segments, verdicts, strict=True)
+            if seg.words and not v.read_only
+        ]
+        rules += [_path_rule("Edit", w, ctx) for v in verdicts for w in v.writes]
+        return list(dict.fromkeys(rules)) or [f"Bash({target})"]
     if isinstance(target, Path):
-        name = "Edit" if tool.name in FILE_EDIT_TOOLS else tool.name
-        rel = _rel(target, ctx.project_root)
-        if rel is None:
-            return f"{name}({target.as_posix()})"
-        parent = Path(rel).parent.as_posix()
-        return f"{name}({parent}/**)" if parent != "." else f"{name}(/{rel})"
-    return tool.name
+        return [_path_rule("Edit" if tool.name in FILE_EDIT_TOOLS else tool.name, target, ctx)]
+    return [tool.name]
+
+
+def suggest_rule(tool: Tool, args: object, ctx: ToolContext) -> str:
+    """The rules "always allow" saves, as the user sees them."""
+    return ", ".join(suggest_rules(tool, args, ctx))

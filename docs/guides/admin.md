@@ -72,7 +72,8 @@ An admin-only file on each PC:
 
 It applies to the terminal and every IDE alike. It can:
 - lock cmcoder to the company gateway (`lockProviders`);
-- turn off `bypassPermissions`;
+- turn off `bypassPermissions` or the `auto` mode (`disableBypassPermissionsMode`,
+  `disableAutoMode`: `"disable"`);
 - deny commands, or allow only its own rules;
 - allow or deny MCP servers;
 - turn off code search, or require the company's Chroma server.

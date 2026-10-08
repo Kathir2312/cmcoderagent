@@ -9,6 +9,7 @@ namespace Cmcoder.VisualStudio
         [Description("Ask before edits and commands")] Default,
         [Description("Edits without asking")] AcceptEdits,
         [Description("Read only, plan first")] Plan,
+        [Description("Ask only for risky actions")] Auto,
     }
 
     /// <summary>Tools > Options > cmcoder (H17, H21). Stored per user, never in a solution.</summary>
@@ -44,6 +45,7 @@ namespace Cmcoder.VisualStudio
             PermissionModeSetting.Default => "default",
             PermissionModeSetting.AcceptEdits => "acceptEdits",
             PermissionModeSetting.Plan => "plan",
+            PermissionModeSetting.Auto => "auto",
             _ => null,
         };
     }
