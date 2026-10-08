@@ -59,19 +59,32 @@ export function bridge<Out>(): Bridge<Out> {
 
 /**
  * Whether a "message" event comes from the IDE: Eclipse, NetBeans and Visual
- * Studio post from inside the page (window.postMessage), VS Code from one of
- * the frames it wraps the page in (how deep depends on its version), or as an
- * event without a sending window. A frame inside the page, or any other
- * window, is ignored.
+ * Studio post from inside the page (window.postMessage); VS Code posts from
+ * one of its webview's own frames: same origin as the page (its own
+ * vscode-webview:// address), around it or beside it depending on its
+ * version. Never taken: a frame inside the page or a window it opened (a
+ * hostile page could make one), or a window of another origin.
  */
 export function fromHost(e: MessageEvent): boolean {
   const from = e.source;
   if (from === null || from === window) return true;
+  if (typeof (from as Window).postMessage !== "function" || !("parent" in from)) return false; // a port or a worker
+  const sender = from as Window;
+  for (let w: Window = sender; w.parent !== w; ) {
+    w = w.parent;
+    if (w === window) return false; // a frame inside this page
+  }
+  try {
+    if (sender.opener === window) return false; // a window this page opened
+  } catch {
+    // another origin's window: decided below
+  }
   for (let w: Window = window; w.parent !== w; ) {
     w = w.parent;
-    if (from === w) return true;
+    if (sender === w) return true; // a frame around this page
   }
-  return false;
+  const origin = window.origin; // (the document's origin: also right in a frame without its own address)
+  return origin !== "null" && e.origin === origin;
 }
 
 /** Values the IDE puts on <body> for the panel: data-product, data-icon. */

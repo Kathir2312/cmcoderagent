@@ -139,3 +139,49 @@ test("VS Code: messages from the frames it wraps the page in, however deep, are 
   });
   await p.close();
 });
+
+test("VS Code: a message from another frame of the webview (same origin, beside the page) is taken; another origin's is not", async () => {
+  // In VS Code the extension's messages come from a frame of the webview that is
+  // neither the page nor around it, at the webview's own address.
+  const p = await browser.newPage();
+  const errors: string[] = [];
+  p.on("pageerror", (e) => errors.push(e.message));
+  await p.route("https://webview.test/**", (route) =>
+    route.fulfill({ contentType: "text/html", body: '<!DOCTYPE html><html><body><iframe id="host"></iframe><iframe id="chat"></iframe></body></html>' }),
+  );
+  await p.route("https://elsewhere.test/**", (route) =>
+    route.fulfill({ contentType: "text/html", body: "<!DOCTYPE html><html><body></body></html>" }),
+  );
+  await p.goto("https://webview.test/");
+  const chat = readFileSync(join(root, "dist", "chat.js"), "utf8");
+  await p.evaluate((chat) => {
+    const inner = (document.getElementById("chat") as HTMLIFrameElement).contentWindow!;
+    const w = inner as unknown as Window & { sent: unknown[]; acquireVsCodeApi: () => unknown };
+    w.sent = [];
+    w.acquireVsCodeApi = () => ({ postMessage: (m: unknown) => w.sent.push(m) });
+    inner.document.body.innerHTML = '<div id="app"></div>';
+    const script = inner.document.createElement("script");
+    script.textContent = chat;
+    inner.document.body.append(script);
+  }, chat);
+  // The other frame of the webview (same origin, beside the chat) posts: taken.
+  await p.evaluate(() => {
+    const host = (document.getElementById("host") as HTMLIFrameElement).contentWindow as Window & { eval(code: string): unknown };
+    host.eval(`parent.frames[1].postMessage({ kind: "state", state: "exited", message: "FROM-VS-CODE" }, "*")`);
+  });
+  const chatText = () => (document.getElementById("chat") as HTMLIFrameElement).contentDocument!.body.innerText;
+  await p.waitForFunction(`(${chatText})().includes("FROM-VS-CODE")`);
+  // A frame of another origin posts: ignored (and reported once).
+  await p.evaluate(() => {
+    const f = document.createElement("iframe");
+    f.src = "https://elsewhere.test/";
+    f.onload = () => f.contentWindow!.postMessage("", "*"); // (just to have it loaded)
+    document.body.append(f);
+  });
+  const other = await p.waitForEvent("framenavigated", (f) => f.url().startsWith("https://elsewhere.test"));
+  await other.evaluate(() => parent.frames[1].postMessage({ kind: "state", state: "exited", message: "FROM-ELSEWHERE" }, "*"));
+  await p.waitForFunction(`(${chatText})().includes("ignored a message from a window that isn't the IDE")`);
+  assert.equal(await p.evaluate(`(${chatText})().includes("FROM-ELSEWHERE")`), false);
+  assert.deepEqual(errors, []);
+  await p.close();
+});
