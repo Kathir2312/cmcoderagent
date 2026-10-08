@@ -44,6 +44,8 @@ export async function run(): Promise<void> {
   assert.ok(ext, "extension not found");
   const api = (await ext.activate()) as CmcoderApi;
   api.onEvent((e) => events.push(e));
+  const panelStates: string[] = [];
+  api.onPanelState((s) => panelStates.push(s));
   const commands = await vscode.commands.getCommands(true);
   for (const c of [
     "cmcoder.newConversation",
@@ -61,6 +63,9 @@ export async function run(): Promise<void> {
   // Opening the chat view starts cmcoder for the workspace.
   await vscode.commands.executeCommand("cmcoder.focus");
   const init = await event("system_init");
+  // The chat page in this real VS Code runs and takes messages from the
+  // extension: it reports "ready" back (Send works only then).
+  await until("the chat page to be ready to send", () => panelStates.includes("ready"));
   // Code search isn't set up in the test workspace: the status bar says so.
   const codeSearch = await event("index_status");
   assert.equal(codeSearch.set_up, false);

@@ -46,6 +46,25 @@ needs Python, and cmcoder never tries to install it. If something asks for
 | The project's `.cmcoder` settings are ignored | the project isn't trusted: `cmcoder trust`, VS Code's workspace trust, or Eclipse's preference |
 | Corporate antivirus blocks `cmcoder.exe` | ask IT to allow it (the signed build, once your company signs it) |
 
+## The chat does nothing when you press Send
+
+The line above the input says why a message didn't go ("Not sent: …"), and
+the top of the chat shows cmcoder's state ("Starting cmcoder…", the model's
+name when it's ready, "cmcoder stopped"). If neither tells you, open the log
+(VS Code: **cmcoder: Show Log**) and look for these lines, in this order:
+
+| Line | Means |
+|---|---|
+| `Chat panel loaded` | the chat's page runs |
+| `cmcoder 0.1.0 (…): <model>` | cmcoder started (and which build) |
+| `Chat panel: cmcoder ready, messages can be sent` | the page gets messages from the IDE |
+| `Message sent to cmcoder: …` | your message left the chat |
+| `Turn ended: success after … s` | the answer is complete |
+| `Chat panel error: …` | the page's script failed: reload the window, and send us this line |
+
+The first line that's missing is where it stops. Send the log with your
+question (your key is never in it).
+
 ## Logs
 
 | Where | How |

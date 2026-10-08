@@ -19,6 +19,23 @@ import type { AgentState, FromWebview, ImageAttachment, ToWebview } from "../mes
 const host = bridge<FromWebview>();
 const post = (m: FromWebview) => host.post(m);
 
+// A failure in this page's script would leave a chat that looks fine but does
+// nothing: show it, and tell the IDE, whose log keeps it.
+function panelError(message: string): void {
+  const product = document.body.dataset.product || "cmcoder";
+  try {
+    post({ kind: "panelError", message: message.slice(0, 2000) });
+  } catch {
+    // the bridge itself failed: the page still shows it
+  }
+  const box = document.createElement("div");
+  box.className = "note error";
+  box.textContent = `✗ The chat panel failed: ${message}\nReload the window to start it again; ${product}'s log has this too.`;
+  (document.querySelector(".log") ?? document.body).append(box);
+}
+window.addEventListener("error", (e) => panelError(`${e.message} (${(e.filename || "").split("/").pop()}:${e.lineno})`));
+window.addEventListener("unhandledrejection", (e) => panelError(String(e.reason)));
+
 const MODES = ["default", "acceptEdits", "plan", "bypassPermissions"];
 const MARKS: Record<string, string> = { pending: "☐", in_progress: "►", completed: "☑" };
 
@@ -370,6 +387,22 @@ function flushQueue(interrupted: boolean): void {
     return;
   }
   submit(text, items.some((q) => q.includeContext), images);
+}
+
+// A start that takes long says so, with the time, instead of looking stuck.
+let startTimer: ReturnType<typeof setInterval> | undefined;
+function watchStart(): void {
+  const started = Date.now();
+  if (startTimer !== undefined) clearInterval(startTimer);
+  startTimer = setInterval(() => {
+    if (agentState !== "starting") {
+      clearInterval(startTimer);
+      startTimer = undefined;
+      return;
+    }
+    const s = Math.round((Date.now() - started) / 1000);
+    if (s >= 10) showStatus(`Starting ${PRODUCT}… (${s} s; its log says what it's doing)`);
+  }, 1000);
 }
 
 function showStatus(text?: string): void {
@@ -1015,10 +1048,15 @@ window.addEventListener("message", (e: MessageEvent<ToWebview>) => {
     case "state":
       ready = m.state === "ready";
       agentState = m.state;
+      post({ kind: "panelState", state: m.state }); // the IDE's log: messages reach this page
       if (m.state !== "ready") critiqueBox.disabled = true; // until the next system_init
-      if (m.state === "starting") showStatus(`Starting ${PRODUCT}…`);
-      else if (m.state === "ready") showStatus();
+      if (m.state === "starting") {
+        modelLabel.textContent = `Starting ${PRODUCT}…`;
+        showStatus(`Starting ${PRODUCT}…`);
+        watchStart();
+      } else if (m.state === "ready") showStatus();
       else {
+        modelLabel.textContent = `${PRODUCT} stopped`;
         setBusy(false);
         showStatus();
         const box = el("div", "note error", m.message ?? `${PRODUCT} stopped.`);

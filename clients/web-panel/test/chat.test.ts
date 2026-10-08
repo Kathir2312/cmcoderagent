@@ -580,6 +580,31 @@ test("Send never does nothing silently: it says why the message didn't go", asyn
   await page.close();
 });
 
+test("the header and the status line always say what cmcoder is doing", async () => {
+  const { page, send, sent } = await panel("vscode", undefined, false);
+  await page.clock.install();
+  await send({ kind: "state", state: "starting" });
+  assert.equal(await page.textContent(".model"), "Starting cmcoder…");
+  await page.clock.runFor(12_000); // a slow start says how long, and where to look
+  assert.match((await page.textContent(".status")) ?? "", /Starting cmcoder… \(1[23] s; its log says what it's doing\)/);
+  await send({ kind: "state", state: "exited", message: "cmcoder stopped." });
+  assert.equal(await page.textContent(".model"), "cmcoder stopped");
+  // Each state it took goes back to the IDE, for its log.
+  assert.deepEqual(
+    (await sent()).filter((m) => m.kind === "panelState").map((m) => (m as { state: string }).state),
+    ["starting", "exited"],
+  );
+  await page.close();
+});
+
+test("a failure in the page's script shows in the chat and goes to the IDE's log", async () => {
+  const { page, sent } = await panel("vscode");
+  await page.evaluate(() => window.dispatchEvent(new ErrorEvent("error", { message: "Uncaught TypeError: x is undefined", filename: "https://x/dist/chat.js", lineno: 7 })));
+  assert.match((await page.textContent(".note.error")) ?? "", /The chat panel failed: Uncaught TypeError: x is undefined \(chat\.js:7\)/);
+  assert.deepEqual((await sent()).at(-1), { kind: "panelError", message: "Uncaught TypeError: x is undefined (chat.js:7)" });
+  await page.close();
+});
+
 test("a page that reloaded after cmcoder started still sends images", async () => {
   // The host says "ready" again, but this page never saw system_init.
   const { page, send, sent } = await panel("vscode", undefined, false);

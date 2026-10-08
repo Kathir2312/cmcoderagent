@@ -23,6 +23,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private readonly events = new vscode.EventEmitter<AgentEvent>();
   /** Every protocol event from cmcoder (used by the integration tests). */
   readonly onEvent = this.events.event;
+  private readonly panelStates = new vscode.EventEmitter<AgentState>();
+  /** The chat page took a state from here: messages reach it (for the log and tests). */
+  readonly onPanelState = this.panelStates.event;
   /** The Agent Navigator tab (the turn's agents as a mind map). */
   readonly navigator: AgentNavigator;
 
@@ -272,6 +275,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     switch (m.kind) {
       case "ready":
         // The webview (re)loaded: start a conversation if none is running.
+        this.log.appendLine(`Chat panel loaded (${productName()} ${this.agent ? `is ${this.state}` : "not started yet"})`);
         if (!this.agent) this.startAgent();
         else this.post({ kind: "state", state: this.state });
         this.updateContext();
@@ -326,6 +330,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         break;
       case "pasteImage":
         break; // VS Code's webview gives the page clipboard images itself
+      case "panelError":
+        this.log.appendLine(`Chat panel error: ${m.message}`);
+        break;
+      case "panelState":
+        this.log.appendLine(`Chat panel: ${productName()} ${m.state === "ready" ? "ready, messages can be sent" : m.state}`);
+        this.panelStates.fire(m.state);
+        break;
     }
   }
 

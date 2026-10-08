@@ -261,6 +261,12 @@ public final class Host {
                 }
                 break;
             }
+            case "panelError":
+                ide.log(config.product + " chat panel error: " + Json.string(m, "message"));
+                break;
+            case "panelState":
+                ide.log(config.product + " chat panel: " + Json.string(m, "state"));
+                break;
             case "pasteImage":
                 // The page got no image from the clipboard (JavaFX's browser doesn't pass
                 // them on): the IDE reads it, and the page shows it like a pasted one.

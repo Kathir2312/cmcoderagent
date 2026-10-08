@@ -46,7 +46,11 @@ export type FromWebview =
   | { kind: "resume"; id: string }
   | { kind: "attachFile" }
   | { kind: "restart" }
-  | { kind: "openLink"; href: string };
+  | { kind: "openLink"; href: string }
+  /** The page's script failed: the IDE writes it to its log (the page shows it too). */
+  | { kind: "panelError"; message: string }
+  /** The page took cmcoder's state (so messages from the IDE reach it): for the IDE's log. */
+  | { kind: "panelState"; state: AgentState };
 
 // Messages between the extension and the Agent Navigator (an editor tab with
 // the current turn's agents as a mind map).

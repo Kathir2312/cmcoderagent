@@ -290,6 +290,12 @@ namespace Cmcoder.Core
                     }
                     case "pasteImage":
                         break; // WebView2 gives the page clipboard images itself
+                    case "panelError":
+                        ide.Log(config.Product + " chat panel error: " + Json.Str(m, "message"));
+                        break;
+                    case "panelState":
+                        ide.Log(config.Product + " chat panel: " + Json.Str(m, "state"));
+                        break;
                     case "interrupt":
                         Send(Protocol.Interrupt());
                         break;
