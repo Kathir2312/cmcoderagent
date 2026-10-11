@@ -30,6 +30,8 @@ Then, once, whichever you chose: [setup.md](setup.md) (your gateway and API
 key). Optional, for big projects: [code-search.md](code-search.md). Screenshots
 and other images: [images.md](images.md).
 Problems: [troubleshooting.md](troubleshooting.md).
+A team of agents (PM, developer, tester, DevOps) on one feature:
+[../setupteams.md](../setupteams.md).
 
 ## What your PC needs
 
