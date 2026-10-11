@@ -6,9 +6,15 @@ using System.Runtime.InteropServices;
 namespace Cmcoder.Core
 {
     /// <summary>
-    /// Which cmcoder program to start (H1): the user's own setting, else the copy
-    /// inside the extension, else <c>cmcoder</c> on PATH. Never Python or uv
-    /// (developers' PCs may have neither).
+    /// Which cmcoder program to start (H1): the user's own setting, else the
+    /// shared one in <c>%USERPROFILE%\.cmcoder\bin</c> when it's at least as new
+    /// as the copy inside the extension, else that copy, else <c>cmcoder</c> on
+    /// PATH. Never Python or uv (developers' PCs may have neither).
+    ///
+    /// The shared folder holds one cmcoder for the terminal and every IDE: the
+    /// terminal package installs there, and a cmcoder started from an
+    /// extension's own copy copies itself there when that one is missing or
+    /// older (src/cmcoder/shared_install.py). "Newer" is the build's STAMP.
     ///
     /// A project must not be able to choose the program: the setting is the
     /// user's (never a project file) and must be a full path, and PATH is
@@ -37,7 +43,36 @@ namespace Cmcoder.Core
             public string? Problem { get; }
         }
 
-        public static Found Find(string? setting, string? extensionDir, string? projectDir, IDictionary<string, string?> env)
+        /// <summary>The folder of the shared cmcoder: CMCODER_CONFIG_DIR (or ~\.cmcoder), then bin.</summary>
+        public static string SharedFolder(IDictionary<string, string?> env, string home)
+        {
+            env.TryGetValue("CMCODER_CONFIG_DIR", out var dir);
+            return Path.Combine(string.IsNullOrEmpty(dir) ? Path.Combine(home, ".cmcoder") : dir!, "bin");
+        }
+
+        /// <summary>The build stamp of the cmcoder in <paramref name="folder"/> (sortable), or null.</summary>
+        public static string? StampOf(string folder)
+        {
+            if (!File.Exists(Path.Combine(folder, Windows ? "cmcoder.exe" : "cmcoder"))) return null;
+            foreach (var f in new[] { Path.Combine(folder, "_internal", "cmcoder", "STAMP"), Path.Combine(folder, "cmcoder", "STAMP") })
+            {
+                try
+                {
+                    var text = File.ReadAllText(f).Trim();
+                    if (text.Length > 0) return text;
+                }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
+            }
+            return null;
+        }
+
+        public static Found Find(string? setting, string? extensionDir, string? projectDir, IDictionary<string, string?> env) =>
+            Find(setting, extensionDir, projectDir, env,
+                SharedFolder(env, Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)));
+
+        /// <summary>As <see cref="Find(string?, string?, string?, IDictionary{string, string?})"/>, with the shared folder given (tests).</summary>
+        public static Found Find(string? setting, string? extensionDir, string? projectDir, IDictionary<string, string?> env, string shared)
         {
             if (!string.IsNullOrWhiteSpace(setting))
             {
@@ -50,11 +85,16 @@ namespace Cmcoder.Core
                     ? new Found(p, null)
                     : new Found(null, "The cmcoder program set in the settings doesn't exist: " + p);
             }
-            if (extensionDir != null)
+            var b = extensionDir == null ? null : Bundled(extensionDir);
+            var ours = b != null && File.Exists(b);
+            var sharedStamp = StampOf(shared);
+            if (sharedStamp != null)
             {
-                var b = Bundled(extensionDir);
-                if (File.Exists(b)) return new Found(b, null);
+                var ourStamp = ours ? StampOf(Path.GetDirectoryName(b)!) : null;
+                if (ourStamp == null || string.CompareOrdinal(sharedStamp, ourStamp) >= 0)
+                    return new Found(Path.Combine(shared, Windows ? "cmcoder.exe" : "cmcoder"), null);
             }
+            if (ours) return new Found(b, null);
             var onPath = OnPath("cmcoder", projectDir, env);
             if (onPath != null) return new Found(onPath, null);
             return new Found(null, "cmcoder wasn't found: this extension should contain it. Install the extension file "

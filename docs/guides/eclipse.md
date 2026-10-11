@@ -38,31 +38,22 @@ the update site zip. **Don't unzip the update site itself.**
 Skip this if your team did it for you: open the chat and ask something. If it
 answers, you're done.
 
-1. **The gateway.** Create `%USERPROFILE%\.cmcoder\settings.json` (Windows) or
-   `~/.cmcoder/settings.json` (macOS, Linux) with what your AI team gives you:
+1. Open the chat once. Without settings it says so, and it puts cmcoder in
+   `%USERPROFILE%\.cmcoder\bin` (Windows) or `~/.cmcoder/bin` (macOS, Linux):
+   the one program for the terminal and every IDE.
+2. In a terminal, run:
 
-   ```json
-   {
-     "providers": { "corp": { "baseUrl": "https://ai-gateway.example.com/v1" } },
-     "model": "corp:qwen3-27b"
-   }
-   ```
+   - Windows, Command Prompt: `"%USERPROFILE%\.cmcoder\bin\cmcoder.exe" setup`
+   - Windows, PowerShell: `& "$env:USERPROFILE\.cmcoder\bin\cmcoder.exe" setup`
+   - macOS, Linux: `~/.cmcoder/bin/cmcoder setup`
 
-2. **Your API key.** It's saved in your operating system's keychain, never in
-   a file. In Eclipse, press **Ctrl+3**, run **cmcoder: Copy Diagnostics**, and
-   paste it somewhere: the **Program:** line is the cmcoder inside the plugin
-   (in Eclipse's `plugins` folder, ending in `bin/cmcoder/cmcoder`, or
-   `cmcoder.exe` on Windows). In a terminal, run that program with `login` and
-   paste your key (it isn't shown):
+   (`cmcoder setup`, if you installed the terminal package.) It asks for the
+   gateway's address (from your AI team) and your API key (saved in your
+   operating system's keychain, never in a file; it isn't shown), and lets you
+   pick the models from the gateway's list.
+3. Click **Restart** in the chat.
 
-   ```
-   "C:\…\plugins\cmcoder.eclipse.win32.x86_64_…\bin\cmcoder\cmcoder.exe" login
-   ```
-
-   If you also use the terminal package, `cmcoder login` there does the same:
-   the key is shared.
-
-More (Open WebUI, certificates, proxies): [setup.md](setup.md).
+More (Open WebUI, certificates, proxies, doing it by hand): [setup.md](setup.md).
 
 ## 4. Use
 

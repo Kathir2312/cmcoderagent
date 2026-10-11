@@ -93,6 +93,39 @@ def check_mono_svg(path: Path) -> list[str]:
     return sorted(set(out))
 
 
+def check_settings(path: Path, managed: bool) -> list[str]:
+    """The company's settings template or managed settings (both optional):
+    a broken one would stop cmcoder on every PC, so the build refuses it."""
+    if not path.exists():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
+    except ValueError as e:
+        return [f"{path.name}: invalid JSON ({e})"]
+    if not isinstance(data, dict):
+        return [f"{path.name}: must contain a JSON object"]
+    from cmcoder.config.settings import Settings
+
+    try:
+        Settings.model_validate(data)
+    except ValueError as e:
+        return [f"{path.name}: {str(e).splitlines()[0]} ({e})"]
+    found: list[str] = []
+    for name, provider in (data.get("providers") or {}).items():
+        url = str(provider.get("baseUrl", "")) if isinstance(provider, dict) else ""
+        if "example" in url or "YOUR-" in url.upper():
+            found.append(f"{path.name}: provider {name!r} still has the example address {url}")
+    if (
+        not managed
+        and "permissions" in data
+        and "disableBypassPermissionsMode" in data["permissions"]
+    ):
+        found.append(
+            f"{path.name}: disableBypassPermissionsMode only counts in managed-settings.json"
+        )
+    return found
+
+
 def load(folder: Path = BRANDING) -> dict[str, str]:
     """brand.json with defaults filled in; raises BrandError listing every problem."""
     try:
@@ -104,6 +137,8 @@ def load(folder: Path = BRANDING) -> dict[str, str]:
     found = problems(data, logo)
     found += check_png(folder / "icon.png")
     found += check_mono_svg(folder / "icon-mono.svg")
+    found += check_settings(folder / "settings.template.json", managed=False)
+    found += check_settings(folder / "managed-settings.json", managed=True)
     if found:
         raise BrandError("branding/ has problems:\n  - " + "\n  - ".join(found))
     assert isinstance(data, dict)

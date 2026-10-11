@@ -1,16 +1,12 @@
 // Which cmcoder the extension starts: one you set (cmcoder.executable), else
-// the one bundled in a platform-specific .vsix (bin/cmcoder/), else `cmcoder`
-// on PATH.
+// the shared one in ~/.cmcoder/bin when it's at least as new as the copy in
+// this extension (bin/cmcoder/), else that copy, else `cmcoder` on PATH
+// (sharedProgram.ts).
 
-import { existsSync } from "node:fs";
-import * as path from "node:path";
 import * as vscode from "vscode";
+import { chooseProgram } from "./sharedProgram";
 
-export function bundledCmcoder(extensionPath: string): string | undefined {
-  const exe = process.platform === "win32" ? "cmcoder.exe" : "cmcoder";
-  const file = path.join(extensionPath, "bin", "cmcoder", exe);
-  return existsSync(file) ? file : undefined;
-}
+export { bundledCmcoder, chooseProgram } from "./sharedProgram";
 
 export function cmcoderCommand(extensionPath: string): { command: string; args: string[] } {
   const config = vscode.workspace.getConfiguration("cmcoder");
@@ -18,8 +14,8 @@ export function cmcoderCommand(extensionPath: string): { command: string; args: 
   const chosen = set?.globalValue ?? set?.workspaceValue ?? set?.workspaceFolderValue;
   const args = config.get<string[]>("executableArgs") ?? [];
   if (!chosen) {
-    const bundled = bundledCmcoder(extensionPath);
-    if (bundled) return { command: bundled, args: [] };
+    const program = chooseProgram(extensionPath);
+    if (program) return { command: program, args: [] };
   }
   return { command: chosen || "cmcoder", args };
 }

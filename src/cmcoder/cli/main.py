@@ -29,6 +29,7 @@ from ..providers.openai_compat import ProviderError
 
 SUBCOMMANDS = {
     "doctor",
+    "setup",
     "index",
     "login",
     "logout",
@@ -295,8 +296,8 @@ def _provider_name(settings: Settings, provider: str | None) -> str:
         return provider
     if not settings.providers:
         err_console.print(
-            "[red]error:[/red] no provider configured. Add `providers` to ~/.cmcoder/settings.json "
-            "(see docs/settings.example.json) or set CMCODER_BASE_URL."
+            "[red]error:[/red] no gateway configured. Run `cmcoder setup`, or add `providers` to "
+            "~/.cmcoder/settings.json (see settings.example.json there) or set CMCODER_BASE_URL."
         )
         raise typer.Exit(2)
     if settings.model:
@@ -503,8 +504,12 @@ def version() -> None:
 
 from .mcp_cmd import mcp_app  # noqa: E402
 from .rag_cmd import index_command, rag_app  # noqa: E402
+from .setup_cmd import setup as setup_command  # noqa: E402
 from .symbols import configure as configure_symbols  # noqa: E402
 
+sub_app.command("setup", help="First-time setup: the gateway, your API key, the models.")(
+    setup_command
+)
 sub_app.add_typer(mcp_app, name="mcp")
 sub_app.add_typer(rag_app, name="rag")
 sub_app.command("index", help="Build or update this project's code index (changed files only).")(
@@ -520,6 +525,11 @@ def run() -> None:
         bridge(sys.argv[2:])
         return
     use_utf8_stdio()
+    from ..shared_install import mark_running
+    from ..user_folder import prepare
+
+    prepare()  # ~/.cmcoder and the company's settings template, the first time
+    mark_running()  # run from ~/.cmcoder/bin: no update swaps it out meanwhile
     if len(sys.argv) > 1 and sys.argv[1] in SUBCOMMANDS:
         sub_app()
     else:

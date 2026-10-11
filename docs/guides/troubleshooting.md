@@ -25,7 +25,9 @@ needs Python, and cmcoder never tries to install it. If something asks for
 
 | Problem | Fix |
 |---|---|
-| `cmcoder` not found (terminal) | open a **new** terminal after installing; check `%LOCALAPPDATA%\Programs\cmcoder` is on PATH (Windows) or `~/.local/bin` (macOS, Linux) |
+| `cmcoder` not found (terminal) | open a **new** terminal after installing; check `%USERPROFILE%\.cmcoder\bin` is on PATH (Windows) or `~/.local/bin` (macOS, Linux) |
+| "No gateway configured" | first-time setup: `cmcoder setup`, or the program's full path with `setup` ([setup.md](setup.md)) |
+| Which cmcoder an IDE runs | `%USERPROFILE%\.cmcoder\bin`, or the plugin's own copy while that one is newer: the IDE's log has the path and "Shared program: …" (how the copy went) |
 | Commands fail on Windows: "Git Bash not found" | install Git for Windows, restart the IDE / terminal |
 | "Can't reach the gateway" / name not found | connect the VPN; check `baseUrl` in `~/.cmcoder/settings.json` |
 | Certificate error | IT's root certificate isn't in the Windows/macOS store: add `"caCertPath"` to the provider ([setup.md](setup.md)). Never switch certificate checks off |

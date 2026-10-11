@@ -11,22 +11,25 @@ everything it needs: **no Python, pip, uv or Node.js** is needed or used.
    | Windows | macOS, Linux |
    |---|---|
    | double-click **`install.cmd`** (or `powershell -ExecutionPolicy Bypass -File install.ps1`) | `sh install.sh` |
-   | installs into `%LOCALAPPDATA%\Programs\cmcoder` and adds it to your PATH | installs into `~/.local/share/cmcoder` and links `~/.local/bin/cmcoder` |
+   | installs into `%USERPROFILE%\.cmcoder\bin` and adds it to your PATH | installs into `~/.cmcoder/bin` and links `~/.local/bin/cmcoder` |
 
-   No administrator rights are needed.
+   No administrator rights are needed. That folder holds the one cmcoder for
+   the terminal and every IDE (the IDEs use it too). An older install in
+   `%LOCALAPPDATA%\Programs\cmcoder` or `~/.local/share/cmcoder` is moved.
 3. Open a **new** terminal (the old one doesn't see the new PATH) and run:
 
    ```
    cmcoder doctor
    ```
 
-4. First time only: [setup.md](setup.md) (your gateway and `cmcoder login`).
+4. First time only, unless your company's settings came with it:
+   `cmcoder setup` (your gateway, your API key, the models; [setup.md](setup.md)).
 
 If your company blocks scripts: copy the `cmcoder` folder from the zip
 anywhere you like and add that folder to your PATH yourself.
 
-**Update:** run the install script of the new version (your settings, saved
-conversations and key stay). **Uninstall:** `uninstall.cmd` (Windows) or
+**Update:** close cmcoder (terminal and IDEs), then run the install script
+of the new version (your settings, saved conversations and key stay). **Uninstall:** `uninstall.cmd` (Windows) or
 `sh uninstall.sh`; your settings, conversations and key are kept.
 
 On Windows, cmcoder runs shell commands with Git Bash: install Git for Windows

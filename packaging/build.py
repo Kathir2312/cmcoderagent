@@ -12,6 +12,7 @@ cmcoder/_brand; on Windows, cmcoder.exe also gets the icon and file details.
 
 from __future__ import annotations
 
+import datetime
 import os
 import shutil
 import sys
@@ -25,7 +26,6 @@ import brand  # noqa: E402
 
 def build_id() -> str:
     """The commit and UTC date, e.g. "aa3dc83 2026-10-07" ("+changes" if the tree isn't clean)."""
-    import datetime
     import subprocess
 
     def git(*args: str) -> str:
@@ -56,14 +56,23 @@ def main() -> None:
     except brand.BrandError as e:
         sys.exit(str(e))
     generated = brand.OUT
-    data = [brand.BRANDING / n for n in ("brand.json", "logo.txt", "icon.png")]
+    names = ("brand.json", "logo.txt", "icon.png", "settings.template.json")
+    data = [brand.BRANDING / n for n in names]
     data.append(generated / "cmcoder.ico")
     add_data = [f"--add-data={p}{os.pathsep}cmcoder/_brand" for p in data if p.is_file()]
-    # Which build this is, for `cmcoder version`, the banner and the IDEs' logs.
+    # Which build this is, for `cmcoder version`, the banner and the IDEs' logs;
+    # and when (STAMP): the newest copy of cmcoder wins ~/.cmcoder/bin
+    # (src/cmcoder/shared_install.py).
     build_file = ROOT / "build" / "BUILD"
     build_file.parent.mkdir(exist_ok=True)
     build_file.write_text(build_id(), encoding="utf-8")
+    stamp_file = ROOT / "build" / "STAMP"
+    stamp_file.write_text(f"{datetime.datetime.now(datetime.UTC):%Y%m%dT%H%M%SZ}", encoding="utf-8")
     add_data.append(f"--add-data={build_file}{os.pathsep}cmcoder")
+    add_data.append(f"--add-data={stamp_file}{os.pathsep}cmcoder")
+    # Every setting, as a reference: copied to ~/.cmcoder on first use (user_folder.py).
+    example = ROOT / "docs" / "settings.example.json"
+    add_data.append(f"--add-data={example}{os.pathsep}cmcoder")
     windows = []
     if sys.platform == "win32":
         windows = [

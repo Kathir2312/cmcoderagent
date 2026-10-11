@@ -45,15 +45,52 @@ namespace Cmcoder.Core.Tests
             var bundled = MakeProgram(Path.Combine(extension, "bin", "cmcoder"), "cmcoder" + Exe);
             var onPath = MakeProgram(Path.Combine(tmp, "tools"), "cmcoder" + Exe);
             var mine = MakeProgram(Path.Combine(tmp, "mine"), "cmcoder" + Exe);
-            var env = new Dictionary<string, string?> { ["PATH"] = Path.GetDirectoryName(onPath) };
+            // No shared copy (CMCODER_CONFIG_DIR: an empty folder, not this PC's ~\.cmcoder).
+            var cfg = Path.Combine(tmp, "cfg");
+            var env = new Dictionary<string, string?> { ["PATH"] = Path.GetDirectoryName(onPath), ["CMCODER_CONFIG_DIR"] = cfg };
 
             Assert.Equal(mine, ProgramLocator.Find(mine, extension, project, env).Program);
             Assert.Equal(bundled, ProgramLocator.Find(null, extension, project, env).Program);
             Assert.Equal(bundled, ProgramLocator.Find("  ", extension, project, env).Program);
             Assert.Equal(onPath, ProgramLocator.Find(null, Path.Combine(tmp, "none"), project, env).Program);
-            var none = ProgramLocator.Find(null, null, project, new Dictionary<string, string?> { ["PATH"] = "" });
+            var none = ProgramLocator.Find(null, null, project, new Dictionary<string, string?> { ["PATH"] = "", ["CMCODER_CONFIG_DIR"] = cfg });
             Assert.Null(none.Program);
             Assert.Contains("Install the extension file again", none.Problem);
+        }
+
+        /// <summary>A standalone cmcoder folder (PyInstaller's layout) with this build stamp.</summary>
+        private static string Stamped(string dir, string stamp)
+        {
+            var exe = MakeProgram(dir, "cmcoder" + Exe);
+            var folder = Directory.CreateDirectory(Path.Combine(dir, "_internal", "cmcoder")).FullName;
+            File.WriteAllText(Path.Combine(folder, "STAMP"), stamp + "\n");
+            return exe;
+        }
+
+        [Fact]
+        public void TheSharedCopyWhenItIsAtLeastAsNewAsTheExtensions()
+        {
+            var tmp = Tmp();
+            var project = Directory.CreateDirectory(Path.Combine(tmp, "project")).FullName;
+            var extension = Path.Combine(tmp, "extension");
+            var shared = Path.Combine(tmp, "home", ".cmcoder", "bin");
+            var env = new Dictionary<string, string?> { ["PATH"] = "" };
+            var ours = Stamped(Path.Combine(extension, "bin", "cmcoder"), "20261008T120000Z");
+            // Nothing shared yet: the extension's copy (cmcoder copies itself there for next time).
+            Assert.Equal(ours, ProgramLocator.Find(null, extension, project, env, shared).Program);
+            var theirs = Stamped(shared, "20261001T090000Z"); // older: still ours
+            Assert.Equal(ours, ProgramLocator.Find(null, extension, project, env, shared).Program);
+            Stamped(shared, "20261008T120000Z"); // as new: the shared one
+            Assert.Equal(theirs, ProgramLocator.Find(null, extension, project, env, shared).Program);
+            Stamped(shared, "20261009T000000Z"); // newer: the shared one
+            Assert.Equal(theirs, ProgramLocator.Find(null, extension, project, env, shared).Program);
+            Assert.Equal(theirs, ProgramLocator.Find(null, Path.Combine(tmp, "none"), project, env, shared).Program);
+            var mine = MakeProgram(Path.Combine(tmp, "mine"), "cmcoder" + Exe);
+            Assert.Equal(mine, ProgramLocator.Find(mine, extension, project, env, shared).Program);
+            // The folder follows CMCODER_CONFIG_DIR, else the home folder.
+            Assert.Equal(Path.Combine(tmp, "cfg", "bin"),
+                ProgramLocator.SharedFolder(new Dictionary<string, string?> { ["CMCODER_CONFIG_DIR"] = Path.Combine(tmp, "cfg") }, tmp));
+            Assert.Equal(Path.Combine(tmp, ".cmcoder", "bin"), ProgramLocator.SharedFolder(new Dictionary<string, string?>(), tmp));
         }
 
         [Fact]

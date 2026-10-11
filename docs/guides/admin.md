@@ -9,9 +9,22 @@ out that bundle (or the files in it); developers need no Python.
 | What | Where | Notes |
 |---|---|---|
 | Name, icon, publisher | `branding/` (`brand.json`, `icon.png`, `icon-mono.svg`) | [../phase4/branding.md](../phase4/branding.md). Every file in the bundle carries them. |
-| Gateway, models | a company settings file, or each developer's [setup.md](setup.md) | developers can also be given `settings.json` with the `baseUrl` |
-| Rules developers can't loosen | `managed-settings.json` on each PC | see below |
+| Gateway, models | `branding/settings.template.json` (optional) | every developer's `settings.json` starts as a copy of it, so they only add their API key; without it, each runs `cmcoder setup` ([setup.md](setup.md)) |
+| Rules developers can't loosen | `branding/managed-settings.json` (optional), installed on each PC | see section 5 |
 | Code signing | not yet: needs a company certificate | until then, Windows SmartScreen, antivirus and macOS Gatekeeper may warn; tell developers (the guides say so) |
+
+### The settings template
+
+`branding/settings.template.json` is a normal `settings.json` (start from
+[../settings.example.json](../settings.example.json)): your gateway, its
+certificate if needed, the models. It goes into the program, and the first
+time cmcoder starts on a PC (terminal or IDE) it becomes that developer's
+`%USERPROFILE%\.cmcoder\settings.json`. From then on the file is the
+developer's: a later build never overwrites it (delete it to get the
+template again). No API key goes in it: keys go to each developer's keychain.
+
+The build refuses a template (or a managed file) that isn't valid JSON, isn't
+valid settings, or still has an example address.
 
 ## 2. Build a release
 
@@ -53,12 +66,38 @@ vscode/                cmcoder-<platform>.vsix
 visualstudio/          cmcoder-visualstudio-win32-x64.vsix
 eclipse/               cmcoder-eclipse.zip (all platforms)
 netbeans/              cmcoder-netbeans-<platform>.nbm
+admin/                 managed settings and the scripts that install them
 ```
 
 Put it on a share or the intranet with the guides
 ([README.md](README.md) and the pages it links). Developers install the file
 for their IDE; updates are a new file over the old one. A problem report
 should include the output of **Copy Diagnostics**, which never contains keys.
+
+### Where cmcoder runs from
+
+Every developer has one cmcoder, in `%USERPROFILE%\.cmcoder\bin`
+(`~/.cmcoder/bin` on macOS and Linux), whichever way they installed it:
+
+- the terminal package installs it there (no administrator rights; an
+  older install in `%LOCALAPPDATA%\Programs\cmcoder` is moved);
+- each IDE plugin carries its own copy, and the first time it starts it
+  copies that one there, if it's newer than what's there; the IDEs then run
+  it from there.
+
+For antivirus or AppLocker rules: day to day, what runs is
+`%USERPROFILE%\.cmcoder\bin\cmcoder.exe` (unsigned until the company has a
+certificate). An IDE runs the copy inside its plugin folder only until that
+one has been copied over. If programs can't run from plugin folders, install
+the terminal package first (same version or newer): the IDEs then run the
+shared copy from the start. A running cmcoder is never replaced: the update
+waits until it has closed.
+
+**Roaming profiles:** the program is large (it carries everything it
+needs). If `%USERPROFILE%` roams, leave `.cmcoder\bin` out of the roaming
+profile (Group Policy: *Exclude directories in roaming profile*); the IDEs
+put it back on each PC. The saved conversations in `.cmcoder\projects` can
+roam or not, as you prefer.
 
 ## 5. Managed settings (rules developers can't change)
 
@@ -81,6 +120,20 @@ It applies to the terminal and every IDE alike. It can:
 Start from [../managed-settings.example.json](../managed-settings.example.json).
 `cmcoder doctor` shows what's enforced on a PC. A broken file stops cmcoder
 from starting, so test it on one PC first.
+
+To roll it out, put your file in `branding/managed-settings.json` before the
+build (it is checked like the template, and it lands in the bundle's
+`admin/` folder), or next to the scripts in `admin/` afterwards:
+
+- **One PC:** right-click `admin\install-managed.cmd`, **Run as
+  administrator** (macOS, Linux: `sudo sh admin/install-managed.sh`). It
+  checks the file and copies it to the place above.
+- **Many PCs:** deploy the same file to the same place with Intune, Group
+  Policy, Configuration Manager or Jamf.
+
+Developers' installers never install it: they run without administrator
+rights, and an installer started "as administrator" with another account
+would put that account's files in the wrong profile.
 
 ## 6. Code search with a shared Chroma server (optional)
 

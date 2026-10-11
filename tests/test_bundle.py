@@ -4,6 +4,7 @@ report from each platform's results, checksums that match."""
 from __future__ import annotations
 
 import hashlib
+import shutil
 import sys
 from pathlib import Path
 
@@ -37,14 +38,23 @@ def artifacts(tmp: Path, skip: str | None = None) -> Path:
 def test_bundle(tmp_path: Path) -> None:
     out = tmp_path / "bundle"
     files = bundle.assemble(artifacts(tmp_path), out)
-    assert len(files) == 11
+    assert len(files) == 16
     names = {f.relative_to(out).as_posix() for f in files}
+    # For IT: the managed settings (the example, until the company sets its own).
+    assert {
+        "admin/install-managed.cmd",
+        "admin/install-managed.ps1",
+        "admin/install-managed.sh",
+        "admin/README.txt",
+        "admin/managed-settings.example.json",
+    } <= names
     assert "visualstudio/cmcoder-visualstudio-win32-x64.vsix" in names
     assert "eclipse/cmcoder-eclipse.zip" in names
     assert "netbeans/cmcoder-netbeans-darwin-arm64.nbm" in names
     assert "terminal/cmcoder-terminal-linux-x64.zip" in names
     readme = (out / "README-FIRST.txt").read_text(encoding="utf-8")
     assert bundle.version() in readme and "NetBeans" in readme and "no Python" in readme
+    assert "admin/README.txt" in readme and "cmcoder setup" in readme
     report = (out / "GATE-REPORT.md").read_text(encoding="utf-8")
     assert "| Standalone cmcoder, no Python | ✅ | ✅ | ✅ |" in report
     assert "| Visual Studio extension in Visual Studio | ✅ | — | — |" in report
@@ -67,3 +77,16 @@ def test_no_bundle_without_gate_results(tmp_path: Path) -> None:
     (a / "gate-darwin-arm64" / "gate-darwin-arm64.txt").unlink()
     with pytest.raises(SystemExit, match="no gate results for darwin-arm64"):
         bundle.assemble(a, tmp_path / "bundle")
+
+
+def test_the_companys_managed_settings_go_in_the_bundle(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = tmp_path / "repo"
+    (root / "branding").mkdir(parents=True)
+    (root / "branding" / "managed-settings.json").write_text('{"lockProviders": true}')
+    shutil.copytree(bundle.ROOT / "packaging" / "admin", root / "packaging" / "admin")
+    monkeypatch.setattr(bundle, "ROOT", root)
+    files = bundle.admin_files()
+    assert files["managed-settings.json"] == root / "branding" / "managed-settings.json"
+    assert "managed-settings.example.json" not in files

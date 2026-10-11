@@ -47,14 +47,48 @@ class ProgramLocatorTest {
         Path mine = program(tmp.resolve("mine"), "cmcoder" + EXE);
         Map<String, String> env = Map.of("PATH", onPath.getParent().toString());
 
-        assertEquals(mine, ProgramLocator.find(mine.toString(), plugin, project, env).program);
-        assertEquals(bundled, ProgramLocator.find(null, plugin, project, env).program);
-        assertEquals(bundled, ProgramLocator.find("  ", plugin, project, env).program);
-        assertEquals(onPath, ProgramLocator.find(null, tmp.resolve("no-plugin"), project, env).program);
+        Path noShared = tmp.resolve("home").resolve(".cmcoder").resolve("bin");
+        assertEquals(mine, ProgramLocator.find(mine.toString(), plugin, project, env, noShared).program);
+        assertEquals(bundled, ProgramLocator.find(null, plugin, project, env, noShared).program);
+        assertEquals(bundled, ProgramLocator.find("  ", plugin, project, env, noShared).program);
+        assertEquals(onPath, ProgramLocator.find(null, tmp.resolve("no-plugin"), project, env, noShared).program);
 
-        ProgramLocator.Found none = ProgramLocator.find(null, null, project, Map.of("PATH", ""));
+        ProgramLocator.Found none = ProgramLocator.find(null, null, project, Map.of("PATH", ""), noShared);
         assertNull(none.program);
         assertTrue(none.problem.contains("plugin file for your platform"), none.problem);
+    }
+
+    /** A standalone cmcoder folder (PyInstaller's layout) with this build stamp. */
+    private static Path stamped(Path folder, String stamp) throws IOException {
+        Path exe = program(folder, "cmcoder" + EXE);
+        Path file = Files.createDirectories(folder.resolve("_internal").resolve("cmcoder")).resolve("STAMP");
+        Files.write(file, (stamp + "\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        return exe;
+    }
+
+    @Test
+    void theSharedCopyWhenItIsAtLeastAsNewAsThePlugins(@TempDir Path tmp) throws IOException {
+        Path project = Files.createDirectories(tmp.resolve("project"));
+        Path plugin = tmp.resolve("plugin");
+        Path shared = tmp.resolve("home").resolve(".cmcoder").resolve("bin");
+        Map<String, String> env = Map.of("PATH", "");
+        Path ours = stamped(plugin.resolve("bin").resolve("cmcoder"), "20261008T120000Z");
+        // Nothing shared yet: the plugin's copy (cmcoder copies itself there for next time).
+        assertEquals(ours, ProgramLocator.find(null, plugin, project, env, shared).program);
+        Path theirs = stamped(shared, "20261001T090000Z");  // older: still ours
+        assertEquals(ours, ProgramLocator.find(null, plugin, project, env, shared).program);
+        stamped(shared, "20261008T120000Z");  // as new: the shared one
+        assertEquals(theirs, ProgramLocator.find(null, plugin, project, env, shared).program);
+        stamped(shared, "20261009T000000Z");  // newer: the shared one
+        assertEquals(theirs, ProgramLocator.find(null, plugin, project, env, shared).program);
+        // Without a plugin copy: the shared one; the setting still wins over both.
+        assertEquals(theirs, ProgramLocator.find(null, tmp.resolve("no-plugin"), project, env, shared).program);
+        Path mine = program(tmp.resolve("mine"), "cmcoder" + EXE);
+        assertEquals(mine, ProgramLocator.find(mine.toString(), plugin, project, env, shared).program);
+        // The folder follows CMCODER_CONFIG_DIR, else the home folder.
+        assertEquals(tmp.resolve("cfg").resolve("bin"),
+                ProgramLocator.sharedFolder(Map.of("CMCODER_CONFIG_DIR", tmp.resolve("cfg").toString()), tmp));
+        assertEquals(tmp.resolve(".cmcoder").resolve("bin"), ProgramLocator.sharedFolder(Map.of(), tmp));
     }
 
     @Test

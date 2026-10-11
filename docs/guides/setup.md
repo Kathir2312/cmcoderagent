@@ -4,12 +4,35 @@ cmcoder needs to know your company's AI gateway and your API key. You do this
 once; the terminal and every IDE (VS Code, Visual Studio, Eclipse, NetBeans)
 use it.
 
-Your team may already have done this for you (a company settings file). If
-`cmcoder doctor` passes, or the chat answers, skip this page.
+Your team may already have done this for you: if your company's settings came
+with the build, cmcoder creates `settings.json` from them the first time it
+starts, and you only need your API key (step 2). If `cmcoder doctor` passes,
+or the chat answers, skip this page.
+
+## The quick way: `cmcoder setup`
+
+In a terminal:
+
+| | With the terminal package | Without it |
+|---|---|---|
+| Windows, Command Prompt | `cmcoder setup` | `"%USERPROFILE%\.cmcoder\bin\cmcoder.exe" setup` |
+| Windows, PowerShell | `cmcoder setup` | `& "$env:USERPROFILE\.cmcoder\bin\cmcoder.exe" setup` |
+| macOS, Linux | `cmcoder setup` | `~/.cmcoder/bin/cmcoder setup` |
+
+(Every IDE puts cmcoder in `.cmcoder\bin` the first time you open its chat;
+the terminal package installs it there.)
+
+It asks for the gateway's address, your API key (into the keychain, not
+shown), then lists the gateway's models for you to pick the main one, a
+small fast one and one that reads images. It writes your `settings.json`,
+keeping anything else in it. Run it again to change something: Enter keeps
+each current answer. Then `cmcoder doctor` checks everything.
+
+The rest of this page is what it does, for doing it by hand.
 
 ## 1. Your gateway
 
-Create the file **`%USERPROFILE%\.cmcoder\settings.json`** (Windows) or
+Edit the file **`%USERPROFILE%\.cmcoder\settings.json`** (Windows) or
 **`~/.cmcoder/settings.json`** (macOS, Linux) with what your AI team gives you,
 for example:
 
@@ -32,19 +55,18 @@ for example:
   and use the Open WebUI address; the key is an Open WebUI API key
   (Settings → Account → API keys).
 
+`settings.example.json` next to it lists every setting.
+
 ## 2. Your API key
 
 The key goes into your operating system's keychain (Windows Credential
 Manager, macOS Keychain, the Linux secret service), never into a file.
 
-- **Terminal:** run `cmcoder login` and paste the key (it isn't shown).
-- **An IDE without the terminal package:** run the cmcoder that is inside
-  the extension once, with `login` (the key is shared, so one `login` is
-  enough for all). Each guide's step 3 shows where it is:
-  [VS Code](vscode.md#3-first-time-setup-once),
-  [Visual Studio](visualstudio.md#3-first-time-setup-once),
-  [Eclipse](eclipse.md#3-first-time-setup-once),
-  [NetBeans](netbeans.md#3-first-time-setup-once).
+- `cmcoder setup` asks for it; or `cmcoder login` (only the key), and paste
+  it (it isn't shown).
+- Without the terminal package, run the program by its path, as in the
+  table above, with `login`. The key is shared: one `login` is enough for
+  the terminal and every IDE.
 
 Never put the key in `settings.json`, a script, or a chat message.
 
@@ -72,7 +94,9 @@ report.
 
 | What | Where |
 |---|---|
+| The program (one for the terminal and every IDE) | `~/.cmcoder/bin` |
 | Your settings | `~/.cmcoder/settings.json` |
+| Every setting, as an example | `~/.cmcoder/settings.example.json` |
 | A project's shared settings (commit them) | `<project>/.cmcoder/settings.json` |
 | Your "always allow" answers for a project | `<project>/.cmcoder/settings.local.json` |
 | Saved conversations | `~/.cmcoder/` (per project) |

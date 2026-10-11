@@ -20,8 +20,11 @@ Actions → the latest green run → Artifacts). Each contains its own `cmcoder`
 for Windows on Windows (below):
 
 - **Terminal:** `cmcoder-terminal-<platform>` → unzip → double-click `install.cmd` (Windows) or `sh install.sh`
-  (macOS, Linux). It installs for you only (no administrator rights) and adds `cmcoder` to your PATH; open a new
-  terminal and run `cmcoder doctor`. `uninstall.cmd` / `uninstall.sh` remove it (settings and keys are kept).
+  (macOS, Linux). It installs for you only (no administrator rights) into `%USERPROFILE%\.cmcoder\bin`
+  (`~/.cmcoder/bin`) and adds `cmcoder` to your PATH; open a new terminal and run `cmcoder setup` (first time),
+  then `cmcoder doctor`. `uninstall.cmd` / `uninstall.sh` remove it (settings and keys are kept). The IDE plugins
+  use the same folder: each copies its own cmcoder there when that one is newer, so the terminal and every IDE run
+  one program.
 - **VS Code:** `cmcoder-<platform>.vsix` → Extensions → ⋯ → *Install from VSIX…*.
 - Eclipse ([guide](docs/guides/eclipse.md)), NetBeans ([guide](docs/guides/netbeans.md)) and Visual Studio: `cmcoder-eclipse`, `cmcoder-netbeans-<platform>.nbm`, `cmcoder-visualstudio.vsix`, gate-tested in each real IDE ([status](docs/phase6/STATUS.md)). JetBrains IDEs were dropped from the plan.
 

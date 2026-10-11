@@ -35,30 +35,24 @@ it. It's the same file.
 Skip this if your team did it for you: open the chat and ask something. If it
 answers, you're done.
 
-1. **The gateway.** Create `%USERPROFILE%\.cmcoder\settings.json` with what
-   your AI team gives you:
-
-   ```json
-   {
-     "providers": { "corp": { "baseUrl": "https://ai-gateway.example.com/v1" } },
-     "model": "corp:qwen3-27b"
-   }
-   ```
-
-2. **Your API key.** It's saved in Windows Credential Manager, never in a
-   file. In Visual Studio, **Tools → cmcoder → Copy Diagnostics**, and paste
-   it somewhere: the **Program:** line is the cmcoder inside the extension
-   (ending in `bin\cmcoder\cmcoder.exe`). In a Command Prompt, run that
-   program with `login` and paste your key (it isn't shown):
+1. Open the chat once. Without settings it says so, and it puts cmcoder in
+   `%USERPROFILE%\.cmcoder\bin`: the one program for the terminal and every
+   IDE.
+2. In a Command Prompt, run:
 
    ```
-   "C:\…\bin\cmcoder\cmcoder.exe" login
+   "%USERPROFILE%\.cmcoder\bin\cmcoder.exe" setup
    ```
 
-   If you also use the terminal package, `cmcoder login` there does the same:
-   the key is shared.
+   (PowerShell: `& "$env:USERPROFILE\.cmcoder\bin\cmcoder.exe" setup`.)
 
-More (Open WebUI, certificates, proxies): [setup.md](setup.md).
+   (`cmcoder setup`, if you installed the terminal package.) It asks for the
+   gateway's address (from your AI team) and your API key (saved in Windows
+   Credential Manager, never in a file; it isn't shown), and lets you pick the
+   models from the gateway's list.
+3. Click **Restart** in the chat.
+
+More (Open WebUI, certificates, proxies, doing it by hand): [setup.md](setup.md).
 
 ## 4. Use
 

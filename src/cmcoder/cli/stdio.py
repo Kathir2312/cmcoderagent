@@ -47,6 +47,7 @@ from ..rag.setup import (
 )
 from ..rag.setup import status_lines as rag_status_lines
 from ..rag.stores import StoreError
+from ..shared_install import exe_name, shared_dir, update_in_background
 from ..tools.base import ToolResult
 from ..tools.files import ReadInput, ReadTool
 from .factory import (
@@ -61,6 +62,7 @@ from .factory import (
 
 IDE_TOOL_TIMEOUT = 30.0  # seconds
 CRITIQUE_POLL_SECONDS = 2.0  # how often the saved critique setting is checked while idle
+SHARED_COPY_WAIT_SECONDS = 120.0  # a first start without settings waits for the copy
 
 # Built-in commands that work in the VS Code panel: (argument hint, description).
 # The others (/clear, /resume, /mode, ...) are the panel's own controls.
@@ -139,10 +141,20 @@ class StdioServer:
 
     async def serve(self, stdin_fd: int) -> int:
         self.opts.ask = self.ask
+        # Started from an IDE's own copy: bring ~/.cmcoder/bin up to date for
+        # the terminal and the other IDEs (the IDE's log shows how it went).
+        copying = update_in_background(lambda line: print(line, file=sys.stderr, flush=True))
         try:
             self.agent = await build_agent(self.settings, self.opts)
         except (SettingsError, ProviderError, ValueError) as e:
-            self.error("startup", str(e).split("\n  hint:")[0], getattr(e, "hint", None))
+            hint = getattr(e, "hint", None)
+            if hint is None and "cmcoder setup" in str(e):
+                hint = f'In a terminal, run:  "{shared_dir() / exe_name()}" setup'
+            self.error("startup", str(e).split("\n  hint:")[0], hint)
+            if copying is not None:
+                # The first start, before any settings: finish the copy, so
+                # `cmcoder setup` is there to run next.
+                copying.join(SHARED_COPY_WAIT_SECONDS)
             return 2
         self._start_reader(stdin_fd)
         self.emit(self.agent.init_event())

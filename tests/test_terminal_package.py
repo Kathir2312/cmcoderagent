@@ -84,13 +84,21 @@ def test_install_update_run_and_uninstall_on_macos_and_linux(tmp_path: Path) -> 
         log = tmp_path / "started.log"
         env = no_python.environment(env, trap, log)
 
+    # An install in the old place is moved.
+    old = home / ".local" / "share" / "cmcoder"
+    old.mkdir(parents=True)
+    (old / "cmcoder").write_text("an old version")
+
     first = subprocess.run(["sh", str(top / "install.sh")], env=env, capture_output=True, text=True)
     assert first.returncode == 0, first.stderr
-    installed = home / ".local" / "share" / "cmcoder" / "cmcoder"
+    # The one cmcoder for the terminal and every IDE.
+    installed = home / ".cmcoder" / "bin" / "cmcoder"
     link = home / ".local" / "bin" / "cmcoder"
     assert link.is_symlink() and link.resolve() == installed.resolve()
     assert os.access(installed, os.X_OK)
     assert "Added" in first.stdout and "Open a NEW terminal" in first.stdout
+    assert not old.exists() and f"Moved it from {old}" in first.stdout
+    assert "cmcoder setup" in first.stdout  # no settings yet
     profile = (home / ".profile").read_text()
     assert profile.startswith("# my own settings") and profile.count("cmcoder's install.sh") == 1
 
@@ -112,11 +120,28 @@ def test_install_update_run_and_uninstall_on_macos_and_linux(tmp_path: Path) -> 
         assert "cmcoder" in doctor.stdout
         assert no_python.started(log) == []
 
+    # Never replaced or removed while a cmcoder runs from it (here: holds it open).
+    if shutil.which("lsof", path=env["PATH"]):
+        holder = subprocess.Popen(["tail", "-f", str(installed)], stdout=subprocess.DEVNULL)
+        try:
+            for script in ("install.sh", "uninstall.sh"):
+                busy = subprocess.run(
+                    ["sh", str(top / script)], env=env, capture_output=True, text=True
+                )
+                assert busy.returncode == 1 and "Close it" in busy.stderr, busy.stderr
+                assert installed.exists()
+        finally:
+            holder.kill()
+            holder.wait()
+
+    # Settings made meanwhile (cmcoder setup, or the company's template) stay.
+    (home / ".cmcoder" / "settings.json").write_text("{}")
     gone = subprocess.run(
         ["sh", str(top / "uninstall.sh")], env=env, capture_output=True, text=True
     )
     assert gone.returncode == 0, gone.stderr
     assert not installed.exists() and not link.exists()
+    assert (home / ".cmcoder" / "settings.json").exists()
     assert (home / ".profile").read_text() == "# my own settings\nexport EDITOR=vi\n"
 
 
@@ -134,7 +159,10 @@ def test_install_run_and_uninstall_on_windows(tmp_path: Path) -> None:
 
     before = user_path()
     top = unzip(build(tmp_path), tmp_path / "unzipped folder ä")  # spaces, non-ASCII
-    dest = tmp_path / "Programs dir" / "cmcoder"
+    dest = tmp_path / "home dir" / ".cmcoder" / "bin"
+    old = tmp_path / "Programs dir" / "cmcoder"  # where earlier versions went
+    old.mkdir(parents=True)
+    (old / "cmcoder.exe").write_text("an old version")
     ps = shutil.which("powershell") or "powershell.exe"
     trap = no_python.trap(tmp_path / "trap")
     log = tmp_path / "started.log"
@@ -142,7 +170,8 @@ def test_install_run_and_uninstall_on_windows(tmp_path: Path) -> None:
     args = [ps, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File"]
     try:
         first = subprocess.run(
-            [*args, str(top / "install.ps1"), "-Destination", str(dest)],
+            [*args, str(top / "install.ps1"), "-Destination", str(dest)]
+            + ["-OldDestination", str(old)],
             env=env,
             capture_output=True,
             text=True,
@@ -150,6 +179,7 @@ def test_install_run_and_uninstall_on_windows(tmp_path: Path) -> None:
         assert first.returncode == 0, first.stdout + first.stderr
         assert (dest / "cmcoder.exe").is_file()
         assert terminal.version() in first.stdout
+        assert not old.exists() and "Moved it from" in first.stdout
         entries = [e.rstrip("\\").lower() for e in user_path().split(";")]
         assert str(dest).lower() in entries
         again = subprocess.run(

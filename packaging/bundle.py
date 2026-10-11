@@ -7,7 +7,10 @@ when all of them are there (each build job passed its gates first).
 DIR holds the downloaded artifacts, one folder per artifact (as
 actions/download-artifact writes them). Output: the bundle folder with
 README-FIRST.txt, GATE-REPORT.md (from the gate-<target> artifacts: what each
-platform's build job ran and passed), SHA256SUMS.txt and the files by IDE.
+platform's build job ran and passed), SHA256SUMS.txt, the files by IDE, and
+admin/ for IT: the managed settings and the scripts that install them
+(packaging/admin; the company's branding/managed-settings.json if there is
+one, else the example to fill in).
 """
 
 from __future__ import annotations
@@ -21,6 +24,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+ADMIN_SCRIPTS = ("install-managed.ps1", "install-managed.cmd", "install-managed.sh", "README.txt")
 TARGETS = ("win32-x64", "darwin-arm64", "linux-x64")
 TARGET_NAMES = {
     "win32-x64": "Windows",
@@ -63,6 +67,17 @@ def items() -> list[Item]:
         )
     )
     out.append(Item("eclipse", "cmcoder-eclipse", "cmcoder-eclipse-*.zip", "cmcoder-eclipse.zip"))
+    return out
+
+
+def admin_files() -> dict[str, Path]:
+    """admin/ in the bundle: its name there -> the file in the repository."""
+    out = {name: ROOT / "packaging" / "admin" / name for name in ADMIN_SCRIPTS}
+    company = ROOT / "branding" / "managed-settings.json"
+    if company.is_file():
+        out["managed-settings.json"] = company
+    else:
+        out["managed-settings.example.json"] = ROOT / "docs" / "managed-settings.example.json"
     return out
 
 
@@ -149,10 +164,19 @@ no Python, no Node.js. On Windows, shell commands need Git for Windows.
   <platform>: win32-x64 (Windows), darwin-arm64 (Mac, Apple silicon),
   linux-x64 (Linux).
 
-First time, once: your company's gateway and your API key. See the guides
-(docs/guides/ in the repository): setup.md, then the one for your IDE;
-troubleshooting.md if something is wrong. Every IDE has "Copy Diagnostics"
-for a problem report (it never contains your key).
+Every one of them uses the same cmcoder, in %USERPROFILE%\\.cmcoder\\bin
+(~/.cmcoder/bin on Mac and Linux): the terminal package installs it there,
+and an IDE plugin puts its own copy there when that one is newer.
+
+First time, once: your company's gateway and your API key. If your company's
+settings came with the build, there's nothing to do; otherwise run
+cmcoder setup  (in a terminal). See the guides (docs/guides/ in the
+repository): setup.md, then the one for your IDE; troubleshooting.md if
+something is wrong. Every IDE has "Copy Diagnostics" for a problem report
+(it never contains your key).
+
+  IT             admin/: the managed settings (rules developers can't
+                 change) and the scripts that install them. admin/README.txt.
 
 GATE-REPORT.md lists what was tested automatically, and what wasn't.
 SHA256SUMS.txt has the files' checksums.
@@ -182,6 +206,10 @@ def assemble(artifacts: Path, out: Path) -> list[Path]:
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(f, dest)
         written.append(dest)
+    (out / "admin").mkdir()
+    for name, f in admin_files().items():
+        shutil.copy(f, out / "admin" / name)  # keeps install-managed.sh executable
+        written.append(out / "admin" / name)
     (out / "README-FIRST.txt").write_text(README.format(version=ver), encoding="utf-8")
     (out / "GATE-REPORT.md").write_text(gate_report(artifacts, ver), encoding="utf-8")
     sums = []

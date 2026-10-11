@@ -209,8 +209,13 @@ public final class Gate {
         until("the context label", () -> driver(chat, "text", ".context span").contains("app.txt:1"));
         until("code search's status item", () -> "Code search: off".equals(ui(window::codeSearchText)));
         String diagnostics = Actions.diagnostics(folder, true);
+        // The plugin's copy, or the shared one in ~/.cmcoder/bin (the same build,
+        // copied there by an earlier start).
         String bundled = File.separator + "bin" + File.separator + "cmcoder" + File.separator + "cmcoder";
-        if (!diagnostics.contains(bundled)) throw new AssertionError("cmcoder didn't come from the plugin:\n" + diagnostics);
+        String shared = File.separator + ".cmcoder" + File.separator + "bin" + File.separator + "cmcoder";
+        if (!diagnostics.contains(bundled) && !diagnostics.contains(shared)) {
+            throw new AssertionError("cmcoder didn't come from the plugin or ~/.cmcoder/bin:\n" + diagnostics);
+        }
         if (!diagnostics.contains("cmcoder doctor --no-probe:")) throw new AssertionError("no doctor in the diagnostics");
         String key = System.getenv("CMCODER_API_KEY");
         if (key != null && !key.isEmpty() && diagnostics.contains(key)) throw new AssertionError("the API key is in the diagnostics");

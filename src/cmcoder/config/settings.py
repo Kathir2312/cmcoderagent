@@ -309,15 +309,16 @@ class Settings(_Model):
         ref = ref or self.model
         if not ref:
             raise SettingsError(
-                "No model configured. Set `model` in ~/.cmcoder/settings.json or CMCODER_MODEL."
+                "No model configured. Run `cmcoder setup`, or set `model` in "
+                "~/.cmcoder/settings.json (or CMCODER_MODEL)."
             )
         prefix, sep, rest = ref.partition(":")
         if sep and prefix in self.providers:
             return prefix, rest
         if not self.providers:
             raise SettingsError(
-                "No model provider configured. Set `providers` in ~/.cmcoder/settings.json "
-                "or CMCODER_BASE_URL."
+                "No gateway configured. Run `cmcoder setup`, or set `providers` in "
+                "~/.cmcoder/settings.json (or CMCODER_BASE_URL)."
             )
         return self.default_provider(), ref
 
@@ -377,7 +378,7 @@ def read_managed_settings(path: Path | None = None) -> dict[str, Any]:
     file that exists but can't be read or parsed stops cmcoder."""
     path = path or managed_settings_path()
     try:
-        text = path.read_text(encoding="utf-8")
+        text = path.read_text(encoding="utf-8-sig")
     except FileNotFoundError:
         return {}
     except OSError as e:
@@ -438,7 +439,7 @@ def deep_merge(base: dict[str, Any], over: dict[str, Any]) -> dict[str, Any]:
 
 def _read_json(path: Path) -> dict[str, Any]:
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
     except (FileNotFoundError, IsADirectoryError):
         return {}  # (a directory: the sandbox's placeholder for a missing .mcp.json)
     except ValueError as e:

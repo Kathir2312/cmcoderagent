@@ -12,6 +12,7 @@ from typing import Any
 
 from cmcoder.protocol.events import parse_event
 from cmcoder.protocol.messages import parse_message
+from cmcoder.shared_install import exe_name, shared_dir
 
 from .conftest import API_KEY
 
@@ -28,13 +29,14 @@ class Agent:
     @classmethod
     async def start(cls, cwd: Path, server: Any, *args: str) -> Agent:
         env = {k: v for k, v in os.environ.items() if not k.lower().endswith("_proxy")}
-        env.update(
-            {
-                "CMCODER_BASE_URL": server.base_url,
-                "CMCODER_API_KEY": API_KEY,
-                "CMCODER_MODEL": "qwen3-27b",
-            }
-        )
+        if server is not None:  # None: no gateway configured yet
+            env.update(
+                {
+                    "CMCODER_BASE_URL": server.base_url,
+                    "CMCODER_API_KEY": API_KEY,
+                    "CMCODER_MODEL": "qwen3-27b",
+                }
+            )
         proc = await asyncio.create_subprocess_exec(
             sys.executable,
             "-m",
@@ -212,6 +214,18 @@ async def test_startup_errors_are_events(project: Path) -> None:
     try:
         assert await agent.close() == 2  # rejected before starting: usage error on stderr
         assert "--permission-mode" in await agent.stderr()
+    finally:
+        await agent.close()
+
+
+async def test_a_first_start_says_how_to_set_up(project: Path) -> None:
+    agent = await Agent.start(project, None)
+    try:
+        event = await agent.next()
+        assert event["type"] == "error" and event["kind"] == "startup"
+        assert "cmcoder setup" in event["message"]
+        assert f'"{shared_dir() / exe_name()}" setup' in event["hint"]
+        assert await agent.close() == 2
     finally:
         await agent.close()
 

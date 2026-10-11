@@ -199,8 +199,10 @@ public class GateTest {
         assertFalse(diagnostics, diagnostics.contains("could not run it"));
         assertFalse(diagnostics.contains(API_KEY));
         if (bundled()) {
-            assertTrue("cmcoder came from the plugin's fragment: " + diagnostics,
-                    diagnostics.replace('\\', '/').matches("(?s).*Program: [^\n]*/cmcoder\\.eclipse\\.[a-z0-9_.]+/bin/cmcoder/cmcoder(\\.exe)?\n.*"));
+            // The plugin's fragment, or the shared copy in ~/.cmcoder/bin (the
+            // same build, copied there by an earlier start).
+            assertTrue("cmcoder came from the plugin's fragment or ~/.cmcoder/bin: " + diagnostics,
+                    diagnostics.replace('\\', '/').matches("(?s).*Program: [^\n]*(/cmcoder\\.eclipse\\.[a-z0-9_.]+/bin/cmcoder|/\\.cmcoder/bin)/cmcoder(\\.exe)?\n.*"));
         }
 
         // H14: "Ask About Selection" (the editor's menu and Ctrl+Alt+K) fills in a prompt.
