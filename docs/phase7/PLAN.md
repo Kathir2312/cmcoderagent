@@ -1,8 +1,9 @@
 # Phase 7 — IntelliJ-based IDEs: plan
 
 **Status:** in progress (12 October 2026). Item 1 done; the code of items
-2–4 (the whole host) builds and passes the Plugin Verifier on 2024.2 and
-2026.2, and is checked in a real IDE once the gate (item 5) exists. Phase 6 is complete ([../phase6/STATUS.md](../phase6/STATUS.md)); this
+2–4 (the whole host) builds, passes the Plugin Verifier on 2024.2 and 2026.2,
+and passes the release gate in a real IntelliJ IDEA 2024.2.5 and 2026.2.3 on
+Linux (item 5, in progress). Phase 6 is complete ([../phase6/STATUS.md](../phase6/STATUS.md)); this
 phase adds the IDE family Phase 6 dropped.
 
 > **Note: developers' PCs may not have Python installed** (nor uv, pip or
@@ -173,13 +174,19 @@ Plus:
   name, vendor and menu texts, and its one-colour icon becomes the plugin,
   tool window and tab icons; the build checks the jar for an unfilled name.)
 - [ ] 5. Gate in CI and the release build; smoke in PyCharm and Rider
-  (12 Oct: **the gate passes in a real IntelliJ IDEA 2024.2.5 on Linux**:
+  (12 Oct: **the gate passes in CI on Linux in IntelliJ IDEA 2024.2.5 and in
+  the newest, 2026.2.3** (looked up from JetBrains' release list each run):
   the gate zip unpacked into a fresh profile as *Install Plugin from Disk*
   does, the cmcoder inside it, the mock model server, Xvfb, no Python in
   reach; 25 steps from the chat page and editor context to the diff window,
-  the navigator and cmcoder stopping with the chat. Its first run found that
-  cmcoder refused `--client jetbrains`, fixed. Next: the newest IntelliJ IDEA,
-  then the release build on Windows, macOS and Linux, then PyCharm and Rider.)
+  the navigator and cmcoder stopping with the chat. It found two bugs the
+  build and the Plugin Verifier hadn't: cmcoder refused `--client jetbrains`,
+  and in 2026.2 JCEF is a module of its own that the plugin must declare (an
+  optional dependency now; without it the chat wouldn't open there). The
+  newest IDE also shows a modal onboarding dialog on a fresh profile, which the
+  gate closes and records. When a step stalls, the report lists the windows
+  on screen and the runner prints the UI thread. Next: the release build on
+  Windows, macOS and Linux, then PyCharm and Rider.)
 - [ ] 6. Release bundle, versions, dependency scanning
 - [ ] 7. Security review
 - [ ] 8. Docs
