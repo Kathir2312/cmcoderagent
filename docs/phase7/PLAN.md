@@ -1,8 +1,9 @@
 # Phase 7 — IntelliJ-based IDEs: plan
 
-**Status:** planned (12 October 2026). Phase 6 is complete
-([../phase6/STATUS.md](../phase6/STATUS.md)); this phase adds the IDE family
-Phase 6 dropped.
+**Status:** in progress (12 October 2026). Item 1 done; item 2's code builds
+and passes the Plugin Verifier, and runs in a real IDE once the gate (item 5)
+exists. Phase 6 is complete ([../phase6/STATUS.md](../phase6/STATUS.md)); this
+phase adds the IDE family Phase 6 dropped.
 
 > **Note: developers' PCs may not have Python installed** (nor uv, pip or
 > Node.js). The plugin carries its own `cmcoder` and must work without them;
@@ -154,8 +155,14 @@ Plus:
 
 ## Checklist
 
-- [ ] 1. Skeleton, CI build, Plugin Verifier
-- [ ] 2. Chat in JCEF, host, bundled and shared `cmcoder`
+- [x] 1. Skeleton, CI build, Plugin Verifier (12 Oct: CI builds the plugin
+  with Gradle 9.8.1 and the IntelliJ Platform Gradle Plugin 2.19.0; the
+  verifier finds it compatible with IntelliJ IDEA 2024.2.5 and 2026.2, no
+  internal API, and it can be enabled without a restart. Found by the
+  verifier: the plugin manager's lookups are internal API in 2026.2, so the
+  plugin finds its folder from its own jar.)
+- [ ] 2. Chat in JCEF, host, bundled and shared `cmcoder` (code in, builds
+  and verifies; checked in a real IDE with the gate)
 - [ ] 3. Editor duties (H7–H14)
 - [ ] 4. Navigator, code search, settings, trust, diagnostics, branding
 - [ ] 5. Gate in CI and the release build; smoke in PyCharm and Rider
