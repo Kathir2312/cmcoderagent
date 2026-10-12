@@ -11,6 +11,10 @@ import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
 import javax.swing.JComponent;
@@ -51,6 +55,11 @@ import cmcoder.ide.core.Json;
  * are refused; if another page ever loads anyway, the page is loaded again.
  */
 public final class Panel implements Disposable {
+    /** Tests only: a test-driver.js to load after the page's script (ignored by a release build). */
+    public static final String TEST_DRIVER = "cmcoder.testDriver";
+    /** Tests only: what a script's answer starts with on its way back from the page. */
+    private static final String EVAL = "#eval:"; // page messages are JSON objects: never start so
+
     private final String pageUrl;
     private final Consumer<String> onMessage;
     private final JBCefBrowser browser;
@@ -60,6 +69,9 @@ public final class Panel implements Disposable {
     private volatile boolean disposed;
     /** A prompt to put in the input box that came while the page loaded (Ask About Selection opening the chat). */
     private volatile String pendingPrefill;
+    /** Tests only (null in a release): scripts run in the page, waiting for their answers. */
+    private final Map<String, CompletableFuture<String>> evals = testBuild() ? new ConcurrentHashMap<>() : null;
+    private final AtomicLong evalIds = new AtomicLong();
 
     private Panel(String pageUrl, Consumer<String> onMessage) {
         this.pageUrl = pageUrl;
@@ -71,8 +83,13 @@ public final class Panel implements Disposable {
         query.addHandler(text -> {
             String prefix = secret + ":";
             if (secret.isEmpty() || text == null || !text.startsWith(prefix)) return null;
+            String body = text.substring(prefix.length());
+            if (evals != null && body.startsWith(EVAL)) {
+                answered(body.substring(EVAL.length()));
+                return null;
+            }
             try {
-                onMessage.accept(text.substring(prefix.length()));
+                onMessage.accept(body);
             } catch (RuntimeException e) {
                 Plugin.error("A message from the panel failed", e);
             }
@@ -163,6 +180,42 @@ public final class Panel implements Disposable {
         return loaded;
     }
 
+    /**
+     * Tests only: the value of a JavaScript expression in the page, as text
+     * ("null" while the page isn't loaded, "error: ..." if it threw). The answer
+     * comes back through the page's own channel to the plugin.
+     */
+    public CompletableFuture<String> evaluate(String expression) {
+        CompletableFuture<String> result = new CompletableFuture<>();
+        if (evals == null || disposed || !loaded) {
+            result.complete("null");
+            return result;
+        }
+        String id = String.valueOf(evalIds.incrementAndGet());
+        evals.put(id, result);
+        String js = "(function(){var r;try{r=String((" + expression + "))}catch(e){r='error: '+e}"
+                + "window.cmcoderHostPost(" + Json.write(EVAL + id + ":") + "+r)})()";
+        browser.getCefBrowser().executeJavaScript(js, pageUrl, 0);
+        return result.completeOnTimeout("null", 30, TimeUnit.SECONDS).whenComplete((v, e) -> evals.remove(id));
+    }
+
+    private void answered(String idAndValue) {
+        int colon = idAndValue.indexOf(':');
+        if (colon < 0) return;
+        CompletableFuture<String> waiting = evals.remove(idAndValue.substring(0, colon));
+        if (waiting != null) waiting.complete(idAndValue.substring(colon + 1));
+    }
+
+    /** The test build (-Pgate) has the gate's self-test in it; a release doesn't. */
+    static boolean testBuild() {
+        try {
+            Class.forName("cmcoder.idea.Gate", false, Panel.class.getClassLoader());
+            return true;
+        } catch (ClassNotFoundException e) {
+            return false;
+        }
+    }
+
     @Override
     public void dispose() {
         disposed = true;
@@ -180,6 +233,9 @@ public final class Panel implements Disposable {
         }
         String source = panel.toUri().toString().replaceAll("/$", "");
         String nonce = nonce();
+        String testDriver = testBuild() ? System.getProperty(TEST_DRIVER) : null; // a release ignores the setting
+        String testScript = testDriver == null || testDriver.isBlank() ? ""
+                : "\n  <script nonce=\"" + nonce + "\" src=\"" + attr(Path.of(testDriver).toUri().toString()) + "\"></script>";
         String icon = Files.isRegularFile(panel.resolve("icon.png")) ? " data-icon=\"" + attr(source + "/icon.png") + "\"" : "";
         String html = "<!DOCTYPE html>\n<html lang=\"en\"><head>\n"
                 + "  <meta charset=\"UTF-8\">\n"
@@ -188,7 +244,7 @@ public final class Panel implements Disposable {
                 + "  <link href=\"" + attr(source + "/" + page + ".css") + "\" rel=\"stylesheet\">\n"
                 + "</head>\n<body data-product=\"" + attr(Brand.product()) + "\"" + icon + " data-host=\"function\">\n"
                 + "  <div id=\"app\"></div>\n"
-                + "  <script nonce=\"" + nonce + "\" src=\"" + attr(source + "/" + page + ".js") + "\"></script>\n"
+                + "  <script nonce=\"" + nonce + "\" src=\"" + attr(source + "/" + page + ".js") + "\"></script>" + testScript + "\n"
                 + "</body></html>\n";
         Path folder = Path.of(PathManager.getSystemPath(), "cmcoder", "pages");
         Files.createDirectories(folder);

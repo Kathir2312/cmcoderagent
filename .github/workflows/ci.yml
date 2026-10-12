@@ -379,6 +379,71 @@ jobs:
             jetbrains/build/reports/pluginVerifier/
           if-no-files-found: ignore
 
+  jetbrains-gate:
+    # The release gate for the IntelliJ plugin (Phase 7 item 5): the gate build
+    # (the self-test inside, never shipped) with the standalone cmcoder inside,
+    # unpacked into a fresh IDE profile as "Install Plugin from Disk" does, in a
+    # real IntelliJ IDEA with its real chat page in JCEF, the mock model server
+    # and no Python in reach. The IDE comes from JetBrains, checked against its
+    # published checksum.
+    name: IntelliJ plugin gate (IntelliJ IDEA ${{ matrix.ide }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { ide: "2024.2.5", url: "https://download.jetbrains.com/idea/ideaIC-2024.2.5.tar.gz" }
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          python-version: "3.12"
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          gradle-version: "9.8.1"
+      - run: uv sync
+      - name: IntelliJ IDEA ${{ matrix.ide }} (checked against JetBrains' checksum)
+        env:
+          URL: ${{ matrix.url }}
+        run: |
+          cd "$RUNNER_TEMP"
+          curl -fsSL --retry 3 -o ide.tar.gz "$URL"
+          curl -fsSL --retry 3 -o ide.tar.gz.sha256 "$URL.sha256"
+          [ "$(cut -d' ' -f1 ide.tar.gz.sha256)" = "$(sha256sum ide.tar.gz | cut -d' ' -f1)" ]
+          mkdir ide && tar -xzf ide.tar.gz -C ide --strip-components=1 && rm ide.tar.gz
+      - name: The shared chat panel
+        working-directory: clients/web-panel
+        run: npm ci && npm run build
+      - name: The standalone cmcoder
+        run: uv run --with pyinstaller python packaging/build.py
+      - name: The gate build of the plugin, with cmcoder inside
+        working-directory: jetbrains
+        run: gradle --no-daemon --stacktrace -Pgate "-PcmcoderDir=$GITHUB_WORKSPACE/dist/cmcoder" buildPlugin
+      - name: Run the gate (no Python in reach)
+        run: |
+          command -v import >/dev/null || sudo apt-get install -y -q imagemagick  # a screenshot if it hangs
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true    # Chromium (JCEF)
+          py="$(uv run python -c 'import sys; print(sys.executable)')"
+          CMCODER_GATE_SHOTS="$RUNNER_TEMP/shots" xvfb-run -a -s "-screen 0 1600x1000x24" \
+            uv run python packaging/no_python.py run -- bash jetbrains/gate/run-gate.sh \
+            --zip jetbrains/build/distributions/cmcoder-jetbrains-*-gate.zip --ide "$RUNNER_TEMP/ide" --python "$py"
+      - name: Screenshots (chat, a diff, the navigator; the screen if it hung)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: gate-screenshots-intellij-${{ matrix.ide }}
+          path: ${{ runner.temp }}/shots
+          if-no-files-found: ignore
+
   netbeans:
     # The NetBeans plugin (netbeans/) in a real NetBeans, oldest and newest
     # supported, with its real chat page in JavaFX, the standalone cmcoder

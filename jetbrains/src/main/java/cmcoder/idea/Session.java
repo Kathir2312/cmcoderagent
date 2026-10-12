@@ -152,6 +152,20 @@ public final class Session implements Disposable {
         navigator = panel;
     }
 
+    /** The chat's page, or null when it isn't open (for the gate). */
+    Panel chat() {
+        return chat;
+    }
+
+    /** The navigator's page, or null when it isn't open (for the gate). */
+    Panel navigator() {
+        return navigator;
+    }
+
+    DiffReview diffs() {
+        return diffs;
+    }
+
     void navigatorClosed(Panel panel) {
         if (navigator == panel) navigator = null;
     }

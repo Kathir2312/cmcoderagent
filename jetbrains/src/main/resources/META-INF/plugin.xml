@@ -27,6 +27,11 @@
     <notificationGroup id="cmcoder" displayType="BALLOON"/>
   </extensions>
 
+  <applicationListeners>
+    <!-- The release gate's self-test, in the test build only (does nothing in a release). -->
+    <listener class="cmcoder.idea.GateStarter" topic="com.intellij.ide.AppLifecycleListener"/>
+  </applicationListeners>
+
   <actions>
     <group id="cmcoder.Menu" text="@productInMenu@" popup="true">
       <add-to-group group-id="ToolsMenu" anchor="last"/>

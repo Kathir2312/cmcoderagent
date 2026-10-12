@@ -5,6 +5,7 @@ import java.awt.event.ActionEvent;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 import javax.swing.Action;
 import javax.swing.JComponent;
@@ -69,6 +70,23 @@ final class DiffReview {
         for (String id : open.keySet().toArray(new String[0])) close(id);
     }
 
+    /** The requests shown now (for the gate). */
+    Set<String> openRequests() {
+        return Set.copyOf(open.keySet());
+    }
+
+    /** Presses a request's button, as the user would (for the gate). */
+    void click(String requestId, String button) {
+        Review review = open.get(requestId);
+        if (review == null) throw new IllegalStateException("no diff window for " + requestId);
+        switch (button) {
+            case ACCEPT -> review.doOKAction();
+            case ALWAYS -> review.press(true, true);
+            case REJECT -> review.press(false, false);
+            default -> throw new IllegalArgumentException(button);
+        }
+    }
+
     static String name(Protocol.FileChange change) {
         Path p = Path.of(change.path).getFileName();
         return p == null ? change.path : p.toString();
@@ -127,6 +145,12 @@ final class DiffReview {
             session.answer(requestId, allow, remember);
         }
 
+        /** What Accept Always and Reject do. */
+        void press(boolean allow, boolean remember) {
+            answer(allow, remember);
+            close(allow ? OK_EXIT_CODE : CANCEL_EXIT_CODE);
+        }
+
         private final class Answer extends DialogWrapperAction {
             private final boolean allow;
             private final boolean remember;
@@ -139,8 +163,7 @@ final class DiffReview {
 
             @Override
             protected void doAction(ActionEvent e) {
-                answer(allow, remember);
-                close(allow ? OK_EXIT_CODE : CANCEL_EXIT_CODE);
+                press(allow, remember);
             }
         }
     }

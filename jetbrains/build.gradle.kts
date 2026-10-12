@@ -4,6 +4,9 @@
 //                               release and the newest IntelliJ IDEA
 //   -PcmcoderDir=DIR            bundle that standalone cmcoder (the release build;
 //                               without it the plugin finds cmcoder as the others do)
+//   -Pgate                      the test build for the release gate (never shipped):
+//                               the self-test (src/gate) and the page's test driver
+//                               inside, the zip named ...-gate.zip (gate/run-gate.sh)
 // The JVM core (clients/jvm-core, shared with Eclipse and NetBeans) is
 // compiled into the plugin; the shared chat page (clients/web-panel/dist, built
 // first with npm) and the brand's name and icon go into its panel/ folder.
@@ -23,6 +26,7 @@ plugins {
 
 group = "cmcoder"
 version = providers.gradleProperty("pluginVersion").get()
+val gate = providers.gradleProperty("gate").isPresent
 
 // -- the brand (branding/brand.json, checked by packaging/brand.py) -----------------------
 val brandFile = file("../branding/brand.json")
@@ -86,6 +90,7 @@ sourceSets {
     main {
         java {
             srcDir("../clients/jvm-core/src/main/java")
+            if (gate) srcDir("src/gate/java")
         }
         resources {
             srcDir(brandResources)
@@ -156,14 +161,21 @@ tasks.patchPluginXml {
 
 // What the IDE reads: plugin.xml in the jar, with no token left unfilled.
 tasks.jar {
+    val testBuild = gate
     doLast {
         ZipFile(archiveFile.get().asFile).use { zip ->
             val entry = zip.getEntry("META-INF/plugin.xml") ?: error("No META-INF/plugin.xml in the plugin's jar")
             val text = zip.getInputStream(entry).readBytes().toString(Charsets.UTF_8)
             check(!text.contains("@product")) { "plugin.xml: the brand's name wasn't filled in" }
             check(zip.getEntry("META-INF/pluginIcon.svg") != null) { "No plugin icon in the plugin's jar" }
+            check(testBuild || zip.getEntry("cmcoder/idea/Gate.class") == null) { "The gate's self-test is in a release jar" }
         }
     }
+}
+
+// The gate's test build can't be mistaken for a release.
+tasks.buildPlugin {
+    if (gate) archiveClassifier = "gate"
 }
 
 // The plugin's folder, as the IDE unpacks it: lib/ (the code), panel/ (the
@@ -178,6 +190,12 @@ tasks.prepareSandbox {
     from("../branding") {
         include("brand.json", "icon.png")
         into(panel)
+    }
+    if (gate) {
+        from("../clients/web-panel/dist") {
+            include("test-driver.js")
+            into(panel)
+        }
     }
     providers.gradleProperty("cmcoderDir").orNull?.let { dir ->
         from(dir) { into(pluginName.map { "$it/bin/cmcoder" }) }
