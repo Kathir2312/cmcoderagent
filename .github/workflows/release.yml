@@ -6,10 +6,12 @@ name: Release build
 # (packaging/no_python.py: developers' PCs have none); on Linux the extension
 # is also run in a real VS Code with the bundled cmcoder, and the Eclipse plugin
 # runs in a real Eclipse on every platform with its bundled cmcoder, as does
-# the NetBeans plugin in a real NetBeans. Artifacts: cmcoder-<target> (the
-# program folder), cmcoder-terminal-<target> (the zip with install scripts),
-# cmcoder-<target>.vsix, cmcoder-netbeans-<target>.nbm and cmcoder-eclipse
-# (the update site archive, every platform in one).
+# the NetBeans plugin in a real NetBeans, and the IntelliJ plugin in a real
+# IntelliJ IDEA (the newest). Artifacts: cmcoder-<target> (the program folder),
+# cmcoder-terminal-<target> (the zip with install scripts),
+# cmcoder-<target>.vsix, cmcoder-netbeans-<target>.nbm,
+# cmcoder-jetbrains-<target>.zip and cmcoder-eclipse (the update site archive,
+# every platform in one).
 #
 # Then the release bundle (packaging/bundle.py): every file in one folder with
 # README-FIRST.txt, GATE-REPORT.md and SHA256SUMS.txt, made only when every
@@ -29,6 +31,7 @@ on:
       - "eclipse/**"
       - "visualstudio/**"
       - "netbeans/**"
+      - "jetbrains/**"
       - "pyproject.toml"
       - "uv.lock"
       - ".github/workflows/release.yml"
@@ -151,6 +154,32 @@ jobs:
         with:
           name: cmcoder-netbeans-${{ matrix.target }}.nbm
           path: dist/cmcoder-netbeans-${{ matrix.target }}.nbm
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          gradle-version: "9.8.1"
+          cache-disabled: true
+      - name: The IntelliJ plugin in a real IntelliJ IDEA, with this cmcoder inside (no Python in reach)
+        shell: bash
+        run: |
+          # The release zip, then the gate build (the self-test inside, never shipped), both with this cmcoder.
+          (cd jetbrains && gradle --no-daemon -q "-PcmcoderDir=$GITHUB_WORKSPACE/dist/cmcoder" buildPlugin)
+          cp "$(ls jetbrains/build/distributions/cmcoder-jetbrains-*.zip)" dist/cmcoder-jetbrains-${{ matrix.target }}.zip
+          (cd jetbrains && gradle --no-daemon -q -Pgate "-PcmcoderDir=$GITHUB_WORKSPACE/dist/cmcoder" buildPlugin)
+          ide=$(bash jetbrains/gate/get-ide.sh IIU newest "$RUNNER_TEMP/intellij")
+          py="$(uv run python -c 'import sys; print(sys.executable)')"
+          x=()
+          if [ "$RUNNER_OS" = Linux ]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true  # Chromium (JCEF)
+            x=(xvfb-run -a -s "-screen 0 1600x1000x24")
+          fi
+          # Git's bash by its full path: started from Python, Windows finds its own bash.exe (WSL) first.
+          sh=bash; [ "$RUNNER_OS" = Windows ] && sh="$(cygpath -w /usr/bin/bash.exe)"
+          CMCODER_GATE_SHOTS="$RUNNER_TEMP/gate-shots" "${x[@]}" uv run python packaging/no_python.py run -- "$sh" jetbrains/gate/run-gate.sh \
+            --zip "$(ls jetbrains/build/distributions/cmcoder-jetbrains-*-gate.zip)" --ide "$ide" --python "$py" --timeout 600
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: cmcoder-jetbrains-${{ matrix.target }}.zip
+          path: dist/cmcoder-jetbrains-${{ matrix.target }}.zip
       - name: The Visual Studio extension, with this cmcoder inside (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -226,6 +255,7 @@ jobs:
             echo "Visual Studio core, with this cmcoder"
             echo "Eclipse plugin in a real Eclipse, cmcoder inside"
             echo "NetBeans plugin in a real NetBeans 31, cmcoder inside"
+            echo "IntelliJ plugin in a real IntelliJ IDEA (newest), cmcoder inside"
             [ "$RUNNER_OS" = Windows ] && echo "Visual Studio extension in a real Visual Studio, cmcoder inside"
             echo "Terminal package: install, update, run, uninstall"
             echo "VS Code extension: the cmcoder inside it runs"
