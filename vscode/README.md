@@ -4,7 +4,7 @@ Chat with cmcoder in VS Code's side bar. The extension runs the same
 `cmcoder` program as the command line (`cmcoder --protocol stdio`), with your
 settings, API key, permission rules and sessions.
 
-User guide: [docs/guides/vscode.md](../docs/guides/vscode.md).
+User guide: `docs/guides/vscode.md`, with the release files (ask your team).
 
 ## Requirements
 

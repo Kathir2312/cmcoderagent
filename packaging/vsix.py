@@ -74,7 +74,17 @@ def main() -> None:
             [node, "esbuild.mjs", "--production"], cwd=EXT, check=True, stdin=subprocess.DEVNULL
         )
         subprocess.run(
-            [npx, "vsce", "package", "--target", t, "--skip-license", "--out", out],
+            [
+                npx,
+                "vsce",
+                "package",
+                "--target",
+                t,
+                "--skip-license",
+                "--allow-missing-repository",
+                "--out",
+                out,
+            ],
             cwd=EXT,
             check=True,
             stdin=subprocess.DEVNULL,
