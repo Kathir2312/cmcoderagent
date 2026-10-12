@@ -392,7 +392,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # The oldest supported release, and the newest (looked up when the job runs).
           - { ide: "2024.2.5", url: "https://download.jetbrains.com/idea/ideaIC-2024.2.5.tar.gz" }
+          - { ide: "newest", url: "" }
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -416,6 +418,13 @@ jobs:
           URL: ${{ matrix.url }}
         run: |
           cd "$RUNNER_TEMP"
+          if [ -z "$URL" ]; then
+            # The newest release, as JetBrains lists it.
+            release=$(curl -fsSL --retry 3 'https://data.services.jetbrains.com/products/releases?code=IIU&latest=true&type=release')
+            URL=$(jq -r '.IIU[0].downloads.linux.link' <<<"$release")
+            echo "Newest IntelliJ IDEA: $(jq -r '.IIU[0].version + " (" + .IIU[0].build + ")"' <<<"$release")"
+          fi
+          echo "Downloading $URL"
           curl -fsSL --retry 3 -o ide.tar.gz "$URL"
           curl -fsSL --retry 3 -o ide.tar.gz.sha256 "$URL.sha256"
           [ "$(cut -d' ' -f1 ide.tar.gz.sha256)" = "$(sha256sum ide.tar.gz | cut -d' ' -f1)" ]
@@ -435,7 +444,7 @@ jobs:
           py="$(uv run python -c 'import sys; print(sys.executable)')"
           CMCODER_GATE_SHOTS="$RUNNER_TEMP/shots" xvfb-run -a -s "-screen 0 1600x1000x24" \
             uv run python packaging/no_python.py run -- bash jetbrains/gate/run-gate.sh \
-            --zip jetbrains/build/distributions/cmcoder-jetbrains-*-gate.zip --ide "$RUNNER_TEMP/ide" --python "$py"
+            --zip jetbrains/build/distributions/cmcoder-jetbrains-*-gate.zip --ide "$RUNNER_TEMP/ide" --python "$py" --timeout 480
       - name: Screenshots (chat, a diff, the navigator; the screen if it hung)
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

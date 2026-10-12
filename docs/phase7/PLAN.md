@@ -173,6 +173,13 @@ Plus:
   name, vendor and menu texts, and its one-colour icon becomes the plugin,
   tool window and tab icons; the build checks the jar for an unfilled name.)
 - [ ] 5. Gate in CI and the release build; smoke in PyCharm and Rider
+  (12 Oct: **the gate passes in a real IntelliJ IDEA 2024.2.5 on Linux**:
+  the gate zip unpacked into a fresh profile as *Install Plugin from Disk*
+  does, the cmcoder inside it, the mock model server, Xvfb, no Python in
+  reach; 25 steps from the chat page and editor context to the diff window,
+  the navigator and cmcoder stopping with the chat. Its first run found that
+  cmcoder refused `--client jetbrains`, fixed. Next: the newest IntelliJ IDEA,
+  then the release build on Windows, macOS and Linux, then PyCharm and Rider.)
 - [ ] 6. Release bundle, versions, dependency scanning
 - [ ] 7. Security review
 - [ ] 8. Docs
