@@ -11,6 +11,7 @@
 // its icons (H24).
 
 import groovy.json.JsonSlurper
+import java.util.zip.ZipFile
 import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
 import org.jetbrains.intellij.platform.gradle.models.ProductRelease
 import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask.FailureLevel
@@ -154,7 +155,7 @@ tasks.processResources {
 // What the IDE reads: plugin.xml in the jar, with no token left unfilled.
 tasks.jar {
     doLast {
-        java.util.zip.ZipFile(archiveFile.get().asFile).use { zip ->
+        ZipFile(archiveFile.get().asFile).use { zip ->
             val entry = zip.getEntry("META-INF/plugin.xml") ?: error("No META-INF/plugin.xml in the plugin's jar")
             val text = zip.getInputStream(entry).readBytes().toString(Charsets.UTF_8)
             check(!text.contains("@product")) { "plugin.xml: the brand's name wasn't filled in" }
