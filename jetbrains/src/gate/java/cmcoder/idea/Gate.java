@@ -34,7 +34,6 @@ import com.intellij.openapi.actionSystem.DataContext;
 import com.intellij.openapi.actionSystem.impl.SimpleDataContext;
 import com.intellij.openapi.application.ApplicationInfo;
 import com.intellij.openapi.application.ApplicationManager;
-import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.fileEditor.FileEditorManager;
 import com.intellij.openapi.fileEditor.OpenFileDescriptor;
@@ -103,8 +102,8 @@ public final class Gate {
         } catch (IOException e) {
             Plugin.error("Could not write the gate's result", e);
         }
-        ApplicationManager.getApplication().invokeLater(() -> ApplicationManager.getApplication().exit(true, true, false),
-                ModalityState.any());
+        // Not "any" modality: closing saves settings, which needs a write-safe context.
+        ApplicationManager.getApplication().invokeLater(() -> ApplicationManager.getApplication().exit(true, true, false));
     }
 
     /** What the chat page shows, for a failure's report. */
@@ -174,7 +173,7 @@ public final class Gate {
         until(what, check, 90);
     }
 
-    /** {@code read} on the UI thread (also while a dialog is open), waiting for it. */
+    /** {@code read} on the UI thread, waiting for it (the diff windows are modeless: no modal dialog is in the way). */
     private static <T> T ui(Callable<T> read) throws Exception {
         AtomicReference<T> value = new AtomicReference<>();
         AtomicReference<Exception> error = new AtomicReference<>();
@@ -184,7 +183,7 @@ public final class Gate {
             } catch (Exception e) {
                 error.set(e);
             }
-        }, ModalityState.any());
+        });
         if (error.get() != null) throw error.get();
         return value.get();
     }

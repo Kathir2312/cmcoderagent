@@ -224,7 +224,12 @@ def test_turn_time_is_measured_with_a_fine_clock(monkeypatch: pytest.MonkeyPatch
 
 
 @pytest.mark.parametrize(
-    ("args", "label"), [((), "vscode"), (("--client", "netbeans"), "netbeans")]
+    ("args", "label"),
+    [
+        ((), "vscode"),
+        (("--client", "netbeans"), "netbeans"),
+        (("--client", "jetbrains"), "jetbrains"),  # every IntelliJ-based IDE
+    ],
 )
 async def test_an_ide_session_is_counted_under_its_ide(
     collector: Collector,
