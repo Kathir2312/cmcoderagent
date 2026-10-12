@@ -19,10 +19,13 @@ import java.nio.file.StandardOpenOption;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.WeakHashMap;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -44,6 +47,7 @@ import com.intellij.openapi.actionSystem.DataContext;
 import com.intellij.openapi.actionSystem.impl.SimpleDataContext;
 import com.intellij.openapi.application.ApplicationInfo;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.fileEditor.FileEditor;
 import com.intellij.openapi.fileEditor.FileEditorManager;
@@ -52,6 +56,8 @@ import com.intellij.openapi.fileEditor.TextEditor;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.project.ProjectManager;
+import com.intellij.openapi.ui.DialogWrapper;
+import com.intellij.openapi.ui.DialogWrapperDialog;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.wm.ToolWindow;
@@ -75,6 +81,7 @@ public final class Gate {
     private static String result;
     private static volatile String seen = "";
     private static volatile Project project;
+    private static volatile boolean done;
 
     private Gate() {}
 
@@ -86,6 +93,36 @@ public final class Gate {
         Thread t = new Thread(Gate::runAndReport, "cmcoder gate");
         t.setDaemon(true);
         t.start();
+        Thread dialogs = new Thread(Gate::closeTheIdesDialogs, "cmcoder gate: the IDE's dialogs");
+        dialogs.setDaemon(true);
+        dialogs.start();
+    }
+
+    /**
+     * Closes the modal dialogs the IDE itself opens on a fresh profile (newer
+     * releases show onboarding and tours some seconds after start): they hold up
+     * every step on the UI thread. The plugin's own windows during the gate (the
+     * diffs) are modeless, so none of them is touched. Each one closed is a step.
+     */
+    private static void closeTheIdesDialogs() {
+        Set<Window> closed = Collections.newSetFromMap(new WeakHashMap<>());
+        while (!done) {
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException e) {
+                return;
+            }
+            for (Window w : Window.getWindows()) {
+                if (!(w instanceof Dialog d) || !d.isModal() || !d.isShowing() || !closed.add(d)) continue;
+                StringBuilder text = new StringBuilder();
+                texts(d, text);
+                step("closed the IDE's own dialog: " + (text.length() > 120 ? text.substring(0, 120) + "…" : text));
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    if (d instanceof DialogWrapperDialog wrapper) wrapper.getDialogWrapper().close(DialogWrapper.CANCEL_EXIT_CODE);
+                    else d.dispose();
+                }, ModalityState.any());
+            }
+        }
     }
 
     private static void runAndReport() {
@@ -104,7 +141,9 @@ public final class Gate {
         Map<String, Object> report = new LinkedHashMap<>();
         report.put("ok", failure == null);
         report.put("failure", failure);
-        report.put("steps", steps);
+        synchronized (Gate.class) {
+            report.put("steps", new ArrayList<>(steps));
+        }
         Project p = project;
         if (p != null && !p.isDisposed()) {
             Session session = Session.get(p);
@@ -117,6 +156,7 @@ public final class Gate {
             Plugin.error("Could not write the gate's result", e);
         }
         // Not "any" modality: closing saves settings, which needs a write-safe context.
+        done = true;
         ApplicationManager.getApplication().invokeLater(() -> ApplicationManager.getApplication().exit(true, true, false));
     }
 
@@ -173,8 +213,8 @@ public final class Gate {
         }
     }
 
-    /** Also to a file as it happens: if the IDE hangs, the runner shows how far it got. */
-    private static void step(String what) {
+    /** Also to a file as it happens: if the IDE hangs, the runner shows how far it got. (Two threads write steps.) */
+    private static synchronized void step(String what) {
         String line = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss")) + " " + what;
         steps.add(line);
         try {

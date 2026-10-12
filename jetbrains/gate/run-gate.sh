@@ -149,7 +149,7 @@ if ! grep -q '"ok":true' "$result"; then
   for dump in "$work"/log/*/thread-dump-*.txt "$work"/log/threadDumps-*/*.txt; do
     [ -f "$dump" ] || continue
     echo "--- the UI thread in $(basename "$(dirname "$dump")")/$(basename "$dump"):"
-    awk '/^"/ { show = ($0 ~ /AWT-EventQueue|cmcoder gate/) } show' "$dump" | head -60 | sed 's/^/  /'
+    awk '/^"/ { show = ($0 ~ /AWT-EventQueue|cmcoder gate/) } show' "$dump" | head -60 | sed 's/^/  /' || true
     break
   done
   echo "The IntelliJ gate failed." >&2
