@@ -142,13 +142,15 @@ intellijPlatform {
     }
 }
 
-// plugin.xml's texts with the brand's name (ids keep "cmcoder").
-tasks.processResources {
+// plugin.xml's texts with the brand's name (ids keep "cmcoder"), in the
+// patched plugin.xml: the one that goes into the jar.
+tasks.patchPluginXml {
     inputs.property("productName", productName)
     val product = productXml
     val productInMenu = productInMenuXml
-    filesMatching("META-INF/plugin.xml") {
-        filter { line: String -> line.replace("@productInMenu@", productInMenu).replace("@product@", product) }
+    doLast {
+        val xml = outputFile.get().asFile
+        xml.writeText(xml.readText().replace("@productInMenu@", productInMenu).replace("@product@", product))
     }
 }
 
