@@ -122,7 +122,10 @@ if [ ! -f "$result" ]; then
     mkdir -p "$CMCODER_GATE_SHOTS" && import -window root "$CMCODER_GATE_SHOTS/intellij-timeout.png" || true
   fi
   tail -40 "$work/ide.out" 2>/dev/null | sed 's/^/  ide: /' || true
-  tail -80 "$work/log/idea.log" 2>/dev/null | sed 's/^/  log: /' || true
+  echo "--- the plugin in the IDE's log:"
+  grep -E 'custom plugins|PluginManager.*(cmcoder|disabled|incompatible)|cmcoder|SEVERE' "$work/log/idea.log" 2>/dev/null | head -40 | cut -c1-400 | sed 's/^/  log: /' || true
+  echo "--- the IDE's log, last lines:"
+  tail -60 "$work/log/idea.log" 2>/dev/null | cut -c1-400 | sed 's/^/  log: /' || true
   echo "No gate result after $timeout_s s (the IDE still running: $(kill -0 "$ide_pid" 2>/dev/null && echo yes || echo no))" >&2
   exit 1
 fi

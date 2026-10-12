@@ -25,6 +25,8 @@
     <applicationConfigurable parentId="tools" id="cmcoder.settings" instance="cmcoder.idea.SettingsPage"
                              displayName="@product@"/>
     <notificationGroup id="cmcoder" displayType="BALLOON"/>
+    <!-- The release gate's self-test, in the test build only (does nothing in a release). -->
+    <postStartupActivity implementation="cmcoder.idea.GateStarter"/>
   </extensions>
 
   <applicationListeners>
