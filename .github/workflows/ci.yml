@@ -385,9 +385,11 @@ jobs:
     # unpacked into a fresh IDE profile as "Install Plugin from Disk" does, in a
     # real IntelliJ IDEA with its real chat page in JCEF, the mock model server
     # and no Python in reach. The IDE comes from JetBrains, checked against its
-    # published checksum (jetbrains/gate/get-ide.sh). The oldest supported
-    # release on Linux; the newest on Linux, Windows and macOS.
-    name: IntelliJ plugin gate (IntelliJ IDEA ${{ matrix.version }}, ${{ matrix.os }})
+    # published checksum (jetbrains/gate/get-ide.sh). IntelliJ IDEA: the oldest
+    # supported release on Linux, the newest on Linux, Windows and macOS. The
+    # same gate in the newest PyCharm and Rider (one plugin for every
+    # IntelliJ-based IDE).
+    name: IntelliJ plugin gate (${{ matrix.name }} ${{ matrix.version }}, ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -396,10 +398,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: ubuntu-latest, product: IIC, version: "2024.2.5" }
-          - { os: ubuntu-latest, product: IIU, version: newest }
-          - { os: windows-latest, product: IIU, version: newest }
-          - { os: macos-latest, product: IIU, version: newest }
+          - { os: ubuntu-latest, name: IntelliJ IDEA, product: IIC, version: "2024.2.5" }
+          - { os: ubuntu-latest, name: IntelliJ IDEA, product: IIU, version: newest }
+          - { os: windows-latest, name: IntelliJ IDEA, product: IIU, version: newest }
+          - { os: macos-latest, name: IntelliJ IDEA, product: IIU, version: newest }
+          - { os: ubuntu-latest, name: PyCharm, product: PCP, version: newest }
+          - { os: ubuntu-latest, name: Rider, product: RD, version: newest }
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -418,7 +422,7 @@ jobs:
         with:
           gradle-version: "9.8.1"
       - run: uv sync
-      - name: IntelliJ IDEA ${{ matrix.version }} (checked against JetBrains' checksum)
+      - name: ${{ matrix.name }} ${{ matrix.version }} (checked against JetBrains' checksum)
         run: echo "IDE=$(bash jetbrains/gate/get-ide.sh ${{ matrix.product }} ${{ matrix.version }} "$RUNNER_TEMP/intellij")" >> "$GITHUB_ENV"
       - name: The shared chat panel
         working-directory: clients/web-panel
@@ -445,7 +449,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: gate-screenshots-intellij-${{ matrix.version }}-${{ matrix.os }}
+          name: gate-screenshots-${{ matrix.product }}-${{ matrix.version }}-${{ matrix.os }}
           path: ${{ runner.temp }}/shots
           if-no-files-found: ignore
 
