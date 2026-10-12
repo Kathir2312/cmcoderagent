@@ -8,13 +8,13 @@
 #
 #   run-gate.sh --zip path/to/cmcoder-jetbrains-<v>-gate.zip --ide path/to/ide --python path/to/python
 #
-# --ide is an unpacked IntelliJ-based IDE (the folder with bin/ and
-# product-info.json, as its .tar.gz unpacks). --python is a Python with
-# cmcoder, for the mock server only (test equipment); the IDE and cmcoder run
-# without it (run this under packaging/no_python.py so nothing finds Python on
-# PATH). On Linux, run it under xvfb-run. CMCODER_GATE_SHOTS=<folder> keeps
-# screenshots of the chat, a diff and the navigator (and of the screen if the
-# gate times out).
+# --ide is an unpacked IntelliJ-based IDE, as gate/get-ide.sh leaves it: the
+# folder with product-info.json (Linux, Windows) or the .app (macOS). --python
+# is a Python with cmcoder, for the mock server only (test equipment); the IDE
+# and cmcoder run without it (run this under packaging/no_python.py so nothing
+# finds Python on PATH). On Linux, run it under xvfb-run; on Windows, in Git
+# Bash. CMCODER_GATE_SHOTS=<folder> keeps screenshots of the chat, a diff and
+# the navigator (and of the screen if the gate times out, on Linux).
 set -euo pipefail
 trap 'echo "run-gate.sh: line $LINENO failed (exit $?): $BASH_COMMAND" >&2' ERR
 
@@ -32,15 +32,34 @@ done
 zip="$(cd "$(dirname "$zip")" && pwd)/$(basename "$zip")"
 ide="$(cd "$ide" && pwd)"
 
+case "$(uname -s)" in
+  Linux) system=Linux; windows=0 ;;
+  Darwin) system=macOS; windows=0 ;;
+  MINGW*|MSYS*|CYGWIN*) system=Windows; windows=1 ;;
+  *) echo "unknown system $(uname -s)" >&2; exit 1 ;;
+esac
+case "$(uname -m)" in arm64|aarch64) arch=aarch64 ;; *) arch=amd64 ;; esac
+# Paths for Windows programs (Java, Python): C:\... ; in IntelliJ's settings file, C:/...
+native() { if [ "$windows" = 1 ]; then cygpath -w "$1"; else printf '%s' "$1"; fi; }
+setting() { if [ "$windows" = 1 ]; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
+
 # The launcher and its settings variable (IDEA_PROPERTIES, PYCHARM_PROPERTIES, ...)
 # from the IDE's own description of itself.
 info="$ide/product-info.json"
+[ -f "$info" ] || info="$ide/Contents/Resources/product-info.json"
 [ -f "$info" ] || { echo "No product-info.json in $ide: not an unpacked IDE" >&2; exit 1; }
-launcher=$("$python" -c 'import json,sys; d=json.load(open(sys.argv[1])); print(next(l["launcherPath"] for l in d["launch"] if l["os"].lower()=="linux"))' "$info")
-product=$("$python" -c 'import json,sys; d=json.load(open(sys.argv[1])); print(d["name"], d["version"], d["buildNumber"])' "$info")
-name=$(basename "$launcher" .sh)
+launcher=$("$python" -c '
+import json, os, sys
+info, system, arch = sys.argv[1:4]
+launch = [l for l in json.load(open(info, encoding="utf-8"))["launch"] if l["os"].lower() == system.lower()]
+launch = [l for l in launch if l.get("arch", arch) == arch] or launch
+print(os.path.normpath(os.path.join(os.path.dirname(info), launch[0]["launcherPath"])))
+' "$(native "$info")" "$system" "$arch" | tr -d '\r')
+[ "$windows" = 1 ] && launcher=$(cygpath -u "$launcher")
+product=$("$python" -c 'import json,sys; d=json.load(open(sys.argv[1], encoding="utf-8")); print(d["name"], d["version"], d["buildNumber"])' "$(native "$info")" | tr -d '\r')
+name=$(basename "$launcher"); name=${name%.exe}; name=${name%.sh}; name=${name%64}
 properties_variable="$(printf '%s' "$name" | tr '[:lower:]' '[:upper:]')_PROPERTIES"
-echo "IDE: $product ($ide/$launcher, settings through \$$properties_variable)"
+echo "IDE: $product on $system ($launcher, settings through \$$properties_variable)"
 
 work=$(mktemp -d "${TMPDIR:-/tmp}/cmcoder-ij-gate-XXXXXX")
 project="$work/project"
@@ -50,7 +69,11 @@ git -C "$project" init -q 2>/dev/null || mkdir -p "$project/.git"
 result="$work/result.json"
 
 # The plugin's files where "Install Plugin from Disk" puts them: <plugins>/<the zip's folder>.
-unzip -q "$zip" -d "$work/plugins"
+if command -v unzip >/dev/null; then
+  unzip -q "$zip" -d "$work/plugins"
+else
+  "$python" -m zipfile -e "$(native "$zip")" "$(native "$work/plugins")"
+fi
 if ! ls "$work"/plugins/*/lib/*.jar >/dev/null 2>&1; then
   echo "The zip's files didn't land as a plugin (<plugins>/<name>/lib/*.jar). Unpacked:" >&2
   find "$work/plugins" -maxdepth 3 | head -30 >&2
@@ -64,7 +87,7 @@ script="$work/script.json"
 printf '%s' '[{"tool_calls":[{"name":"getDiagnostics","arguments":{}}]},{"content":"Checked the problems."},{"tool_calls":[{"name":"Write","arguments":{"file_path":"new.txt","content":"x = 2\n"}}]},{"content":"Wrote new.txt."},{"tool_calls":[{"name":"Write","arguments":{"file_path":"other.txt","content":"y = 3\n"}}]}]' > "$script"
 api_key="sk-gate-$(date +%s%N)$RANDOM"
 
-"$python" -m cmcoder.testing.mock_server --script "$script" --port 0 --api-key "$api_key" > "$work/mock.out" 2>&1 &
+"$python" -m cmcoder.testing.mock_server --script "$(native "$script")" --port 0 --api-key "$api_key" > "$work/mock.out" 2>&1 &
 mock=$!
 ide_pid=
 cleanup() {
@@ -89,32 +112,34 @@ echo "Mock model server: $url"
 # settings import, tips), the project trusted (a developer opening their own
 # project); IntelliJ makes each line here a system property.
 {
-  echo "idea.config.path=$work/config"
-  echo "idea.system.path=$work/system"
-  echo "idea.plugins.path=$work/plugins"
-  echo "idea.log.path=$work/log"
+  echo "idea.config.path=$(setting "$work/config")"
+  echo "idea.system.path=$(setting "$work/system")"
+  echo "idea.plugins.path=$(setting "$work/plugins")"
+  echo "idea.log.path=$(setting "$work/log")"
   echo "jb.privacy.policy.text=<!--999.999-->"
   echo "jb.consents.confirmation.enabled=false"
   echo "idea.initially.ask.config=never"
   echo "ide.show.tips.on.startup.default.value=false"
   echo "ide.newUsersOnboarding=false"
   echo "idea.trust.all.projects=true"
-  echo "cmcoder.gate=$result"
-  echo "cmcoder.gate.project=$project"
-  [ -n "${CMCODER_GATE_SHOTS:-}" ] && echo "cmcoder.gate.shots=$CMCODER_GATE_SHOTS"
+  echo "cmcoder.gate=$(setting "$result")"
+  echo "cmcoder.gate.project=$(setting "$project")"
+  [ -n "${CMCODER_GATE_SHOTS:-}" ] && echo "cmcoder.gate.shots=$(setting "$CMCODER_GATE_SHOTS")"
   true
 } > "$work/idea.properties"
 
 export CMCODER_BASE_URL="$url" CMCODER_API_KEY="$api_key" CMCODER_MODEL=qwen3-27b
-export CMCODER_CONFIG_DIR="$work/cmcoder" PYTHON_KEYRING_BACKEND=keyring.backends.fail.Keyring
-export "$properties_variable=$work/idea.properties"
+export CMCODER_CONFIG_DIR="$(native "$work/cmcoder")" PYTHON_KEYRING_BACKEND=keyring.backends.fail.Keyring
+export "$properties_variable=$(native "$work/idea.properties")"
 unset HTTPS_PROXY HTTP_PROXY ALL_PROXY https_proxy http_proxy all_proxy JAVA_TOOL_OPTIONS JAVA_HOME || true
 
-"$ide/$launcher" "$project" > "$work/ide.out" 2>&1 &
+"$launcher" "$(native "$project")" > "$work/ide.out" 2>&1 &
 ide_pid=$!
 
 end=$(( $(date +%s) + timeout_s ))
-while [ ! -f "$result" ] && [ "$(date +%s)" -lt "$end" ] && kill -0 "$ide_pid" 2>/dev/null; do sleep 2; done
+# (On Windows a launcher may hand over to another process and end: there, only the time limit counts.)
+alive() { [ "$windows" = 1 ] || kill -0 "$ide_pid" 2>/dev/null; }
+while [ ! -f "$result" ] && [ "$(date +%s)" -lt "$end" ] && alive; do sleep 2; done
 show() { [ -f "$1" ] && { echo "--- $(basename "$1"):"; sed 's/^/  /' "$1"; } || true; }
 if [ ! -f "$result" ]; then
   show "$result.steps"
@@ -122,7 +147,7 @@ if [ ! -f "$result" ]; then
     mkdir -p "$CMCODER_GATE_SHOTS" && import -window root "$CMCODER_GATE_SHOTS/intellij-timeout.png" || true
   fi
   tail -40 "$work/ide.out" 2>/dev/null | sed 's/^/  ide: /' || true
-  if kill -0 "$ide_pid" 2>/dev/null; then
+  if [ "$windows" = 0 ] && kill -0 "$ide_pid" 2>/dev/null; then
     # The JVM prints its threads on SIGQUIT: the UI thread's and the gate's say what they wait for.
     kill -QUIT "$ide_pid" 2>/dev/null || true
     sleep 3
@@ -155,4 +180,4 @@ if ! grep -q '"ok":true' "$result"; then
   echo "The IntelliJ gate failed." >&2
   exit 1
 fi
-echo "The IntelliJ gate passed ($product)."
+echo "The IntelliJ gate passed ($product on $system)."

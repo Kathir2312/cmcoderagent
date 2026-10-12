@@ -385,16 +385,21 @@ jobs:
     # unpacked into a fresh IDE profile as "Install Plugin from Disk" does, in a
     # real IntelliJ IDEA with its real chat page in JCEF, the mock model server
     # and no Python in reach. The IDE comes from JetBrains, checked against its
-    # published checksum.
-    name: IntelliJ plugin gate (IntelliJ IDEA ${{ matrix.ide }})
-    runs-on: ubuntu-latest
+    # published checksum (jetbrains/gate/get-ide.sh). The oldest supported
+    # release on Linux; the newest on Linux, Windows and macOS.
+    name: IntelliJ plugin gate (IntelliJ IDEA ${{ matrix.version }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     strategy:
       fail-fast: false
       matrix:
         include:
-          # The oldest supported release, and the newest (looked up when the job runs).
-          - { ide: "2024.2.5", url: "https://download.jetbrains.com/idea/ideaIC-2024.2.5.tar.gz" }
-          - { ide: "newest", url: "" }
+          - { os: ubuntu-latest, product: IIC, version: "2024.2.5" }
+          - { os: ubuntu-latest, product: IIU, version: newest }
+          - { os: windows-latest, product: IIU, version: newest }
+          - { os: macos-latest, product: IIU, version: newest }
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -413,22 +418,8 @@ jobs:
         with:
           gradle-version: "9.8.1"
       - run: uv sync
-      - name: IntelliJ IDEA ${{ matrix.ide }} (checked against JetBrains' checksum)
-        env:
-          URL: ${{ matrix.url }}
-        run: |
-          cd "$RUNNER_TEMP"
-          if [ -z "$URL" ]; then
-            # The newest release, as JetBrains lists it.
-            release=$(curl -fsSL --retry 3 'https://data.services.jetbrains.com/products/releases?code=IIU&latest=true&type=release')
-            URL=$(jq -r '.IIU[0].downloads.linux.link' <<<"$release")
-            echo "Newest IntelliJ IDEA: $(jq -r '.IIU[0].version + " (" + .IIU[0].build + ")"' <<<"$release")"
-          fi
-          echo "Downloading $URL"
-          curl -fsSL --retry 3 -o ide.tar.gz "$URL"
-          curl -fsSL --retry 3 -o ide.tar.gz.sha256 "$URL.sha256"
-          [ "$(cut -d' ' -f1 ide.tar.gz.sha256)" = "$(sha256sum ide.tar.gz | cut -d' ' -f1)" ]
-          mkdir ide && tar -xzf ide.tar.gz -C ide --strip-components=1 && rm ide.tar.gz
+      - name: IntelliJ IDEA ${{ matrix.version }} (checked against JetBrains' checksum)
+        run: echo "IDE=$(bash jetbrains/gate/get-ide.sh ${{ matrix.product }} ${{ matrix.version }} "$RUNNER_TEMP/intellij")" >> "$GITHUB_ENV"
       - name: The shared chat panel
         working-directory: clients/web-panel
         run: npm ci && npm run build
@@ -439,17 +430,22 @@ jobs:
         run: gradle --no-daemon --stacktrace -Pgate "-PcmcoderDir=$GITHUB_WORKSPACE/dist/cmcoder" buildPlugin
       - name: Run the gate (no Python in reach)
         run: |
-          command -v import >/dev/null || sudo apt-get install -y -q imagemagick  # a screenshot if it hangs
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true    # Chromium (JCEF)
+          x=()
+          if [ "$RUNNER_OS" = Linux ]; then
+            command -v import >/dev/null || sudo apt-get install -y -q imagemagick  # a screenshot if it hangs
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true    # Chromium (JCEF)
+            x=(xvfb-run -a -s "-screen 0 1600x1000x24")
+          fi
           py="$(uv run python -c 'import sys; print(sys.executable)')"
-          CMCODER_GATE_SHOTS="$RUNNER_TEMP/shots" xvfb-run -a -s "-screen 0 1600x1000x24" \
-            uv run python packaging/no_python.py run -- bash jetbrains/gate/run-gate.sh \
-            --zip jetbrains/build/distributions/cmcoder-jetbrains-*-gate.zip --ide "$RUNNER_TEMP/ide" --python "$py" --timeout 480
+          # Git's bash by its full path: started from Python, Windows finds its own bash.exe (WSL) first.
+          sh=bash; [ "$RUNNER_OS" = Windows ] && sh="$(cygpath -w /usr/bin/bash.exe)"
+          CMCODER_GATE_SHOTS="$RUNNER_TEMP/shots" "${x[@]}" uv run python packaging/no_python.py run -- "$sh" jetbrains/gate/run-gate.sh \
+            --zip "$(ls jetbrains/build/distributions/cmcoder-jetbrains-*-gate.zip)" --ide "$IDE" --python "$py" --timeout 480
       - name: Screenshots (chat, a diff, the navigator; the screen if it hung)
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: gate-screenshots-intellij-${{ matrix.ide }}
+          name: gate-screenshots-intellij-${{ matrix.version }}-${{ matrix.os }}
           path: ${{ runner.temp }}/shots
           if-no-files-found: ignore
 
