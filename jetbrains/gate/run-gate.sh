@@ -122,6 +122,13 @@ if [ ! -f "$result" ]; then
     mkdir -p "$CMCODER_GATE_SHOTS" && import -window root "$CMCODER_GATE_SHOTS/intellij-timeout.png" || true
   fi
   tail -40 "$work/ide.out" 2>/dev/null | sed 's/^/  ide: /' || true
+  if kill -0 "$ide_pid" 2>/dev/null; then
+    # The JVM prints its threads on SIGQUIT: the UI thread's and the gate's say what they wait for.
+    kill -QUIT "$ide_pid" 2>/dev/null || true
+    sleep 3
+    echo "--- the IDE's UI thread and the gate's (thread dump):"
+    awk '/^"/ { show = ($0 ~ /AWT-EventQueue|cmcoder gate/) } show' "$work/ide.out" 2>/dev/null | head -150 | sed 's/^/  /' || true
+  fi
   echo "--- the plugin in the IDE's log:"
   grep -E 'custom plugins|PluginManager.*(cmcoder|disabled|incompatible)|cmcoder|SEVERE' "$work/log/idea.log" 2>/dev/null | head -40 | cut -c1-400 | sed 's/^/  log: /' || true
   echo "--- the IDE's log, last lines:"

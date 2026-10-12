@@ -1,7 +1,12 @@
 package cmcoder.idea;
 
+import java.awt.Component;
+import java.awt.Container;
+import java.awt.Dialog;
+import java.awt.Frame;
 import java.awt.Rectangle;
 import java.awt.Robot;
+import java.awt.Window;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
@@ -19,11 +24,16 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.TimeoutException;
 
 import javax.imageio.ImageIO;
+import javax.swing.AbstractButton;
 import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.text.JTextComponent;
 
 import com.intellij.openapi.actionSystem.ActionManager;
 import com.intellij.openapi.actionSystem.ActionPlaces;
@@ -177,17 +187,48 @@ public final class Gate {
 
     /** {@code read} on the UI thread, waiting for it (the diff windows are modeless: no modal dialog is in the way). */
     private static <T> T ui(Callable<T> read) throws Exception {
-        AtomicReference<T> value = new AtomicReference<>();
-        AtomicReference<Exception> error = new AtomicReference<>();
-        ApplicationManager.getApplication().invokeAndWait(() -> {
+        CompletableFuture<T> result = new CompletableFuture<>();
+        ApplicationManager.getApplication().invokeLater(() -> {
             try {
-                value.set(read.call());
+                result.complete(read.call());
             } catch (Exception e) {
-                error.set(e);
+                result.completeExceptionally(e);
             }
         });
-        if (error.get() != null) throw error.get();
-        return value.get();
+        try {
+            return result.get(60, TimeUnit.SECONDS);
+        } catch (TimeoutException e) {
+            // Waiting for a modal dialog to close, most likely: say which.
+            throw new AssertionError("the IDE's UI thread didn't run a step within 60 s. Windows: " + windows());
+        } catch (ExecutionException e) {
+            if (e.getCause() instanceof Exception cause) throw cause;
+            throw e;
+        }
+    }
+
+    /** The windows on screen, with their titles and some of their text (for a failure's report). */
+    private static String windows() {
+        StringBuilder out = new StringBuilder();
+        for (Window w : Window.getWindows()) {
+            if (!w.isShowing()) continue;
+            String title = w instanceof Dialog d ? d.getTitle() : w instanceof Frame f ? f.getTitle() : "";
+            boolean modal = w instanceof Dialog d && d.isModal();
+            StringBuilder text = new StringBuilder();
+            texts(w, text);
+            out.append("\n  ").append(w.getClass().getName()).append(modal ? " (modal)" : "")
+                    .append(" \"").append(title).append("\": ")
+                    .append(text.length() > 400 ? text.substring(0, 400) + "…" : text);
+        }
+        return out.length() == 0 ? "none" : out.toString();
+    }
+
+    private static void texts(Component c, StringBuilder out) {
+        String t = c instanceof JLabel l ? l.getText() : c instanceof AbstractButton b ? "[" + b.getText() + "]"
+                : c instanceof JTextComponent tc ? tc.getText() : null;
+        if (t != null && !t.isBlank()) out.append(t.replaceAll("<[^>]+>", " ").replaceAll("\\s+", " ").trim()).append(" | ");
+        if (c instanceof Container container) {
+            for (Component child : container.getComponents()) texts(child, out);
+        }
     }
 
     /** The panel's test driver: run(action, selector, value) → its answer (JSON text). */
