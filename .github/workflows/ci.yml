@@ -342,7 +342,8 @@ jobs:
   jetbrains:
     # The plugin for IntelliJ-based IDEs (jetbrains/, Phase 7): built against
     # the oldest supported release (2024.2) and checked by JetBrains' Plugin
-    # Verifier against it and the newest IntelliJ IDEA. JetBrains' servers
+    # Verifier against it, the newest IntelliJ IDEA and the newest Rider (which
+    # needs a license to start, so the gate below can't run it). JetBrains' servers
     # aren't reachable from every development environment, so CI builds it.
     name: IntelliJ plugin (build, Plugin Verifier)
     runs-on: ubuntu-latest
@@ -366,7 +367,7 @@ jobs:
       - name: Build the plugin
         working-directory: jetbrains
         run: gradle --no-daemon --stacktrace buildPlugin
-      - name: Plugin Verifier (2024.2 and the newest IntelliJ IDEA)
+      - name: Plugin Verifier (2024.2, the newest IntelliJ IDEA and Rider)
         working-directory: jetbrains
         run: gradle --no-daemon --stacktrace verifyPlugin
       - name: The plugin zip and the verifier's reports
@@ -387,8 +388,9 @@ jobs:
     # and no Python in reach. The IDE comes from JetBrains, checked against its
     # published checksum (jetbrains/gate/get-ide.sh). IntelliJ IDEA: the oldest
     # supported release on Linux, the newest on Linux, Windows and macOS. The
-    # same gate in the newest PyCharm and Rider (one plugin for every
-    # IntelliJ-based IDE).
+    # same gate in the newest PyCharm (one plugin for every IntelliJ-based IDE;
+    # PyCharm looks for Python itself, which is a note, not a failure). Rider
+    # needs a license to start: the Plugin Verifier checks it instead.
     name: IntelliJ plugin gate (${{ matrix.name }} ${{ matrix.version }}, ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     defaults:
@@ -402,8 +404,7 @@ jobs:
           - { os: ubuntu-latest, name: IntelliJ IDEA, product: IIU, version: newest }
           - { os: windows-latest, name: IntelliJ IDEA, product: IIU, version: newest }
           - { os: macos-latest, name: IntelliJ IDEA, product: IIU, version: newest }
-          - { os: ubuntu-latest, name: PyCharm, product: PCP, version: newest }
-          - { os: ubuntu-latest, name: Rider, product: RD, version: newest }
+          - { os: ubuntu-latest, name: PyCharm, product: PCP, version: newest, options: --ide-looks-for-python }
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -444,7 +445,7 @@ jobs:
           # Git's bash by its full path: started from Python, Windows finds its own bash.exe (WSL) first.
           sh=bash; [ "$RUNNER_OS" = Windows ] && sh="$(cygpath -w /usr/bin/bash.exe)"
           CMCODER_GATE_SHOTS="$RUNNER_TEMP/shots" "${x[@]}" uv run python packaging/no_python.py run -- "$sh" jetbrains/gate/run-gate.sh \
-            --zip "$(ls jetbrains/build/distributions/cmcoder-jetbrains-*-gate.zip)" --ide "$IDE" --python "$py" --timeout 480
+            --zip "$(ls jetbrains/build/distributions/cmcoder-jetbrains-*-gate.zip)" --ide "$IDE" --python "$py" --timeout 480 ${{ matrix.options }}
       - name: Screenshots (chat, a diff, the navigator; the screen if it hung)
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

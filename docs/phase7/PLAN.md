@@ -1,9 +1,10 @@
 # Phase 7 — IntelliJ-based IDEs: plan
 
-**Status:** in progress (12 October 2026). Item 1 done; the code of items
-2–4 (the whole host) builds, passes the Plugin Verifier on 2024.2 and 2026.2,
-and passes the release gate in a real IntelliJ IDEA 2024.2.5 and 2026.2.3 on
-Linux (item 5, in progress). Phase 6 is complete ([../phase6/STATUS.md](../phase6/STATUS.md)); this
+**Status:** in progress (12 October 2026). Items 1–5 done: the whole host
+builds, passes the Plugin Verifier on 2024.2 and 2026.2, and passes the
+release gate in a real IntelliJ IDEA on Windows, macOS and Linux (the release
+build, each platform's cmcoder inside) and in PyCharm. Next: item 6, the
+release bundle. Phase 6 is complete ([../phase6/STATUS.md](../phase6/STATUS.md)); this
 phase adds the IDE family Phase 6 dropped.
 
 > **Note: developers' PCs may not have Python installed** (nor uv, pip or
@@ -111,8 +112,9 @@ Plus:
 - **Plugin Verifier** (`verifyPlugin`) against IntelliJ IDEA Community and
   Ultimate, Rider, PyCharm, WebStorm and GoLand, from 2024.2 to the newest
   release: no missing, internal or deprecated-for-removal APIs.
-- **Smoke run** (G1, G2, G4, G9) in **PyCharm** and **Rider** (newest), in the
-  release build.
+- **The same gate in PyCharm** (newest) in CI. Rider can't start without a
+  license (it shows its license dialog and closes), so the Plugin Verifier
+  checks it instead.
 - Screenshots from the gate (chat, a diff, the navigator) for the guide.
 
 ## Items, in order
@@ -132,7 +134,7 @@ Plus:
    branding (H15–H17, H21, H22, H24).
 5. **The gate.** The self-test build, run in CI on Linux (2024.2 and newest)
    and in the release build on Windows, macOS and Linux with that platform's
-   `cmcoder`; smoke runs in PyCharm and Rider; the Plugin Verifier matrix.
+   `cmcoder`; the gate in PyCharm; the Plugin Verifier matrix with Rider.
 6. **Release.** The zips in the release bundle (`jetbrains/`), GATE-REPORT
    columns, README-FIRST, SHA256SUMS; the version in `tests/test_versions.py`;
    osv-scanner sees the Gradle dependencies (dependency locking).
@@ -162,18 +164,18 @@ Plus:
   internal API, and it can be enabled without a restart. Found by the
   verifier: the plugin manager's lookups are internal API in 2026.2, so the
   plugin finds its folder from its own jar.)
-- [ ] 2. Chat in JCEF, host, bundled and shared `cmcoder` (code in, builds
+- [x] 2. Chat in JCEF, host, bundled and shared `cmcoder` (code in, builds
   and verifies; checked in a real IDE with the gate)
-- [ ] 3. Editor duties (H7–H14) (code in, builds and verifies on 2024.2 and
+- [x] 3. Editor duties (H7–H14) (code in, builds and verifies on 2024.2 and
   2026.2; checked in a real IDE with the gate)
-- [ ] 4. Navigator, code search, settings, trust, diagnostics, branding
+- [x] 4. Navigator, code search, settings, trust, diagnostics, branding
   (code in, builds and verifies on 2024.2 and 2026.2; checked in a real IDE
   with the gate. The navigator is an editor tab; code search a status bar
   item with the set-up as dialogs; Settings → Tools → cmcoder; a Log tab and
   Copy Diagnostics; Tools → cmcoder menu. The brand's name fills plugin.xml's
   name, vendor and menu texts, and its one-colour icon becomes the plugin,
   tool window and tab icons; the build checks the jar for an unfilled name.)
-- [ ] 5. Gate in CI and the release build; smoke in PyCharm and Rider
+- [x] 5. Gate in CI and the release build; PyCharm; Rider by the verifier
   (12 Oct: **the gate passes in CI on Linux in IntelliJ IDEA 2024.2.5 and in
   the newest, 2026.2.3** (looked up from JetBrains' release list each run):
   the gate zip unpacked into a fresh profile as *Install Plugin from Disk*
@@ -185,8 +187,21 @@ Plus:
   optional dependency now; without it the chat wouldn't open there). The
   newest IDE also shows a modal onboarding dialog on a fresh profile, which the
   gate closes and records. When a step stalls, the report lists the windows
-  on screen and the runner prints the UI thread. Next: the release build on
-  Windows, macOS and Linux, then PyCharm and Rider.)
+  on screen and the runner prints the UI thread. Then **on Windows and macOS
+  too** (newest IntelliJ IDEA, CI), and **in the release build on all three**:
+  each platform's job builds `cmcoder-jetbrains-<platform>.zip` with that
+  platform's cmcoder inside, then the gate build with the same cmcoder, and
+  runs the gate with no Python in reach; the gate report lists it.
+  `gate/get-ide.sh` fetches any JetBrains IDE by product code and version from
+  JetBrains' release list, checked against the published checksum.
+  **PyCharm** (newest) passes all 25 steps; PyCharm itself runs `uv python dir`
+  to look for interpreters, which the no-Python check now records as a note
+  when the IDE's own process starts it (`--ide-looks-for-python`, PyCharm
+  only, POSIX only: the plugin's code runs in that process too, so IntelliJ
+  IDEA's gate still fails on it). **Rider** needs a license to start (on a
+  fresh profile it shows the license dialog and closes), so the Plugin
+  Verifier checks the newest Rider instead; a license kept as a CI secret
+  would let the gate run there too.)
 - [ ] 6. Release bundle, versions, dependency scanning
 - [ ] 7. Security review
 - [ ] 8. Docs

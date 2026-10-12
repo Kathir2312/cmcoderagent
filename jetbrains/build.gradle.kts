@@ -1,7 +1,7 @@
 // The cmcoder plugin for IntelliJ-based IDEs (docs/phase7/PLAN.md).
 //   gradle buildPlugin          the plugin zip (build/distributions/)
 //   gradle verifyPlugin         JetBrains' Plugin Verifier: the oldest supported
-//                               release and the newest IntelliJ IDEA
+//                               release, the newest IntelliJ IDEA and Rider
 //   -PcmcoderDir=DIR            bundle that standalone cmcoder (the release build;
 //                               without it the plugin finds cmcoder as the others do)
 //   -Pgate                      the test build for the release gate (never shipped):
@@ -138,9 +138,15 @@ intellijPlatform {
         ides {
             // The oldest supported release (what the plugin is compiled against)...
             create(IntelliJPlatformType.IntellijIdeaCommunity, providers.gradleProperty("platformVersion"))
-            // ...and the newest IntelliJ IDEA release.
+            // ...and the newest IntelliJ IDEA release...
             latest {
                 types.set(listOf(IntelliJPlatformType.IntellijIdea))
+                channels.set(listOf(ProductRelease.Channel.RELEASE))
+            }
+            // ...and the newest Rider, which the release gate can't start
+            // without a license (gate/run-gate.sh runs IntelliJ IDEA and PyCharm).
+            latest {
+                types.set(listOf(IntelliJPlatformType.Rider))
                 channels.set(listOf(ProductRelease.Channel.RELEASE))
             }
         }

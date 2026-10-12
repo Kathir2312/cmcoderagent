@@ -15,16 +15,22 @@
 # finds Python on PATH). On Linux, run it under xvfb-run; on Windows, in Git
 # Bash. CMCODER_GATE_SHOTS=<folder> keeps screenshots of the chat, a diff and
 # the navigator (and of the screen if the gate times out, on Linux).
+# --ide-looks-for-python: for an IDE that looks for Python itself (PyCharm
+# runs `uv python dir`): what the IDE's own process starts is a note, not a
+# failure (no_python.py's IDE_VARIABLE; the plugin's code runs in that process
+# too, so IntelliJ IDEA's gate, which has no such option, still holds it).
 set -euo pipefail
 trap 'echo "run-gate.sh: line $LINENO failed (exit $?): $BASH_COMMAND" >&2' ERR
 
 timeout_s=900
+ide_looks_for_python=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --zip) zip=$2; shift 2 ;;
     --ide) ide=$2; shift 2 ;;
     --python) python=$2; shift 2 ;;
     --timeout) timeout_s=$2; shift 2 ;;
+    --ide-looks-for-python) ide_looks_for_python=1; shift ;;
     *) echo "unknown option $1" >&2; exit 2 ;;
   esac
 done
@@ -132,6 +138,7 @@ export CMCODER_BASE_URL="$url" CMCODER_API_KEY="$api_key" CMCODER_MODEL=qwen3-27
 export CMCODER_CONFIG_DIR="$(native "$work/cmcoder")" PYTHON_KEYRING_BACKEND=keyring.backends.fail.Keyring
 export "$properties_variable=$(native "$work/idea.properties")"
 unset HTTPS_PROXY HTTP_PROXY ALL_PROXY https_proxy http_proxy all_proxy JAVA_TOOL_OPTIONS JAVA_HOME || true
+if [ "$ide_looks_for_python" = 1 ]; then export CMCODER_PYTHON_TRAP_IDE="$(cd "$ide" && pwd -P)"; fi
 
 "$launcher" "$(native "$project")" > "$work/ide.out" 2>&1 &
 ide_pid=$!

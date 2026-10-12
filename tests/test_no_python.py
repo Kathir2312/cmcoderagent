@@ -4,6 +4,7 @@ to prove what developers install never needs Python."""
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -52,6 +53,60 @@ def test_run_fails_a_command_that_starts_python(tmp_path: Path) -> None:
         text=True,
     )
     assert plain.returncode == 3  # its own exit code when Python wasn't needed
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="on Windows all of it counts")
+def test_what_the_ides_own_process_starts_is_a_note(tmp_path: Path) -> None:
+    # A stand-in IDE: a copy of bash in its own folder, which runs uv itself
+    # (as PyCharm does) and through a shell it starts (as cmcoder would).
+    ide = tmp_path / "ide"
+    (ide / "bin").mkdir(parents=True)
+    launcher = ide / "bin" / "ide"
+    shutil.copy2(shutil.which("bash") or "/bin/bash", launcher)
+    folder = no_python.trap(tmp_path / "trap")
+    log = tmp_path / "started.log"
+    env = {
+        **no_python.environment(os.environ, folder, log),
+        no_python.IDE_VARIABLE: str(ide.resolve()),
+    }
+    itself = subprocess.run(
+        [str(launcher), "-c", "uv python dir; exit 0"], env=env, capture_output=True
+    )
+    assert itself.returncode == 0
+    assert no_python.started_by_ide(log) == ["uv python dir"]
+    assert no_python.started(log) == []
+    by_a_shell = subprocess.run(
+        [str(launcher), "-c", "/bin/sh -c 'python -V; exit 0'; exit 0"], env=env
+    )
+    assert by_a_shell.returncode == 0
+    assert no_python.started(log) == ["python -V"]  # not the IDE's own process: it counts
+
+    # run: the note is shown and doesn't fail the command; anything else still does.
+    run_env = {**os.environ, no_python.IDE_VARIABLE: str(ide.resolve())}
+    noted = subprocess.run(
+        [sys.executable, str(SCRIPT), "run", "--", str(launcher), "-c", "uv python dir; exit 0"],
+        env=run_env,
+        capture_output=True,
+        text=True,
+    )
+    assert noted.returncode == 0, noted.stderr
+    assert "the IDE itself looked for Python" in noted.stderr and "uv python dir" in noted.stderr
+    failed = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "run",
+            "--",
+            str(launcher),
+            "-c",
+            "/bin/sh -c 'uv sync; exit 0'; exit 0",
+        ],
+        env=run_env,
+        capture_output=True,
+        text=True,
+    )
+    assert failed.returncode == no_python.EXIT_CODE
+    assert "Python (or uv/pip) was started" in failed.stderr
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="the trap is a compiled .exe on Windows")

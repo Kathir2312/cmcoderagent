@@ -29,12 +29,26 @@ NAMES = ("python", "python3", "pythonw", "py", "pip", "pip3", "uv", "uvx", "pipx
 PYTHON_VARIABLES = ("PYTHONHOME", "PYTHONPATH", "PYTHONSTARTUP", "PYTHONUSERBASE", "VIRTUAL_ENV")
 PYTHON_PREFIXES = ("PYTHON", "UV_", "CONDA_", "PIPX_", "PIP_")
 LOG_VARIABLE = "CMCODER_PYTHON_TRAP_LOG"
+# The folder of an IDE that looks for Python itself (PyCharm): what its own
+# process starts is recorded apart, as a note (POSIX only; on Windows all of
+# it counts). A test runner sets it just for that IDE, so the plugin's own
+# code, which runs in the IDE's process too, is still held to it in the IDEs
+# that don't look for Python (IntelliJ IDEA).
+IDE_VARIABLE = "CMCODER_PYTHON_TRAP_IDE"
 EXIT_CODE = 97
 
 _POSIX_TRAP = """#!/bin/sh
 # cmcoder's no-Python check: this stands in for {name}. Being run means
 # something needed Python on a machine that won't have it.
-[ -n "$CMCODER_PYTHON_TRAP_LOG" ] && echo "{name} $*" >> "$CMCODER_PYTHON_TRAP_LOG"
+log=$CMCODER_PYTHON_TRAP_LOG
+# The IDE under test looking for Python on its own (PyCharm does): recorded
+# apart when the IDE's own process started this, not cmcoder or anything else
+# the IDE started (a shell). It still fails, as on a PC without Python.
+if [ -n "$CMCODER_PYTHON_TRAP_IDE" ] && [ -n "$log" ]; then
+  parent=$(readlink "/proc/$PPID/exe" 2>/dev/null || ps -o comm= -p "$PPID" 2>/dev/null)
+  case "$parent" in "$CMCODER_PYTHON_TRAP_IDE"/*) log="$log.ide" ;; esac
+fi
+[ -n "$log" ] && echo "{name} $*" >> "$log"
 echo "cmcoder no-Python check: {name} was started ($*)" >&2
 exit {code}
 """
@@ -109,6 +123,11 @@ def started(log: Path) -> list[str]:
         return []
 
 
+def started_by_ide(log: Path) -> list[str]:
+    """What the IDE's own process started (see IDE_VARIABLE): notes, not failures."""
+    return started(log.with_name(log.name + ".ide"))
+
+
 def check(env: Mapping[str, str], folder: Path) -> None:
     """Prove the environment works: each name finds the trap, and running it fails."""
     path = next(v for k, v in env.items() if k.upper() == "PATH")
@@ -139,6 +158,13 @@ def main(argv: list[str]) -> int:
         check(env, folder)
         log.unlink(missing_ok=True)  # the check's own python run
         code = subprocess.run(argv[2:], env=env).returncode
+        if by_ide := started_by_ide(log):
+            print(
+                "Note: the IDE itself looked for Python (it found none, as on a PC without it):",
+                file=sys.stderr,
+            )
+            for line in by_ide:
+                print(f"  {line}", file=sys.stderr)
         if found := started(log):
             print("Python (or uv/pip) was started, which developers won't have:", file=sys.stderr)
             for line in found:
