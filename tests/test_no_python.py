@@ -62,7 +62,9 @@ def test_what_the_ides_own_process_starts_is_a_note(tmp_path: Path) -> None:
     ide = tmp_path / "ide"
     (ide / "bin").mkdir(parents=True)
     launcher = ide / "bin" / "ide"
-    shutil.copy2(shutil.which("bash") or "/bin/bash", launcher)
+    # Contents only: macOS's /bin/bash carries a system flag a copy can't take.
+    shutil.copyfile(shutil.which("bash") or "/bin/bash", launcher)
+    launcher.chmod(0o755)
     folder = no_python.trap(tmp_path / "trap")
     log = tmp_path / "started.log"
     env = {
