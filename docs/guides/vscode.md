@@ -26,6 +26,11 @@ wraps each download in a `.zip`: unzip it to get the file.
 | Mac (Apple silicon) | `cmcoder-darwin-arm64.vsix` |
 | Linux | `cmcoder-linux-x64.vsix` |
 
+Only these files have cmcoder inside. A file named just `cmcoder.vsix` (the
+`cmcoder-vsix` artifact of the CI workflow) is a test build **without**
+cmcoder: on a PC without it, the chat can't start. To build the right file
+yourself, see [admin.md](admin.md), section 7.
+
 ## 2. Install
 
 1. In VS Code, open **Extensions** (Ctrl+Shift+X).
@@ -34,6 +39,13 @@ wraps each download in a `.zip`: unzip it to get the file.
 3. Reload VS Code if it asks.
 
 Or in a terminal: `code --install-extension cmcoder-win32-x64.vsix`.
+
+No admin rights are needed: VS Code installs extensions for your user only.
+cmcoder is inside the extension's folder
+(`%USERPROFILE%\.vscode\extensions\cmcoder.cmcoder-<version>-win32-x64\bin\cmcoder\cmcoder.exe`
+on Windows, `~/.vscode/extensions/…/bin/cmcoder/cmcoder` elsewhere; the first
+part is your company's publisher name if it has its own). It isn't added to
+PATH.
 
 The cmcoder icon appears in the activity bar on the left.
 
@@ -134,6 +146,8 @@ folder (**Manage Workspace Trust**). A project can never change the gateway.
 | "No API key" / 401 | run `login` again (step 3); keys expire |
 | Certificate error | add your company's root certificate: [setup.md](setup.md) |
 | Commands fail on Windows: "Git Bash not found" | install Git for Windows, restart VS Code |
+| "cmcoder was not found", or no `cmcoder.exe` anywhere | you installed `cmcoder.vsix` (the test build without cmcoder): install `cmcoder-win32-x64.vsix` (step 1) |
+| No `%USERPROFILE%\.cmcoder\bin\cmcoder.exe` | it's copied there the first time the chat starts cmcoder (it takes a moment); open the chat once |
 
 For help, run **cmcoder: Show Log** and send the log (your key is never in
 it). More: [troubleshooting.md](troubleshooting.md).

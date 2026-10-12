@@ -57,6 +57,8 @@ uv run python packaging/vsix.py                         # vscode/cmcoder-<platfo
 
 Run **both** after changing `branding/`: the VSIX bundles the cmcoder that
 `build.py` made, and that one carries the name, logo and icon too.
+`packaging/package-vscode.ps1` (Windows) or `packaging/package-vscode.sh`
+does both, tests the program and checks it's in the `.vsix`.
 
 - `build.py` puts the branding inside the build and, on Windows, gives
   `cmcoder.exe` the icon (16–256 px) and the file details.

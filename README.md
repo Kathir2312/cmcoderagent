@@ -49,7 +49,9 @@ For development: `uv sync`, then run it with `uv run cmcoder`.
 **Building the Python-free files yourself:** `uv run --with pyinstaller python packaging/build.py` (the standalone
 `cmcoder` in `dist/cmcoder/`), then `uv run python packaging/terminal.py` (the terminal zip) and
 `uv run python packaging/vsix.py` (the VS Code extension with it inside; Node.js 22+). The release workflow
-tests each of them with no Python in reach (`packaging/no_python.py`), as on developers' PCs.
+tests each of them with no Python in reach (`packaging/no_python.py`), as on developers' PCs. For the VS Code
+file alone, one command does all of it and checks cmcoder is inside: `packaging\package-vscode.ps1` (Windows)
+or `bash packaging/package-vscode.sh` (macOS, Linux); the build PC needs uv and Node.js 22, not Python.
 
 **Your company's icon and name:** replace the files in `branding/` before building (icon, side-bar icon, name,
 VS Code publisher, colour, text logo); `cmcoder terminal-profile` adds a Windows Terminal profile with them. See

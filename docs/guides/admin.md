@@ -140,3 +140,27 @@ would put that account's files in the wrong profile.
 See [../phase5/code-search.md](../phase5/code-search.md), "A shared Chroma
 server for a team". Read the security notes there first. Developers can
 also run Chroma on their own PC by its URL ([code-search.md](code-search.md)).
+
+## 7. Build the VS Code file yourself (without the Release workflow)
+
+When you need just the VS Code extension, for example to try a branding
+change, build it on a build PC with one command. Developers' PCs need nothing
+but VS Code: cmcoder is inside the file. The build PC needs **uv**
+(<https://docs.astral.sh/uv/>, one program; it downloads its own Python, so
+Python needn't be installed) and **Node.js 22**. Build on the platform you
+build for: Windows for `cmcoder-win32-x64.vsix`.
+
+```
+powershell -ExecutionPolicy Bypass -File packaging\package-vscode.ps1     # Windows
+bash packaging/package-vscode.sh                                          # macOS, Linux
+```
+
+It builds cmcoder (PyInstaller), runs it with no Python in reach, builds the
+chat panel, packages the extension with cmcoder and your `branding/`, checks
+the program is in the file, and prints the file's path and SHA256.
+`-SkipTests` (`--skip-tests`) leaves out the test run.
+
+Hand out `vscode\cmcoder-win32-x64.vsix`, never `cmcoder.vsix`: that one (from
+`npm run package`, or the CI workflow's `cmcoder-vsix` artifact) is a test
+build without cmcoder inside. The Release workflow (section 2) remains the
+way to build everything, tested in the real IDEs.
