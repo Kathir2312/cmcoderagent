@@ -11,6 +11,7 @@ import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.ui.jcef.JBCefApp;
 
 /** The plugin's folder and log. */
 public final class Plugin {
@@ -71,6 +72,19 @@ public final class Plugin {
         if (folder == null) return null;
         Path file = folder.resolve(relative);
         return Files.exists(file) ? file : null;
+    }
+
+    /**
+     * Whether the IDE's built-in browser (JCEF) can show the chat: false when the
+     * runtime has none, or the IDE lacks JCEF's module altogether.
+     */
+    public static boolean jcef() {
+        try {
+            return JBCefApp.isSupported();
+        } catch (LinkageError e) {
+            error("No JCEF in this IDE", e);
+            return false;
+        }
     }
 
     /** A line for the IDE's log (cmcoder's stderr, starts and ends). */

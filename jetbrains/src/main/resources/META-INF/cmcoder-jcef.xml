@@ -1,0 +1,2 @@
+<!-- Nothing extra: the optional dependency in plugin.xml only makes JCEF's classes visible. -->
+<idea-plugin/>

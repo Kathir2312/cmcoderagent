@@ -26,7 +26,6 @@ import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.Project;
-import com.intellij.ui.jcef.JBCefApp;
 
 import cmcoder.ide.core.ProgramLocator;
 
@@ -76,7 +75,7 @@ final class Diagnostics {
         s.append("OS: ").append(System.getProperty("os.name")).append(' ').append(System.getProperty("os.version"))
                 .append(' ').append(System.getProperty("os.arch")).append('\n');
         s.append("Java: ").append(System.getProperty("java.version")).append(' ').append(System.getProperty("java.vendor")).append('\n');
-        s.append("JCEF: ").append(JBCefApp.isSupported() ? "yes" : "no").append('\n');
+        s.append("JCEF: ").append(Plugin.jcef() ? "yes" : "no").append('\n');
         s.append("Plugin folder: ").append(Plugin.dir()).append('\n');
         s.append("Trusted project: ").append(session.trusted() ? "yes" : "no").append('\n');
         s.append("Settings: program=").append(setting == null ? "(the plugin's)" : setting)

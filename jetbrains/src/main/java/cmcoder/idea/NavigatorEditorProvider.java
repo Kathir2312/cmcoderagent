@@ -23,7 +23,6 @@ import com.intellij.openapi.util.IconLoader;
 import com.intellij.openapi.util.UserDataHolderBase;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.testFramework.LightVirtualFile;
-import com.intellij.ui.jcef.JBCefApp;
 
 /**
  * The Agent Navigator (H15): the shared navigator page in an editor tab, live
@@ -83,7 +82,7 @@ public final class NavigatorEditorProvider implements FileEditorProvider, DumbAw
             this.file = file;
             Session session = Session.get(project);
             JComponent shown;
-            if (!JBCefApp.isSupported()) {
+            if (!Plugin.jcef()) {
                 shown = ChatToolWindowFactory.messageComponent(Brand.product() + " shows the Agent Navigator in the IDE's built-in "
                         + "browser (JCEF), which this IDE's runtime doesn't have (see the chat for how to fix it).");
             } else {

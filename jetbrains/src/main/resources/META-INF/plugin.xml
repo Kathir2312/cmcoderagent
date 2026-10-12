@@ -14,6 +14,10 @@
   ]]></description>
 
   <depends>com.intellij.modules.platform</depends>
+  <!-- The chat and the navigator are pages in JCEF. Newer IDEs (2026.2) ship JCEF
+       as a module of its own, whose classes a plugin sees only if it says so;
+       older ones have it built in (there this dependency is simply absent). -->
+  <depends optional="true" config-file="cmcoder-jcef.xml">com.intellij.modules.jcef</depends>
 
   <extensions defaultExtensionNs="com.intellij">
     <toolWindow id="cmcoder" anchor="right" secondary="false"

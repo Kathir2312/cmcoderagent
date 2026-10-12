@@ -36,12 +36,13 @@ public final class GateStarter implements AppLifecycleListener, ProjectActivity 
 
     private static void start() {
         String gate = System.getProperty("cmcoder.gate");
-        if (gate == null || gate.isBlank() || !Panel.testBuild() || !started.compareAndSet(false, true)) return;
+        if (gate == null || gate.isBlank() || !started.compareAndSet(false, true)) return;
         Plugin.log("cmcoder gate: starting the self-test");
         try {
+            // Only in the test build (-Pgate): never in a release.
             Class.forName("cmcoder.idea.Gate").getMethod("start", String.class).invoke(null, gate);
-        } catch (ReflectiveOperationException | RuntimeException e) {
-            Plugin.error("cmcoder.gate is set, but the gate couldn't start", e);
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
+            Plugin.error("cmcoder.gate is set, but the gate couldn't start (not the test build?)", e);
         }
     }
 }

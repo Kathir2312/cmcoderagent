@@ -15,7 +15,6 @@ import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.components.JBTextArea;
 import com.intellij.ui.content.Content;
 import com.intellij.ui.content.ContentFactory;
-import com.intellij.ui.jcef.JBCefApp;
 
 /**
  * The cmcoder tool window: the shared chat page in JCEF, one conversation per
@@ -35,7 +34,7 @@ public final class ChatToolWindowFactory implements ToolWindowFactory, DumbAware
         Session session = Session.get(project);
         ContentFactory factory = ContentFactory.getInstance();
         Content content;
-        if (!JBCefApp.isSupported()) {
+        if (!Plugin.jcef()) {
             content = factory.createContent(messageComponent(Brand.product() + " shows its chat in the IDE's built-in browser (JCEF), "
                     + "which this IDE's runtime doesn't have. Choose a JetBrains Runtime with JCEF: Help → Find Action → "
                     + "\"Choose Boot Java Runtime for the IDE\". The terminal (cmcoder) works meanwhile."), CHAT_TAB, false);
