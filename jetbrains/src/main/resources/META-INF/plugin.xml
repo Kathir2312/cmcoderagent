@@ -18,4 +18,13 @@
                 icon="AllIcons.Toolwindows.ToolWindowMessages"
                 factoryClass="cmcoder.idea.ChatToolWindowFactory"/>
   </extensions>
+
+  <actions>
+    <action id="cmcoder.AskAboutSelection" class="cmcoder.idea.AskAboutSelectionAction"
+            text="Ask cmcoder About Selection"
+            description="Open the chat with the selected code and a prompt to finish">
+      <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+      <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt K"/>
+    </action>
+  </actions>
 </idea-plugin>

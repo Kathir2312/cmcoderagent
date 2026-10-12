@@ -58,6 +58,8 @@ public final class Panel implements Disposable {
     private volatile boolean loaded;
     private volatile String secret = "";
     private volatile boolean disposed;
+    /** A prompt to put in the input box that came while the page loaded (Ask About Selection opening the chat). */
+    private volatile String pendingPrefill;
 
     private Panel(String pageUrl, Consumer<String> onMessage) {
         this.pageUrl = pageUrl;
@@ -88,6 +90,9 @@ public final class Panel implements Disposable {
                             + query.inject(Json.write(secret + ":") + " + String(json)") + " };", pageUrl, 0);
                     loaded = true;
                     applyTheme();
+                    String prefill = pendingPrefill;
+                    pendingPrefill = null;
+                    if (prefill != null) post(prefill);
                 } else {
                     loaded = false;
                     secret = "";
@@ -145,7 +150,11 @@ public final class Panel implements Disposable {
 
     /** A message (JSON) to the page; any thread. Dropped while the page loads: it asks again with "ready". */
     public void post(String json) {
-        if (disposed || !loaded) return;
+        if (disposed) return;
+        if (!loaded) {
+            if (json.startsWith("{\"kind\":\"prefill\"")) pendingPrefill = json;
+            return;
+        }
         // The JSON travels as a string literal and is parsed in the page.
         browser.getCefBrowser().executeJavaScript("window.postMessage(JSON.parse(" + Json.write(json) + "),'*')", pageUrl, 0);
     }
