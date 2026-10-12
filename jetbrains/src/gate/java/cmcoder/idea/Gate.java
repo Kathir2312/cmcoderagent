@@ -98,6 +98,8 @@ public final class Gate {
             e.printStackTrace(new PrintWriter(w));
             failure = w.toString();
             failure += "\nchat page: " + probe();
+            failure += "\ntool window: " + toolWindowState();
+            failure += "\nwindows: " + windows();
         }
         Map<String, Object> report = new LinkedHashMap<>();
         report.put("ok", failure == null);
@@ -116,6 +118,20 @@ public final class Gate {
         }
         // Not "any" modality: closing saves settings, which needs a write-safe context.
         ApplicationManager.getApplication().invokeLater(() -> ApplicationManager.getApplication().exit(true, true, false));
+    }
+
+    /** The cmcoder tool window as the IDE sees it (read off the UI thread: for a failure's report only). */
+    private static String toolWindowState() {
+        try {
+            Project p = project;
+            if (p == null || p.isDisposed()) return "no project";
+            ToolWindow w = ToolWindowManager.getInstance(p).getToolWindow(Session.TOOL_WINDOW);
+            if (w == null) return "not registered (ids: " + List.of(ToolWindowManager.getInstance(p).getToolWindowIds()) + ")";
+            return "available=" + w.isAvailable() + " visible=" + w.isVisible() + " active=" + w.isActive()
+                    + " contents=" + w.getContentManager().getContentCount();
+        } catch (RuntimeException e) {
+            return "(couldn't read it: " + e + ")";
+        }
     }
 
     /** What the chat page shows, for a failure's report. */

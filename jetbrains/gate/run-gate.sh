@@ -145,6 +145,13 @@ ide_pid=
 echo "Result: $(head -c 4000 "$result")" | sed 's/\\n/\n  /g'
 if ! grep -q '"ok":true' "$result"; then
   grep -E 'cmcoder|SEVERE|ERROR' "$work/log/idea.log" 2>/dev/null | tail -60 | sed 's/^/  log: /' || true
+  # The IDE saves thread dumps when its UI or write actions stall: the UI thread's stack says why.
+  for dump in "$work"/log/*/thread-dump-*.txt "$work"/log/threadDumps-*/*.txt; do
+    [ -f "$dump" ] || continue
+    echo "--- the UI thread in $(basename "$(dirname "$dump")")/$(basename "$dump"):"
+    awk '/^"/ { show = ($0 ~ /AWT-EventQueue|cmcoder gate/) } show' "$dump" | head -60 | sed 's/^/  /'
+    break
+  done
   echo "The IntelliJ gate failed." >&2
   exit 1
 fi
