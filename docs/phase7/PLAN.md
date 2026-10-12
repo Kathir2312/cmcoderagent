@@ -1,8 +1,8 @@
 # Phase 7 — IntelliJ-based IDEs: plan
 
-**Status:** in progress (12 October 2026). Item 1 done; item 2's code builds
-and passes the Plugin Verifier, and runs in a real IDE once the gate (item 5)
-exists. Phase 6 is complete ([../phase6/STATUS.md](../phase6/STATUS.md)); this
+**Status:** in progress (12 October 2026). Item 1 done; the code of items
+2–4 (the whole host) builds and passes the Plugin Verifier on 2024.2 and
+2026.2, and is checked in a real IDE once the gate (item 5) exists. Phase 6 is complete ([../phase6/STATUS.md](../phase6/STATUS.md)); this
 phase adds the IDE family Phase 6 dropped.
 
 > **Note: developers' PCs may not have Python installed** (nor uv, pip or
@@ -86,7 +86,7 @@ Phase 6's host contract (H1–H24) with the API each uses:
 | H16 | Code search | A status bar widget; the set-up as dialogs (`DialogWrapper`), as in Eclipse and NetBeans |
 | H17 | Settings page | `Configurable` + `PersistentStateComponent` (application level: a project can't set the program) |
 | H20 | Themes | `LafManagerListener`; the page gets the IDE's colours (`JBColor`) as CSS variables, live |
-| H21 | Project trust | The IDE's own trusted projects (`TrustedProjects`): `--trust-project` only for a trusted project |
+| H21 | Project trust | The IDE's own trusted projects (`TrustedProjects`): `--trust-project` only for a trusted project, as VS Code with its workspace trust. The only way to ask is an experimental API, deprecated in 2026.2 but not scheduled for removal; the verifier fails the build if it ever is |
 | H22 | Log, Copy Diagnostics | A log tool window tab; Copy Diagnostics to the clipboard (never the key) |
 | H23 | Telemetry label | `--client jetbrains` |
 | H24 | Branding | `plugin.xml`'s name, vendor and icons from `branding/` at build time (as `vsix.py` and the NetBeans build do) |
@@ -166,6 +166,12 @@ Plus:
 - [ ] 3. Editor duties (H7–H14) (code in, builds and verifies on 2024.2 and
   2026.2; checked in a real IDE with the gate)
 - [ ] 4. Navigator, code search, settings, trust, diagnostics, branding
+  (code in, builds and verifies on 2024.2 and 2026.2; checked in a real IDE
+  with the gate. The navigator is an editor tab; code search a status bar
+  item with the set-up as dialogs; Settings → Tools → cmcoder; a Log tab and
+  Copy Diagnostics; Tools → cmcoder menu. The brand's name fills plugin.xml's
+  name, vendor and menu texts, and its one-colour icon becomes the plugin,
+  tool window and tab icons; the build checks the jar for an unfilled name.)
 - [ ] 5. Gate in CI and the release build; smoke in PyCharm and Rider
 - [ ] 6. Release bundle, versions, dependency scanning
 - [ ] 7. Security review

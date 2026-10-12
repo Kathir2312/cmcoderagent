@@ -85,16 +85,16 @@ nonce. Model text is Markdown, filtered to plain elements (H19).
 
 Each plugin has the same few classes. The IDE APIs differ:
 
-| Duty | Eclipse | Visual Studio | NetBeans |
-|---|---|---|---|
-| Browser | SWT `Browser` (Edge on Windows, WebKitGTK, WebKit) | WebView2 with virtual host names | OpenJFX `WebView` in a `JFXPanel` (bundled) |
-| Chat window | `ViewPart` | `ToolWindowPane` | `TopComponent` (right side) |
-| Diff with Accept/Reject (H9, H10) | `CompareEditorInput` + buttons | diff window + InfoBar | `DiffController` in an editor tab |
-| Editor context (H7) | `ITextEditor`, problem markers | DTE `ActiveDocument`, Error List | `EditorRegistry`, `ErrorProvider`s |
-| IDE tools (H8) | markers, `IDE.openEditor` | Error List, `VsShellUtilities` | `ErrorProvider`s, `LineCookie` |
-| Settings (H17, H21) | preference page | `DialogPage` | `OptionsPanelController` |
-| Log, diagnostics (H22) | console, Copy Diagnostics | Output pane | Output window |
-| Packaging | p2 site: plugin + a fragment per platform | `.vsix` | `.nbm` per platform (+ OpenJFX) |
+| Duty | Eclipse | Visual Studio | NetBeans | IntelliJ (Phase 7) |
+|---|---|---|---|---|
+| Browser | SWT `Browser` (Edge on Windows, WebKitGTK, WebKit) | WebView2 with virtual host names | OpenJFX `WebView` in a `JFXPanel` (bundled) | JCEF (`JBCefBrowser`, `JBCefJSQuery`) |
+| Chat window | `ViewPart` | `ToolWindowPane` | `TopComponent` (right side) | tool window (right side), Chat and Log tabs |
+| Diff with Accept/Reject (H9, H10) | `CompareEditorInput` + buttons | diff window + InfoBar | `DiffController` in an editor tab | `DiffManager` request panel in a dialog with the buttons |
+| Editor context (H7) | `ITextEditor`, problem markers | DTE `ActiveDocument`, Error List | `EditorRegistry`, `ErrorProvider`s | `FileEditorManager`, the daemon's highlights |
+| IDE tools (H8) | markers, `IDE.openEditor` | Error List, `VsShellUtilities` | `ErrorProvider`s, `LineCookie` | highlights, `OpenFileDescriptor` |
+| Settings (H17, H21) | preference page | `DialogPage` | `OptionsPanelController` | `Configurable`; trust is the IDE's trusted projects |
+| Log, diagnostics (H22) | console, Copy Diagnostics | Output pane | Output window | Log tab, Copy Diagnostics |
+| Packaging | p2 site: plugin + a fragment per platform | `.vsix` | `.nbm` per platform (+ OpenJFX) | plugin zip per platform (Gradle) |
 
 Look at `Session` first in each: it holds Host, implements `Ide` (what Host
 asks of the IDE), and moves work between the UI thread and the session
