@@ -1,0 +1,21 @@
+<!-- The cmcoder plugin for IntelliJ-based IDEs. Depends on the platform only,
+     so one plugin works in IntelliJ IDEA, Rider, PyCharm, WebStorm, GoLand,
+     Android Studio and the others. Version and build range come from the build. -->
+<idea-plugin>
+  <id>cmcoder.idea</id>
+  <name>cmcoder</name>
+  <vendor>cmcoder</vendor>
+  <description><![CDATA[
+    A coding assistant in your IDE: ask in plain language, and it reads your
+    project, explains code, and proposes changes and commands for you to approve.
+    The model runs on your company's AI gateway (LiteLLM or Open WebUI).
+  ]]></description>
+
+  <depends>com.intellij.modules.platform</depends>
+
+  <extensions defaultExtensionNs="com.intellij">
+    <toolWindow id="cmcoder" anchor="right" secondary="false"
+                icon="AllIcons.Toolwindows.ToolWindowMessages"
+                factoryClass="cmcoder.idea.ChatToolWindowFactory"/>
+  </extensions>
+</idea-plugin>

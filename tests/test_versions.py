@@ -57,6 +57,7 @@ MANIFESTS = {
     "NetBeans plugin": lambda: first(
         "netbeans/pom.xml", r"<artifactId>cmcoder-netbeans</artifactId>\s*<version>([^<]+)"
     ),
+    "IntelliJ plugin": lambda: first("jetbrains/gradle.properties", r"^pluginVersion\s*=\s*(\S+)"),
 }
 
 
