@@ -4,9 +4,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import com.intellij.ide.plugins.IdeaPluginDescriptor;
-import com.intellij.ide.plugins.PluginManagerCore;
+import com.intellij.ide.plugins.PluginManager;
 import com.intellij.openapi.diagnostic.Logger;
-import com.intellij.openapi.extensions.PluginId;
 
 /** The plugin's folder and log. */
 public final class Plugin {
@@ -18,7 +17,8 @@ public final class Plugin {
 
     /** Where the IDE unpacked the plugin: lib/ (the code), panel/ (the chat's files), bin/cmcoder/ (the program). */
     public static Path dir() {
-        IdeaPluginDescriptor plugin = PluginManagerCore.getPlugin(PluginId.getId(ID));
+        // The public way (PluginManagerCore.getPlugin is internal API in newer releases).
+        IdeaPluginDescriptor plugin = PluginManager.getPluginByClass(Plugin.class);
         return plugin == null ? null : plugin.getPluginPath();
     }
 
