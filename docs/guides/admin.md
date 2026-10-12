@@ -147,8 +147,10 @@ When you need just the VS Code extension, for example to try a branding
 change, build it on a build PC with one command. Developers' PCs need nothing
 but VS Code: cmcoder is inside the file. The build PC needs **uv**
 (<https://docs.astral.sh/uv/>, one program; it downloads its own Python, so
-Python needn't be installed) and **Node.js 22**. Build on the platform you
-build for: Windows for `cmcoder-win32-x64.vsix`.
+Python needn't be installed), **Node.js 22** and **Git**, with the repository
+as a **git clone** (`git clone`, then check out the branch): the build is named
+after its commit, which a copied folder or a downloaded zip doesn't have. Build
+on the platform you build for: Windows for `cmcoder-win32-x64.vsix`.
 
 ```
 powershell -ExecutionPolicy Bypass -File packaging\package-vscode.ps1     # Windows
@@ -159,6 +161,12 @@ It builds cmcoder (PyInstaller), runs it with no Python in reach, builds the
 chat panel, packages the extension with cmcoder and your `branding/`, checks
 the program is in the file, and prints the file's path and SHA256.
 `-SkipTests` (`--skip-tests`) leaves out the test run.
+
+If it stops with "git can't read this folder's commit": for "dubious
+ownership" (common on a second drive such as `E:`), run the
+`git config --global --add safe.directory …` line it prints; for "not a git
+repository", use a git clone instead of a copied folder. (With `-SkipTests` it
+goes on, and the build says `unknown` instead of its commit.)
 
 Hand out `vscode\cmcoder-win32-x64.vsix`, never `cmcoder.vsix`: that one (from
 `npm run package`, or the CI workflow's `cmcoder-vsix` artifact) is a test

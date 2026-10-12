@@ -11,13 +11,16 @@ Run it on a build PC (not the developers'), in the repository:
 The build PC needs:
   - uv (https://docs.astral.sh/uv/): it downloads its own Python 3.12 if
     there's none, so Python itself needn't be installed;
-  - Node.js 22 or newer (packaging only).
+  - Node.js 22 or newer (packaging only);
+  - Git, and the repository as a git clone (the build is named after its
+    commit; a copied folder or a downloaded zip has none).
 
 It does what the Release workflow does for this platform: builds cmcoder
 with PyInstaller, runs it with no Python in reach, packages the extension
 with it (and the brand in branding\), and checks cmcoder.exe is in the file.
 
-    -SkipTests   don't run the built cmcoder before packaging (faster)
+    -SkipTests   don't run the built cmcoder before packaging (faster); also
+                 goes on when git can't name the build ("unknown")
 
 The other "cmcoder.vsix" (npm run package, or CI's cmcoder-vsix artifact)
 has no cmcoder inside: it's for testing on PCs that have cmcoder already.
@@ -49,6 +52,20 @@ Need node "install Node.js 22 LTS"
 Need npm "it comes with Node.js"
 $major = [int](node -p "process.versions.node.split('.')[0]")
 if ($major -lt 22) { throw "Node.js 22 or newer is needed for packaging (this is $(node --version))" }
+
+# The build is named after its git commit ("0.1.0 (aa3dc83 2026-10-12)", in
+# --version and Copy Diagnostics). Checked first, not after a long build.
+# Through cmd, so git's message comes back as text whatever the PowerShell.
+Need git "install Git for Windows (the build is named after its commit)"
+$commit = (cmd /c "git -C `"$root`" rev-parse --short=7 HEAD 2>&1" | Out-String).Trim()
+if ($LASTEXITCODE -ne 0) {
+    $why = "git can't read this folder's commit, which names the build:`n  $commit`n" +
+        "- 'dubious ownership': trust the folder, then run this again:`n" +
+        "    git config --global --add safe.directory $($root -replace '\\', '/')`n" +
+        "- 'not a git repository': use a git clone of the repository, not a copy or a downloaded zip."
+    if (-not $SkipTests) { throw $why }
+    Write-Warning "$why`nGoing on (-SkipTests): the build will say 'unknown' instead of its commit."
+}
 
 Step "Python environment for the build (uv)" $root { uv sync --python 3.12 }
 Step "Standalone cmcoder (PyInstaller)" $root { uv run --with pyinstaller python packaging/build.py }

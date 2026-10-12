@@ -36,6 +36,9 @@ def test_the_release_steps_in_order(script: Path) -> None:
         at = found
     # Run with no Python in reach, as on developers' PCs.
     assert "CMCODER_TEST_NO_PYTHON" in text
+    # git names the build: checked before the build, with the fixes spelled out.
+    assert -1 < text.find("rev-parse") < text.find(STEPS[0])
+    assert "safe.directory" in text and "git clone" in text
     # The web panel is built before the extension (vscode's build imports it).
     assert text.find("clients") < text.find("uv run python packaging/vsix.py")
 

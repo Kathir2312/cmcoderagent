@@ -9,7 +9,8 @@
 #     bash packaging/package-vscode.sh [--skip-tests]
 #
 # The build machine needs uv (https://docs.astral.sh/uv/; it downloads its own
-# Python 3.12 if there's none) and Node.js 22 or newer.
+# Python 3.12 if there's none), Node.js 22 or newer, and git with the repository
+# as a git clone (the build is named after its commit).
 #
 # It does what the Release workflow does for this platform: builds cmcoder with
 # PyInstaller, runs it with no Python in reach, packages the extension with it
@@ -23,7 +24,7 @@ skip_tests=0
 for arg in "$@"; do
   case "$arg" in
     --skip-tests) skip_tests=1 ;;
-    -h|--help) sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "unknown option: $arg (see --help)" >&2; exit 2 ;;
   esac
 done
@@ -45,6 +46,22 @@ major="$(node -p "process.versions.node.split('.')[0]")"
 if [ "$major" -lt 22 ]; then
   echo "Node.js 22 or newer is needed for packaging (this is $(node --version))" >&2
   exit 1
+fi
+
+# The build is named after its git commit ("0.1.0 (aa3dc83 2026-10-12)", in
+# --version and Copy Diagnostics). Checked first, not after a long build.
+need git "install git (the build is named after its commit)"
+if ! commit="$(git -C "$root" rev-parse --short=7 HEAD 2>&1)"; then
+  why="git can't read this folder's commit, which names the build:
+  $commit
+- 'dubious ownership': trust the folder, then run this again:
+    git config --global --add safe.directory '$root'
+- 'not a git repository': use a git clone of the repository, not a copy or a downloaded zip."
+  if [ "$skip_tests" = 0 ]; then
+    echo "$why" >&2
+    exit 1
+  fi
+  printf 'WARNING: %s\nGoing on (--skip-tests): the build will say "unknown" instead of its commit.\n' "$why" >&2
 fi
 
 step "Python environment for the build (uv)"
