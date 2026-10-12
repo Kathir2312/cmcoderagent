@@ -35,8 +35,10 @@ import com.intellij.openapi.actionSystem.impl.SimpleDataContext;
 import com.intellij.openapi.application.ApplicationInfo;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.editor.Editor;
+import com.intellij.openapi.fileEditor.FileEditor;
 import com.intellij.openapi.fileEditor.FileEditorManager;
 import com.intellij.openapi.fileEditor.OpenFileDescriptor;
+import com.intellij.openapi.fileEditor.TextEditor;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.project.ProjectManager;
@@ -334,9 +336,18 @@ public final class Gate {
         }
         until("the chat still works after it", () -> "1".equals(driver(chat, "count", "textarea")), 20);
 
-        // H14: Ask About Selection (the editor's menu entry) fills in a prompt.
+        // H14: Ask About Selection (the editor's menu entry) fills in a prompt. The
+        // navigator's tab is in front now: back to app.txt, as a right-click in it would.
         ui(() -> {
-            Editor editor = FileEditorManager.getInstance(p).getSelectedTextEditor();
+            VirtualFile vf = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(app);
+            Editor editor = null;
+            for (FileEditor opened : FileEditorManager.getInstance(p).openFile(vf, true)) {
+                if (opened instanceof TextEditor text) editor = text.getEditor();
+            }
+            if (editor == null) throw new AssertionError("app.txt has no text editor");
+            if (!editor.getSelectionModel().hasSelection()) {
+                editor.getSelectionModel().setSelection(0, editor.getDocument().getLineEndOffset(0));
+            }
             AnAction action = ActionManager.getInstance().getAction("cmcoder.AskAboutSelection");
             DataContext data = SimpleDataContext.builder()
                     .add(CommonDataKeys.PROJECT, p)
