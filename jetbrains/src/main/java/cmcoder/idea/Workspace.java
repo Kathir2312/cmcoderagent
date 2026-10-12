@@ -14,7 +14,6 @@ import com.intellij.lang.annotation.HighlightSeverity;
 import com.intellij.openapi.application.Application;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
-import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.editor.SelectionModel;
@@ -22,6 +21,7 @@ import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.fileEditor.FileEditorManager;
 import com.intellij.openapi.fileEditor.OpenFileDescriptor;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.util.Computable;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 
@@ -107,7 +107,7 @@ final class Workspace {
     /** A document's errors and warnings as the IDE highlights them (files it has checked: the open ones). */
     static List<Problem> problems(Project project, Document doc) {
         if (doc == null) return List.of();
-        return ReadAction.compute(() -> {
+        return ApplicationManager.getApplication().runReadAction((Computable<List<Problem>>) () -> {
             List<Problem> out = new ArrayList<>();
             if (project.isDisposed()) return out;
             DaemonCodeAnalyzerEx.processHighlights(doc, project, HighlightSeverity.WARNING, 0, doc.getTextLength(), info -> {
@@ -182,7 +182,8 @@ final class Workspace {
             if (path == null) continue;
             Path p = Path.of(path);
             String shown = projectDir != null && p.startsWith(projectDir) ? projectDir.relativize(p).toString().replace('\\', '/') : path;
-            Document doc = ReadAction.compute(() -> FileDocumentManager.getInstance().getDocument(vf));
+            Document doc = ApplicationManager.getApplication()
+                    .runReadAction((Computable<Document>) () -> FileDocumentManager.getInstance().getDocument(vf));
             for (Problem problem : problems(project, doc)) {
                 total++;
                 if (lines.size() >= MAX_TOOL_LINES) continue;

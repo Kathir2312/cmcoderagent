@@ -6,9 +6,11 @@ import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
 
+import javax.swing.JList;
+
 import com.intellij.openapi.application.ApplicationManager;
-import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.util.Computable;
 import com.intellij.openapi.roots.ProjectFileIndex;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.ui.popup.JBPopupFactory;
@@ -31,7 +33,13 @@ final class Dialogs {
         JBPopupFactory.getInstance()
                 .createPopupChooserBuilder(newestFirst)
                 .setTitle(Brand.product() + ": rewind to before which message?")
-                .setRenderer(SimpleListCellRenderer.<Protocol.RewindPoint>create("", Dialogs::label))
+                .setRenderer(new SimpleListCellRenderer<Protocol.RewindPoint>() {
+                    @Override
+                    public void customize(JList<? extends Protocol.RewindPoint> list, Protocol.RewindPoint value, int index,
+                            boolean selected, boolean hasFocus) {
+                        setText(value == null ? "" : label(value));
+                    }
+                })
                 .setNamerForFiltering(Dialogs::label)
                 .setItemChosenCallback(point -> afterPoint(project, point, chosen))
                 .createPopup()
@@ -72,7 +80,7 @@ final class Dialogs {
         }
         // Listing a big project takes a moment: not on the UI thread.
         ApplicationManager.getApplication().executeOnPooledThread(() -> {
-            List<String> files = ReadAction.compute(() -> {
+            List<String> files = ApplicationManager.getApplication().runReadAction((Computable<List<String>>) () -> {
                 List<String> out = new ArrayList<>();
                 if (project.isDisposed()) return out;
                 ProjectFileIndex.getInstance(project).iterateContent(vf -> {
