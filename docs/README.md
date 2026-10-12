@@ -15,7 +15,8 @@ its own folder. The current phase's documents are updated as features land.
 | **3 — Extensibility** | ✅ Complete | tag `phase3` | [phase3/](phase3/) |
 | **4 — Hardening** | ✅ Complete | commit `e78bdb1` (code); [phase4/STATUS.md](phase4/STATUS.md) | [phase4/](phase4/) |
 | **5 — Code search (RAG)** | ✅ Complete | commit `46f2e75`; [phase5/STATUS.md](phase5/STATUS.md) | [phase5/](phase5/) |
-| **6 — Other IDEs** | 🚧 Planned (6 Oct 2026) | — | [phase6/](phase6/) |
+| **6 — Other IDEs** | ✅ Complete | [phase6/STATUS.md](phase6/STATUS.md) | [phase6/](phase6/) |
+| **7 — IntelliJ-based IDEs** | 🚧 Planned (12 Oct 2026) | — | [phase7/](phase7/) |
 
 The overall design, decisions and roadmap stay in one living document:
 [DESIGN.md](DESIGN.md).

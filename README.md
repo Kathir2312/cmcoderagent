@@ -26,7 +26,7 @@ for Windows on Windows (below):
   use the same folder: each copies its own cmcoder there when that one is newer, so the terminal and every IDE run
   one program.
 - **VS Code:** `cmcoder-<platform>.vsix` → Extensions → ⋯ → *Install from VSIX…*.
-- Eclipse ([guide](docs/guides/eclipse.md)), NetBeans ([guide](docs/guides/netbeans.md)) and Visual Studio: `cmcoder-eclipse`, `cmcoder-netbeans-<platform>.nbm`, `cmcoder-visualstudio.vsix`, gate-tested in each real IDE ([status](docs/phase6/STATUS.md)). JetBrains IDEs were dropped from the plan.
+- Eclipse ([guide](docs/guides/eclipse.md)), NetBeans ([guide](docs/guides/netbeans.md)) and Visual Studio: `cmcoder-eclipse`, `cmcoder-netbeans-<platform>.nbm`, `cmcoder-visualstudio.vsix`, gate-tested in each real IDE ([status](docs/phase6/STATUS.md)). IntelliJ-based IDEs (IntelliJ IDEA, Rider, PyCharm, …) are Phase 7: [plan](docs/phase7/PLAN.md).
 
 **From source** (contributors). Works on **Windows, macOS and Linux**. Requires Python 3.11+ and bash:
 
