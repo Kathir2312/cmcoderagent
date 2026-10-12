@@ -7,7 +7,10 @@
 // The JVM core (clients/jvm-core, shared with Eclipse and NetBeans) is
 // compiled into the plugin; the shared chat page (clients/web-panel/dist, built
 // first with npm) and the brand's name and icon go into its panel/ folder.
+// The brand (branding/) also names the plugin, its vendor and menus, and draws
+// its icons (H24).
 
+import groovy.json.JsonSlurper
 import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
 import org.jetbrains.intellij.platform.gradle.models.ProductRelease
 import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask.FailureLevel
@@ -19,6 +22,20 @@ plugins {
 
 group = "cmcoder"
 version = providers.gradleProperty("pluginVersion").get()
+
+// -- the brand (branding/brand.json, checked by packaging/brand.py) -----------------------
+val brandFile = file("../branding/brand.json")
+val brand = (JsonSlurper().parse(brandFile) as Map<*, *>)
+fun brandValue(key: String, default: String): String =
+    (brand[key] as? String)?.trim()?.takeIf { it.isNotEmpty() } ?: default
+val productName = brandValue("productName", "cmcoder")
+val vendorName = brandValue("company", "").ifEmpty { brandValue("publisher", "cmcoder") }
+val accentColor = brandValue("accentColor", "#4F8EF7")
+check(Regex("^#[0-9A-Fa-f]{6}$").matches(accentColor)) { "branding/brand.json: accentColor must look like #4F8EF7" }
+fun xmlText(s: String) = s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
+// In menus "_" and "&" mark a shortcut letter: doubled, they are shown as they are.
+val productXml = xmlText(productName)
+val productInMenuXml = xmlText(productName.replace("_", "__").replace("&", "&&"))
 
 repositories {
     mavenCentral()
@@ -34,10 +51,43 @@ dependencies {
     }
 }
 
+// Drawn from the brand: the plugin's icon (Settings → Plugins, 40×40, the
+// accent colour), the tool window's and navigator tab's icon (16×16, the
+// IDE's icon greys for light and dark themes); and the version Copy
+// Diagnostics reports.
+val brandResources = tasks.register("brandResources") {
+    val source = file("../branding/icon-mono.svg")
+    val out = layout.buildDirectory.dir("generated/brand")
+    val accent = accentColor
+    val pluginVersion = project.version.toString()
+    inputs.file(source)
+    inputs.property("accentColor", accent)
+    inputs.property("version", pluginVersion)
+    outputs.dir(out)
+    doLast {
+        val dir = out.get().asFile
+        val svg = source.readText()
+        val open = Regex("<svg\\b[^>]*>").find(svg) ?: error("branding/icon-mono.svg: no <svg> element")
+        fun icon(path: String, size: Int, colour: String) {
+            val tag = open.value.replace(Regex("\\s(width|height)=\"[^\"]*\""), "")
+                .replaceFirst("<svg", "<svg width=\"$size\" height=\"$size\"")
+            val text = svg.replaceRange(open.range, tag).replace(Regex("currentColor", RegexOption.IGNORE_CASE), colour)
+            dir.resolve(path).apply { parentFile.mkdirs() }.writeText(text)
+        }
+        icon("META-INF/pluginIcon.svg", 40, accent)
+        icon("icons/toolWindow.svg", 16, "#6C707E")
+        icon("icons/toolWindow_dark.svg", 16, "#CED0D6")
+        dir.resolve("cmcoder/idea/build.properties").apply { parentFile.mkdirs() }.writeText("version=$pluginVersion\n")
+    }
+}
+
 sourceSets {
     main {
         java {
             srcDir("../clients/jvm-core/src/main/java")
+        }
+        resources {
+            srcDir(brandResources)
         }
     }
 }
@@ -58,7 +108,11 @@ intellijPlatform {
     buildSearchableOptions = false
 
     pluginConfiguration {
+        name = productName
         version = providers.gradleProperty("pluginVersion")
+        vendor {
+            name = vendorName
+        }
         ideaVersion {
             sinceBuild = providers.gradleProperty("sinceBuild")
             untilBuild = provider { null } // no upper bound unless the verifier finds a break
@@ -83,6 +137,28 @@ intellijPlatform {
                 types.set(listOf(IntelliJPlatformType.IntellijIdea))
                 channels.set(listOf(ProductRelease.Channel.RELEASE))
             }
+        }
+    }
+}
+
+// plugin.xml's texts with the brand's name (ids keep "cmcoder").
+tasks.processResources {
+    inputs.property("productName", productName)
+    val product = productXml
+    val productInMenu = productInMenuXml
+    filesMatching("META-INF/plugin.xml") {
+        filter { line: String -> line.replace("@productInMenu@", productInMenu).replace("@product@", product) }
+    }
+}
+
+// What the IDE reads: plugin.xml in the jar, with no token left unfilled.
+tasks.jar {
+    doLast {
+        java.util.zip.ZipFile(archiveFile.get().asFile).use { zip ->
+            val entry = zip.getEntry("META-INF/plugin.xml") ?: error("No META-INF/plugin.xml in the plugin's jar")
+            val text = zip.getInputStream(entry).readBytes().toString(Charsets.UTF_8)
+            check(!text.contains("@product")) { "plugin.xml: the brand's name wasn't filled in" }
+            check(zip.getEntry("META-INF/pluginIcon.svg") != null) { "No plugin icon in the plugin's jar" }
         }
     }
 }

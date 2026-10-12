@@ -1,8 +1,11 @@
 package cmcoder.idea;
 
 import java.nio.file.Path;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -12,6 +15,7 @@ import java.util.function.Consumer;
 import org.jetbrains.annotations.NotNull;
 
 import com.intellij.ide.BrowserUtil;
+import com.intellij.ide.impl.TrustedProjects;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.components.Service;
@@ -25,7 +29,9 @@ import com.intellij.openapi.fileEditor.FileEditorManagerListener;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowManager;
+import com.intellij.ui.content.Content;
 
+import cmcoder.ide.core.CodeSearch;
 import cmcoder.ide.core.Host;
 import cmcoder.ide.core.Ide;
 import cmcoder.ide.core.Protocol;
@@ -41,6 +47,8 @@ import cmcoder.ide.core.Protocol;
 public final class Session implements Disposable {
     /** The tool window's id in plugin.xml. */
     public static final String TOOL_WINDOW = "cmcoder";
+    /** Lines of the log kept for the Log tab and Copy Diagnostics. */
+    static final int LOG_LINES = 300;
 
     private final Project project;
     private final ScheduledExecutorService worker = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -52,14 +60,21 @@ public final class Session implements Disposable {
     private final Host host;
     private final DiffReview diffs;
     private volatile Panel chat;
+    private volatile Panel navigator;
+    private NavigatorEditorProvider.NavigatorFile navigatorFile;
     private volatile String lastState = "";
     private ScheduledFuture<?> pendingContext;
+    private final CodeSearch codeSearch;
+    private final List<Runnable> codeSearchViews = new CopyOnWriteArrayList<>();
+    private final ArrayDeque<String> recentLog = new ArrayDeque<>();
+    private final List<Consumer<String>> logViews = new CopyOnWriteArrayList<>();
 
     public Session(@NotNull Project project) {
         this.project = project;
         config.client = "jetbrains";
         config.product = Brand.product();
         host = new Host(new IntelliJIde(), config);
+        codeSearch = new CodeSearch(host, cs -> codeSearchViews.forEach(Runnable::run));
         diffs = new DiffReview(project, this);
         listenToEditors();
     }
@@ -89,7 +104,16 @@ public final class Session implements Disposable {
         config.projectDir = base == null ? null : Path.of(base);
         config.programSetting = s.program == null || s.program.isBlank() ? null : s.program.trim();
         config.permissionMode = s.permissionMode == null || s.permissionMode.isBlank() ? null : s.permissionMode;
-        config.trustProject = false; // item 4: the IDE's trusted projects
+        config.trustProject = trusted();
+    }
+
+    /**
+     * Whether the IDE trusts the project (H21): only then does cmcoder read the
+     * project's own .cmcoder settings (--trust-project), as VS Code does with its
+     * workspace trust.
+     */
+    boolean trusted() {
+        return !project.isDisposed() && TrustedProjects.isTrusted(project);
     }
 
     /** Shows the chat's tool window (UI thread or not). */
@@ -101,8 +125,71 @@ public final class Session implements Disposable {
         });
     }
 
+    /** Shows the tool window's Log tab (UI thread or not). */
+    void showLog() {
+        ApplicationManager.getApplication().invokeLater(() -> {
+            if (project.isDisposed()) return;
+            ToolWindow window = ToolWindowManager.getInstance(project).getToolWindow(TOOL_WINDOW);
+            if (window == null) return;
+            window.activate(() -> {
+                Content log = window.getContentManager().findContent(LogView.TAB);
+                if (log != null) window.getContentManager().setSelectedContent(log);
+            });
+        });
+    }
+
     void chatOpened(Panel panel) {
         chat = panel;
+    }
+
+    /** The navigator tab's file, the same one each time (UI thread). */
+    NavigatorEditorProvider.NavigatorFile navigatorFile() {
+        if (navigatorFile == null) navigatorFile = new NavigatorEditorProvider.NavigatorFile();
+        return navigatorFile;
+    }
+
+    void navigatorOpened(Panel panel) {
+        navigator = panel;
+    }
+
+    void navigatorClosed(Panel panel) {
+        if (navigator == panel) navigator = null;
+    }
+
+    /** Code search (H16): its state and requests. */
+    CodeSearch codeSearch() {
+        return codeSearch;
+    }
+
+    /** {@code changed} runs (any thread) when code search's state changes; the returned action stops it. */
+    Runnable onCodeSearchChange(Runnable changed) {
+        codeSearchViews.add(changed);
+        return () -> codeSearchViews.remove(changed);
+    }
+
+    // -- the log (H22) ------------------------------------------------------------------------
+
+    /** A line for this project's log (cmcoder's stderr, starts and ends), also in the IDE's log. */
+    void log(String line) {
+        synchronized (recentLog) {
+            recentLog.addLast(line);
+            while (recentLog.size() > LOG_LINES) recentLog.removeFirst();
+        }
+        Plugin.log(line);
+        for (Consumer<String> view : logViews) view.accept(line);
+    }
+
+    /** The last lines of the log (for the Log tab and Copy Diagnostics). */
+    List<String> recentLog() {
+        synchronized (recentLog) {
+            return new ArrayList<>(recentLog);
+        }
+    }
+
+    /** {@code view} gets each new line (any thread); the returned action stops it. */
+    Runnable onLog(Consumer<String> view) {
+        logViews.add(view);
+        return () -> logViews.remove(view);
     }
 
     /** The chat closed: cmcoder stops with it (no hidden conversation keeps running). */
@@ -185,12 +272,13 @@ public final class Session implements Disposable {
 
         @Override
         public void toNavigator(String json) {
-            // Item 4: the Agent Navigator tab.
+            Panel p = navigator;
+            if (p != null) p.post(json);
         }
 
         @Override
         public void openNavigator() {
-            // Item 4: the Agent Navigator tab.
+            ApplicationManager.getApplication().invokeLater(() -> NavigatorEditorProvider.open(project));
         }
 
         @Override
@@ -253,7 +341,7 @@ public final class Session implements Disposable {
 
         @Override
         public void log(String line) {
-            Plugin.log(line);
+            Session.this.log(line);
         }
     }
 }

@@ -11,7 +11,7 @@ import com.intellij.openapi.project.Project;
 
 import cmcoder.ide.core.Host;
 
-/** "Ask cmcoder About Selection" in the editor's menu and on Ctrl+Alt+K (H14): the chat, with a prompt to finish. */
+/** "Ask cmcoder About Selection" in the editor's menu and on Ctrl+Alt+K (H14): the chat, with a prompt to finish. The text, with the brand's name, is in plugin.xml. */
 public final class AskAboutSelectionAction extends AnAction implements DumbAware {
     @Override
     public void actionPerformed(@NotNull AnActionEvent e) {
@@ -25,7 +25,6 @@ public final class AskAboutSelectionAction extends AnAction implements DumbAware
     @Override
     public void update(@NotNull AnActionEvent e) {
         e.getPresentation().setEnabledAndVisible(e.getProject() != null && e.getData(CommonDataKeys.EDITOR) != null);
-        e.getPresentation().setText("Ask " + Brand.product() + " About Selection");
     }
 
     @Override

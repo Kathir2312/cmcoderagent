@@ -17,37 +17,56 @@ import com.intellij.ui.content.Content;
 import com.intellij.ui.content.ContentFactory;
 import com.intellij.ui.jcef.JBCefApp;
 
-/** The cmcoder tool window: the shared chat page in JCEF, one conversation per project. */
+/**
+ * The cmcoder tool window: the shared chat page in JCEF, one conversation per
+ * project, and the project's log (H22) in a second tab.
+ */
 public final class ChatToolWindowFactory implements ToolWindowFactory, DumbAware {
+    /** The chat's tab. */
+    static final String CHAT_TAB = "Chat";
+
+    @Override
+    public void init(@NotNull ToolWindow toolWindow) {
+        toolWindow.setStripeTitle(Brand.product()); // the id stays "cmcoder"; the brand's name is shown
+    }
+
     @Override
     public void createToolWindowContent(@NotNull Project project, @NotNull ToolWindow toolWindow) {
         Session session = Session.get(project);
+        ContentFactory factory = ContentFactory.getInstance();
         Content content;
         if (!JBCefApp.isSupported()) {
-            content = message(Brand.product() + " shows its chat in the IDE's built-in browser (JCEF), which this IDE's "
-                    + "runtime doesn't have. Choose a JetBrains Runtime with JCEF: Help → Find Action → "
-                    + "\"Choose Boot Java Runtime for the IDE\". The terminal (cmcoder) works meanwhile.");
+            content = factory.createContent(messageComponent(Brand.product() + " shows its chat in the IDE's built-in browser (JCEF), "
+                    + "which this IDE's runtime doesn't have. Choose a JetBrains Runtime with JCEF: Help → Find Action → "
+                    + "\"Choose Boot Java Runtime for the IDE\". The terminal (cmcoder) works meanwhile."), CHAT_TAB, false);
         } else {
             try {
                 Panel panel = Panel.create("chat", json -> session.run(h -> h.onPanelMessage(json)), session);
                 session.chatOpened(panel);
                 Disposer.register(panel, () -> session.chatClosed(panel));
-                content = ContentFactory.getInstance().createContent(panel.component(), "", false);
+                content = factory.createContent(panel.component(), CHAT_TAB, false);
                 content.setDisposer(panel);
             } catch (IOException | RuntimeException e) {
                 Plugin.error("Could not open the " + Brand.product() + " chat", e);
-                content = message(Brand.product() + " could not prepare its chat: " + e.getMessage());
+                content = factory.createContent(messageComponent(Brand.product() + " could not prepare its chat: " + e.getMessage()),
+                        CHAT_TAB, false);
             }
         }
         toolWindow.getContentManager().addContent(content);
+
+        LogView log = new LogView(session);
+        Content logContent = factory.createContent(log.component(), LogView.TAB, false);
+        logContent.setDisposer(log);
+        toolWindow.getContentManager().addContent(logContent);
+        toolWindow.getContentManager().setSelectedContent(content);
     }
 
-    private static Content message(String text) {
+    /** A read-only message where a page would be. */
+    static JComponent messageComponent(String text) {
         JBTextArea area = new JBTextArea(text);
         area.setEditable(false);
         area.setLineWrap(true);
         area.setWrapStyleWord(true);
-        JComponent component = new JBScrollPane(area);
-        return ContentFactory.getInstance().createContent(component, "", false);
+        return new JBScrollPane(area);
     }
 }
