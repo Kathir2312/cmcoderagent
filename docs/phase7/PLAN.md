@@ -163,7 +163,8 @@ Plus:
   plugin finds its folder from its own jar.)
 - [ ] 2. Chat in JCEF, host, bundled and shared `cmcoder` (code in, builds
   and verifies; checked in a real IDE with the gate)
-- [ ] 3. Editor duties (H7–H14)
+- [ ] 3. Editor duties (H7–H14) (code in, builds and verifies on 2024.2 and
+  2026.2; checked in a real IDE with the gate)
 - [ ] 4. Navigator, code search, settings, trust, diagnostics, branding
 - [ ] 5. Gate in CI and the release build; smoke in PyCharm and Rider
 - [ ] 6. Release bundle, versions, dependency scanning
