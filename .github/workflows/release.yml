@@ -132,8 +132,9 @@ jobs:
           if [ ! -x "$nb/netbeans/bin/netbeans" ]; then
             mkdir -p "$nb" && cd "$nb"
             # downloads.apache.org is fast but holds only the newest release; the archive has all, slowly.
+            get() { curl -fsSL --connect-timeout 30 --speed-limit 20000 --speed-time 120 --retry 5 --retry-delay 15 -O "$1"; }  # a stalled transfer is cut and tried again
             for base in https://downloads.apache.org/netbeans/netbeans/31 https://archive.apache.org/dist/netbeans/netbeans/31; do
-              curl -fsSL --retry 3 -O $base/netbeans-31-bin.zip && curl -fsSL -O $base/netbeans-31-bin.zip.sha512 && break
+              get $base/netbeans-31-bin.zip && get $base/netbeans-31-bin.zip.sha512 && break
             done
             [ "$(cut -d' ' -f1 netbeans-31-bin.zip.sha512)" = "$( (sha512sum netbeans-31-bin.zip 2>/dev/null || shasum -a 512 netbeans-31-bin.zip) | cut -d' ' -f1)" ]
             if [ "$RUNNER_OS" = Windows ]; then 7z x -bd -y netbeans-31-bin.zip > /dev/null; else unzip -q netbeans-31-bin.zip; fi

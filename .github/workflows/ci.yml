@@ -521,14 +521,18 @@ jobs:
           path: ${{ runner.temp }}/netbeans-${{ matrix.netbeans }}
           key: netbeans-${{ matrix.netbeans }}-bin
       - name: Get NetBeans ${{ matrix.netbeans }}
+        # The archive is slow and sometimes stalls: curl cuts a transfer under
+        # 20 KB/s for 2 minutes and tries again; the step gives up after 30.
+        timeout-minutes: 30
         run: |
           nb="$RUNNER_TEMP/netbeans-${{ matrix.netbeans }}"
           [ -x "$nb/netbeans/bin/netbeans" ] && exit 0
           mkdir -p "$nb" && cd "$nb"
           # downloads.apache.org is fast but holds only the newest release; the archive has all, slowly.
           v=${{ matrix.netbeans }}
+          get() { curl -fsSL --connect-timeout 30 --speed-limit 20000 --speed-time 120 --retry 5 --retry-delay 15 -O "$1"; }  # a stalled transfer is cut and tried again
           for base in https://downloads.apache.org/netbeans/netbeans/$v https://archive.apache.org/dist/netbeans/netbeans/$v; do
-            curl -fsSL --retry 3 -O $base/netbeans-$v-bin.zip && curl -fsSL -O $base/netbeans-$v-bin.zip.sha512 && break
+            get $base/netbeans-$v-bin.zip && get $base/netbeans-$v-bin.zip.sha512 && break
           done
           [ "$(cut -d' ' -f1 netbeans-*-bin.zip.sha512)" = "$(sha512sum netbeans-*-bin.zip | cut -d' ' -f1)" ]
           unzip -q netbeans-*-bin.zip && rm netbeans-*-bin.zip
