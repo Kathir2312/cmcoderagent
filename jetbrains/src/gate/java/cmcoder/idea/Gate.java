@@ -44,6 +44,8 @@ import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.CommonDataKeys;
 import com.intellij.openapi.actionSystem.DataContext;
+import com.intellij.openapi.actionSystem.KeyboardShortcut;
+import com.intellij.openapi.actionSystem.Shortcut;
 import com.intellij.openapi.actionSystem.impl.SimpleDataContext;
 import com.intellij.openapi.application.ApplicationInfo;
 import com.intellij.openapi.application.ApplicationManager;
@@ -53,6 +55,9 @@ import com.intellij.openapi.fileEditor.FileEditor;
 import com.intellij.openapi.fileEditor.FileEditorManager;
 import com.intellij.openapi.fileEditor.OpenFileDescriptor;
 import com.intellij.openapi.fileEditor.TextEditor;
+import com.intellij.openapi.keymap.Keymap;
+import com.intellij.openapi.keymap.KeymapManager;
+import com.intellij.openapi.keymap.KeymapUtil;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.project.ProjectManager;
@@ -458,6 +463,21 @@ public final class Gate {
         });
         until("the prompt", () -> chat.evaluate("document.querySelector('textarea').value").get(10, TimeUnit.SECONDS)
                 .contains("Explain the selected code."));
+        // Its keyboard shortcut (Ctrl+Alt+K; on a Mac, the keymap's own) is its own: no
+        // action of the IDE's has it in the keymap in use.
+        step("Ask About Selection's shortcut is its own: " + ui(() -> {
+            Keymap keymap = KeymapManager.getInstance().getActiveKeymap();
+            for (Shortcut shortcut : keymap.getShortcuts("cmcoder.AskAboutSelection")) {
+                if (!(shortcut instanceof KeyboardShortcut keys)) continue;
+                List<String> others = new ArrayList<>(keymap.getActionIdList(keys));
+                others.remove("cmcoder.AskAboutSelection");
+                if (!others.isEmpty()) {
+                    throw new AssertionError(KeymapUtil.getShortcutText(keys) + " is also " + others + " in the keymap " + keymap.getName());
+                }
+                return KeymapUtil.getShortcutText(keys) + " (keymap " + keymap.getName() + ")";
+            }
+            throw new AssertionError("Ask About Selection has no keyboard shortcut in the keymap " + keymap.getName());
+        }));
 
         // H3: closing the chat stops cmcoder.
         ui(() -> {

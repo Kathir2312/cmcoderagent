@@ -7,7 +7,7 @@ dialog, a stack trace you can't copy, a UI to build, a diagram.
 
 | Where | How |
 |---|---|
-| VS Code, Visual Studio, Eclipse, NetBeans | **Ctrl+V** in the chat's input (Mac: Cmd+V), **drag** an image file onto the chat, or the **Image** button next to **@** |
+| VS Code, Visual Studio, Eclipse, NetBeans, JetBrains IDEs | **Ctrl+V** in the chat's input (Mac: Cmd+V), **drag** an image file onto the chat, or the **Image** button next to **@** |
 | Terminal (`cmcoder`, `cmcoder --tui`) | **Alt+V** pastes the clipboard's image (**Ctrl+V** too, where the terminal lets it through: Windows Terminal and VS Code's terminal keep Ctrl+V for text), **drag** an image file into the terminal (or paste its path), or type **`/image`** (the clipboard's image) or **`/image C:\path\shot.png`** |
 
 - In the IDEs, the image appears as a thumbnail above the input: **×** removes it.

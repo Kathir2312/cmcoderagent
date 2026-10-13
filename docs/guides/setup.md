@@ -1,8 +1,8 @@
 # First-time setup (once, for every way you use cmcoder)
 
 cmcoder needs to know your company's AI gateway and your API key. You do this
-once; the terminal and every IDE (VS Code, Visual Studio, Eclipse, NetBeans)
-use it.
+once; the terminal and every IDE (VS Code, Visual Studio, Eclipse, NetBeans,
+IntelliJ IDEA and the other JetBrains IDEs) use it.
 
 Your team may already have done this for you: if your company's settings came
 with the build, cmcoder creates `settings.json` from them the first time it
@@ -78,8 +78,8 @@ cmcoder doctor
 
 It checks, and tells you what to fix: the gateway's name (VPN), proxies, the
 certificate chain, the key, the model list, streaming, and tool calling. In
-Visual Studio, Eclipse and NetBeans, **Copy Diagnostics** includes the same
-report.
+Visual Studio, Eclipse, NetBeans and the JetBrains IDEs, **Copy Diagnostics**
+includes the same report.
 
 ## Company networks
 

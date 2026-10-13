@@ -10,7 +10,7 @@ LangChain/LangGraph developers).
 
 > Status: **Phases 0–6 complete** (Windows, macOS and Linux): the terminal and TUI, VS Code, extensibility (MCP,
 > hooks, skills, subagents), hardening (sandbox, standalone build, both gateways), code search, and Visual Studio, Eclipse and NetBeans.
-> **Install and use** (terminal, VS Code, Eclipse, NetBeans; no Python needed on the PC): [docs/guides/](docs/guides/README.md).
+> **Install and use** (terminal, VS Code, Eclipse, NetBeans, IntelliJ IDEA and the other JetBrains IDEs; no Python needed on the PC): [docs/guides/](docs/guides/README.md).
 > **Phase 6 (Visual Studio, Eclipse, NetBeans) is complete**: [docs/phase6/STATUS.md](docs/phase6/STATUS.md).
 
 ## Install
@@ -26,7 +26,8 @@ for Windows on Windows (below):
   use the same folder: each copies its own cmcoder there when that one is newer, so the terminal and every IDE run
   one program.
 - **VS Code:** `cmcoder-<platform>.vsix` → Extensions → ⋯ → *Install from VSIX…*.
-- Eclipse ([guide](docs/guides/eclipse.md)), NetBeans ([guide](docs/guides/netbeans.md)) and Visual Studio: `cmcoder-eclipse`, `cmcoder-netbeans-<platform>.nbm`, `cmcoder-visualstudio.vsix`, gate-tested in each real IDE ([status](docs/phase6/STATUS.md)). IntelliJ-based IDEs (IntelliJ IDEA, Rider, PyCharm, …) are Phase 7: [plan](docs/phase7/PLAN.md).
+- Eclipse ([guide](docs/guides/eclipse.md)), NetBeans ([guide](docs/guides/netbeans.md)) and Visual Studio: `cmcoder-eclipse`, `cmcoder-netbeans-<platform>.nbm`, `cmcoder-visualstudio.vsix`, gate-tested in each real IDE ([status](docs/phase6/STATUS.md)).
+- **IntelliJ IDEA, PyCharm, Rider and the other JetBrains IDEs** (2024.2+, [guide](docs/guides/intellij.md)): `cmcoder-jetbrains-<platform>.zip` → Settings → Plugins → ⚙ → *Install Plugin from Disk…*, gate-tested in a real IntelliJ IDEA on every platform ([Phase 7](docs/phase7/PLAN.md)).
 
 **From source** (contributors). Works on **Windows, macOS and Linux**. Requires Python 3.11+ and bash:
 

@@ -20,6 +20,7 @@ updating and removing, and fixes.
 | VS Code | the VS Code extension | [vscode.md](vscode.md) |
 | Eclipse | the Eclipse plugin | [eclipse.md](eclipse.md) |
 | NetBeans | the NetBeans plugin | [netbeans.md](netbeans.md) |
+| IntelliJ IDEA, PyCharm, Rider, WebStorm, GoLand, … | the JetBrains plugin | [intellij.md](intellij.md) |
 | Visual Studio 2022 | the Visual Studio extension | [visualstudio.md](visualstudio.md) |
 
 You can use several: they share your settings, your API key, your permission

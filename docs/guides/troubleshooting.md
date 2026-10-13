@@ -7,7 +7,7 @@ is never shown in it.
 
 ## PCs without Python
 
-Nothing in the terminal package or the VS Code, Eclipse and NetBeans plugins
+Nothing in the terminal package or the VS Code, Eclipse, NetBeans and JetBrains plugins
 needs Python, and cmcoder never tries to install it. If something asks for
 `python`, `pip`, `uv` or `npx`, it comes from your own configuration:
 
@@ -20,6 +20,7 @@ needs Python, and cmcoder never tries to install it. If something asks for
 | VS Code: "cmcoder couldn't start" mentioning `uv` | `cmcoder.executable` / `executableArgs` were set | remove both settings: the extension then uses its own copy |
 | Eclipse: the program can't start | **cmcoder program** preference set | empty it (Preferences → cmcoder) |
 | NetBeans: the program can't start | **cmcoder program** option set | empty it (Tools → Options → Miscellaneous → cmcoder) |
+| IntelliJ IDEA and the other JetBrains IDEs: the program can't start | **cmcoder program** setting set | empty it (Settings → Tools → cmcoder) |
 
 ## Common problems
 
@@ -45,7 +46,9 @@ needs Python, and cmcoder never tries to install it. If something asks for
 | Eclipse: plugin won't install | Eclipse older than 2024-06, or not on Java 21 |
 | NetBeans: "cannot be installed" / missing modules | NetBeans older than 28, or the `.nbm` of another platform: take the one for your OS |
 | NetBeans: the chat says it couldn't start (JavaFX) | Linux: install GTK 3 (`sudo apt install libgtk-3-0`); then **Copy cmcoder Diagnostics** for support |
-| The project's `.cmcoder` settings are ignored | the project isn't trusted: `cmcoder trust`, VS Code's workspace trust, or Eclipse's preference |
+| JetBrains IDE: "incompatible" | the IDE is older than 2024.2 |
+| JetBrains IDE: the chat says the runtime has no JCEF | **Help → Find Action → "Choose Boot Java Runtime for the IDE"**, a JetBrains Runtime with JCEF ([intellij.md](intellij.md)) |
+| The project's `.cmcoder` settings are ignored | the project isn't trusted: `cmcoder trust`, VS Code's workspace trust, Eclipse's preference, or the JetBrains IDE's project trust |
 | Corporate antivirus blocks `cmcoder.exe` | ask IT to allow it (the signed build, once your company signs it) |
 
 ## The chat does nothing when you press Send
@@ -74,6 +77,7 @@ question (your key is never in it).
 | VS Code | **cmcoder: Show Log** (cmcoder's version, then any errors) |
 | Eclipse | Ctrl+3 → **cmcoder: Show Log** (Console view) |
 | NetBeans | **Tools → cmcoder → Show cmcoder Log** (Output window) |
+| IntelliJ IDEA and the other JetBrains IDEs | **Tools → cmcoder → Show cmcoder Log** (the **Log** tab of the cmcoder tool window) |
 | Terminal / all | `~/.cmcoder/logs/` (MCP servers: `mcp-<name>.log`) |
 
 When asking for help, send the **diagnostics** text and the log, not

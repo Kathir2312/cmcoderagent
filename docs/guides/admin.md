@@ -37,8 +37,8 @@ valid settings, or still has an example address.
    - builds the standalone cmcoder and tests it with no Python;
    - builds each IDE's file around it;
    - runs each IDE's **gate** in the real IDE (VS Code, Visual Studio,
-     Eclipse, NetBeans), with the scripted model server and no Python on the
-     PC's path.
+     Eclipse, NetBeans, IntelliJ IDEA), with the scripted model server and no
+     Python on the PC's path.
 4. Only if **every** job passed, the **Release bundle** job assembles the
    bundle. With a tag it also makes a GitHub release with the files.
 
