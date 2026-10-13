@@ -44,7 +44,7 @@ def test_the_first_start_makes_the_folder_with_the_companys_settings(company: Pa
     home = config_dir() / "fresh"
     made = user_folder.prepare(home)
     assert json.loads((home / "settings.json").read_text(encoding="utf-8")) == TEMPLATE
-    example = (ROOT / "docs" / "settings.example.json").read_text(encoding="utf-8")
+    example = (ROOT / "docs" / "examples" / "settings.example.json").read_text(encoding="utf-8")
     assert (home / "settings.example.json").read_text(encoding="utf-8") == example
     assert made == [str(home / "settings.json"), str(home / "settings.example.json")]
     assert user_folder.prepare(home) == []  # nothing new the second time
@@ -101,7 +101,9 @@ def test_the_build_refuses_broken_company_settings(tmp_path: Path) -> None:
     rule = {"permissions": {"disableBypassPermissionsMode": "disable"}}
     assert "only counts in managed-settings.json" in check(rule)[0]
     assert check(rule, managed=True) == []
-    managed_example = (ROOT / "docs" / "managed-settings.example.json").read_text("utf-8")
+    managed_example = (ROOT / "docs" / "examples" / "managed-settings.example.json").read_text(
+        "utf-8"
+    )
     assert "example address" in check(managed_example, managed=True)[0]
 
 

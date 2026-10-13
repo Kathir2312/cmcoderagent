@@ -29,7 +29,7 @@ wraps each download in a `.zip`: unzip it to get the file.
 Only these files have cmcoder inside. A file named just `cmcoder.vsix` (the
 `cmcoder-vsix` artifact of the CI workflow) is a test build **without**
 cmcoder: on a PC without it, the chat can't start. To build the right file
-yourself, see [admin.md](admin.md), section 7.
+yourself, see [../admin/](../admin/README.md), section 7.
 
 ## 2. Install
 
@@ -101,14 +101,14 @@ on) or **Deny** (with a note telling cmcoder what to do instead).
 | Ask about some code | select it, then **Ctrl+Alt+L** (Mac: Cmd+Alt+L) or right-click → **Ask cmcoder About Selection** |
 | See what goes with your message | the 📎 line above the input: the open file, the selection and its problems. Untick it to leave them out once |
 | Mention another file | the **@** button |
-| Show an image (a screenshot, an error dialog) | **Ctrl+V** in the input, drop the file on the chat, or the **Image** button ([images.md](images.md)) |
+| Show an image (a screenshot, an error dialog) | **Ctrl+V** in the input, drop the file on the chat, or the **Image** button ([images.md](../features/images.md)) |
 | Stop cmcoder | **Esc**, or **Stop** |
 | Start over | **cmcoder: New Conversation** |
 | Go back to an earlier conversation | **History** at the top of the chat; **Continue Last Conversation** in the chat's **⋯** menu |
 | Change how much it asks | the picker at the top: **default** (ask) / **acceptEdits** (edits without asking) / **auto** (asks only for risky actions) / **plan** (read only). Read-only commands (`grep`, `find`, `cat`, `git log` …, piped too) never ask |
 | A second check of each answer | tick **Critique** at the top |
 | See background helpers (subagents) | **cmcoder: Open Agent Navigator** |
-| Search code by meaning (big projects) | the status bar item, or **cmcoder: Set Up Code Search** ([code-search.md](code-search.md)) |
+| Search code by meaning (big projects) | the status bar item, or **cmcoder: Set Up Code Search** ([code-search.md](../features/code-search.md)) |
 | Use the terminal version | **cmcoder: Open in Terminal** |
 
 All commands start with **cmcoder:** in the Command Palette (Ctrl+Shift+P).

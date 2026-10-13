@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Security findings checked in the code and not exploitable
-     (docs/security/scan-2026-10-13.md), each with the reason. CI fails on any
+     (docs/project/security/scan-2026-10-13.md), each with the reason. CI fails on any
      other, including a new one of the same kind elsewhere in these classes. -->
 <FindBugsFilter>
   <!-- cmcoder is started with an argument list, no shell; the program is the

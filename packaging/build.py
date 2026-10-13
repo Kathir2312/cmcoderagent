@@ -71,7 +71,7 @@ def main() -> None:
     add_data.append(f"--add-data={build_file}{os.pathsep}cmcoder")
     add_data.append(f"--add-data={stamp_file}{os.pathsep}cmcoder")
     # Every setting, as a reference: copied to ~/.cmcoder on first use (user_folder.py).
-    example = ROOT / "docs" / "settings.example.json"
+    example = ROOT / "docs" / "examples" / "settings.example.json"
     add_data.append(f"--add-data={example}{os.pathsep}cmcoder")
     windows = []
     if sys.platform == "win32":

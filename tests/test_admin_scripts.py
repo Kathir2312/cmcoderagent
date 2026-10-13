@@ -28,7 +28,9 @@ def files(tmp_path: Path) -> dict[str, Path]:
         "bom": "﻿" + json.dumps(GOOD),  # saved by Notepad or PowerShell 5
         "array": "[1, 2]",
         "broken": '{"lockProviders": tru',
-        "example": (ROOT / "docs" / "managed-settings.example.json").read_text("utf-8"),
+        "example": (ROOT / "docs" / "examples" / "managed-settings.example.json").read_text(
+            "utf-8"
+        ),
     }.items():
         out[name] = tmp_path / f"{name}.json"
         out[name].write_text(text, encoding="utf-8")

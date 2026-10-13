@@ -83,14 +83,14 @@ cmcoder what to do instead).
 |---|---|
 | Ask about some code | select it, then **Ctrl+Alt+K** (Mac: Cmd+Alt+K) or right-click → **Ask cmcoder About Selection** |
 | See what goes with your message | the 📎 line above the input: the open file, the selection and its problems. Untick it to leave them out once |
-| Show an image (a screenshot, an error dialog) | **Ctrl+V** in the input, drop the file on the chat, or the **Image** button ([images.md](images.md)) |
+| Show an image (a screenshot, an error dialog) | **Ctrl+V** in the input, drop the file on the chat, or the **Image** button ([images.md](../features/images.md)) |
 | Stop cmcoder | **Esc**, or **Stop** |
 | Start over | **Ctrl+3** → **cmcoder: New Conversation** |
 | Go back to an earlier conversation | **History** at the top of the chat |
 | Change how much it asks | the picker at the top: **default** (ask) / **acceptEdits** (edits without asking) / **auto** (asks only for risky actions) / **plan** (read only). Read-only commands (`grep`, `find`, `cat`, `git log` …, piped too) never ask |
 | A second check of each answer | tick **Critique** at the top |
 | See background helpers (subagents) | **Ctrl+3** → **cmcoder: Open Agent Navigator** |
-| Search code by meaning (big projects) | **Code search** in the chat view's toolbar ([code-search.md](code-search.md)) |
+| Search code by meaning (big projects) | **Code search** in the chat view's toolbar ([code-search.md](../features/code-search.md)) |
 
 All commands are under **Ctrl+3**: type "cmcoder".
 

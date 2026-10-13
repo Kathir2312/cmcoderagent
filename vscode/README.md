@@ -10,7 +10,7 @@ User guide: `docs/guides/vscode.md`, with the release files (ask your team).
 
 - Nothing else: the release `.vsix` (`cmcoder-<platform>.vsix`, from the
   Release build) contains the standalone cmcoder and uses it, so the PC needs
-  no Python, uv or Node.js (docs/DESIGN.md D16).
+  no Python, uv or Node.js (docs/project/DESIGN.md D16).
 - On Windows, Git for Windows (for the Bash tool), as for the CLI.
 
 ## Install

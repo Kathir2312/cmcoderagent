@@ -1,7 +1,7 @@
 name: Packaging scripts
 
 # The one-command scripts people run on their own build machines
-# (packaging/package-*.ps1 and .sh, docs/building/), run for real as they run
+# (packaging/package-*.ps1 and .sh, docs/build-package/), run for real as they run
 # them: Windows PowerShell 5.1 on Windows, bash on macOS and Linux. Each makes
 # its package with cmcoder inside (built and run with no Python in reach) and
 # checks the program is in the file. The files handed out come from the

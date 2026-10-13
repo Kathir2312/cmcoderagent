@@ -83,14 +83,14 @@ a note telling cmcoder what to do instead).
 |---|---|
 | Ask about some code | select it, then **Ctrl+Shift+Alt+K** or right-click → **Ask cmcoder About Selection** |
 | See what goes with your message | the 📎 line above the input: the open file, the selection and its Error List entries. Untick it to leave them out once |
-| Show an image (a screenshot, an error dialog) | **Ctrl+V** in the input, drop the file on the chat, or the **Image** button ([images.md](images.md)) |
+| Show an image (a screenshot, an error dialog) | **Ctrl+V** in the input, drop the file on the chat, or the **Image** button ([images.md](../features/images.md)) |
 | Stop cmcoder | **Esc**, or **Stop** |
 | Start over | **Tools → cmcoder → New Conversation** |
 | Go back to an earlier conversation | **History** at the top of the chat |
 | Change how much it asks | the picker at the top: **default** (ask) / **acceptEdits** (edits without asking) / **auto** (asks only for risky actions) / **plan** (read only). Read-only commands (`grep`, `find`, `cat`, `git log` …, piped too) never ask |
 | A second check of each answer | tick **Critique** at the top |
 | See background helpers (subagents) | **Tools → cmcoder → Open Agent Navigator** |
-| Search code by meaning (big projects) | **Code search** above the chat, or **Tools → cmcoder → Code Search…** ([code-search.md](code-search.md)) |
+| Search code by meaning (big projects) | **Code search** above the chat, or **Tools → cmcoder → Code Search…** ([code-search.md](../features/code-search.md)) |
 
 ![The Agent Navigator in Visual Studio](screenshots/visualstudio-3-navigator.png)
 

@@ -1,6 +1,6 @@
 """cmcoder -> real LiteLLM proxy -> scripted vLLM-style backend.
 
-Checks the gateway assumptions in docs/DESIGN.md §4.7 against real LiteLLM.
+Checks the gateway assumptions in docs/project/DESIGN.md §4.7 against real LiteLLM.
 Opt-in: runs when a LiteLLM proxy is installed, e.g.
 
     uv venv /tmp/litellm && uv pip install --python /tmp/litellm/bin/python 'litellm[proxy]'

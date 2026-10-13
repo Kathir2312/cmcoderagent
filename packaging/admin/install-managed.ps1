@@ -1,5 +1,5 @@
 # Installs your company's managed settings on this PC: the rules developers
-# can't change (docs/guides/admin.md, section 5). Run it as administrator:
+# can't change (docs/admin/README.md, section 5). Run it as administrator:
 #   right-click install-managed.cmd, Run as administrator; or
 #   powershell -ExecutionPolicy Bypass -File install-managed.ps1 [-Source file]
 #

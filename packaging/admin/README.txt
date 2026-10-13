@@ -33,4 +33,4 @@ Developers don't need administrator rights for anything else: cmcoder
 installs per user in %USERPROFILE%\.cmcoder\bin (~/.cmcoder/bin), and their
 own settings are %USERPROFILE%\.cmcoder\settings.json.
 
-The full guide: docs/guides/admin.md in the repository.
+The full guide: docs/admin/README.md in the repository.

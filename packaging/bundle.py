@@ -86,7 +86,9 @@ def admin_files() -> dict[str, Path]:
     if company.is_file():
         out["managed-settings.json"] = company
     else:
-        out["managed-settings.example.json"] = ROOT / "docs" / "managed-settings.example.json"
+        out["managed-settings.example.json"] = (
+            ROOT / "docs" / "examples" / "managed-settings.example.json"
+        )
     return out
 
 

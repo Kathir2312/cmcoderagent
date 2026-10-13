@@ -55,7 +55,7 @@ own; before it changes a file or runs a command it asks:
 | **Enter** | send |
 | **Alt+Enter** (or Esc then Enter) | new line |
 | **Shift+Tab** | cycle the permission mode: ask / accept edits / plan (read only) |
-| **Alt+V** (or Ctrl+V) | paste an image from the clipboard; dragging an image file into the terminal attaches it too ([images.md](images.md)) |
+| **Alt+V** (or Ctrl+V) | paste an image from the clipboard; dragging an image file into the terminal attaches it too ([images.md](../features/images.md)) |
 | **Ctrl+C** | stop the current answer; twice to quit |
 
 ### Slash commands (type them in the chat)
@@ -107,7 +107,7 @@ own; before it changes a file or runs a command it asks:
 ## Code search (optional)
 
 For big projects, `cmcoder rag setup` lets cmcoder find code by meaning:
-[code-search.md](code-search.md).
+[code-search.md](../features/code-search.md).
 
 ## Without Python: what to avoid
 

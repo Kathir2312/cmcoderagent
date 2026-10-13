@@ -10,7 +10,7 @@
 #
 # The build machine needs uv (https://docs.astral.sh/uv/; it downloads its own
 # Python 3.12) and git with the repository as a git clone (the build is named
-# after its commit). docs/building/cli.md has the details.
+# after its commit). docs/build-package/cli.md has the details.
 #
 # It does what the Release workflow does for this file: builds cmcoder with
 # PyInstaller, runs it with no Python in reach, packs it with the install

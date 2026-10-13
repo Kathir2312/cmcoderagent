@@ -292,7 +292,7 @@ jobs:
 
   security:
     # Findings checked and accepted are recorded where they are (nosemgrep with a
-    # reason, .gitleaksignore); docs/security/scan-2026-10-07.md has the triage.
+    # reason, .gitleaksignore); docs/project/security/scan-2026-10-07.md has the triage.
     name: security (SAST + dependency audit)
     runs-on: ubuntu-latest
     steps:

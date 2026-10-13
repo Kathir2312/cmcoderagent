@@ -92,14 +92,14 @@ what to do instead).
 |---|---|
 | Ask about some code | select it, then **Ctrl+Alt+K** (Mac: Cmd+Alt+K) or right-click → **Ask cmcoder About Selection** |
 | See what goes with your message | the 📎 line above the input: the open file, the selection and its problems. Untick it to leave them out once |
-| Show an image (a screenshot, an error dialog) | **Ctrl+V** in the input, drop the file on the chat, or the **Image** button ([images.md](images.md)) |
+| Show an image (a screenshot, an error dialog) | **Ctrl+V** in the input, drop the file on the chat, or the **Image** button ([images.md](../features/images.md)) |
 | Stop cmcoder | **Esc**, **Stop**, or **Tools → cmcoder → Stop cmcoder** |
 | Start over | **Tools → cmcoder → New cmcoder Conversation** |
 | Go back to an earlier conversation | **History** at the top of the chat |
 | Change how much it asks | the picker at the top: **default** (ask) / **acceptEdits** (edits without asking) / **auto** (asks only for risky actions) / **plan** (read only). Read-only commands (`grep`, `find`, `cat`, `git log` …, piped too) never ask |
 | A second check of each answer | tick **Critique** at the top |
 | See background helpers (subagents) | **Tools → cmcoder → Open cmcoder Agent Navigator** (an editor tab) |
-| Search code by meaning (big projects) | **Code search** above the chat ([code-search.md](code-search.md)) |
+| Search code by meaning (big projects) | **Code search** above the chat ([code-search.md](../features/code-search.md)) |
 
 ![The Agent Navigator in NetBeans](screenshots/netbeans-3-navigator.png)
 

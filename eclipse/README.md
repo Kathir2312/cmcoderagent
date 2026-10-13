@@ -3,7 +3,7 @@
 The chat panel, the Agent Navigator and proposed changes in Eclipse's compare
 editor, for Eclipse 2024-06 and newer (Java 21 runs Eclipse; the plugin
 itself needs 17). cmcoder itself is inside the plugin, so developers install
-one file and need nothing else: no Python (docs/DESIGN.md D16).
+one file and need nothing else: no Python (docs/project/DESIGN.md D16).
 
 ## For developers: install
 

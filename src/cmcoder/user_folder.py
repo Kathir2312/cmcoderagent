@@ -42,7 +42,7 @@ def _template() -> str | None:
 
 def _example() -> str | None:
     here = Path(__file__).resolve().parent
-    for path in (here / EXAMPLE, here.parent.parent / "docs" / EXAMPLE):
+    for path in (here / EXAMPLE, here.parent.parent / "docs" / "examples" / EXAMPLE):
         try:
             return path.read_text(encoding="utf-8")
         except OSError:

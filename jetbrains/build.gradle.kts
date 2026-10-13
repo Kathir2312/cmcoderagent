@@ -1,4 +1,4 @@
-// The cmcoder plugin for IntelliJ-based IDEs (docs/phase7/PLAN.md).
+// The cmcoder plugin for IntelliJ-based IDEs (docs/project/phases/phase7/PLAN.md).
 //   gradle buildPlugin          the plugin zip (build/distributions/)
 //   gradle verifyPlugin         JetBrains' Plugin Verifier: the oldest supported
 //                               release, the newest IntelliJ IDEA and Rider

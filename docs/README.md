@@ -6,7 +6,7 @@ NetBeans, IntelliJ IDEA and the other JetBrains IDEs; no Python needed):
 
 **Building, packing and releasing** each package (build-machine
 prerequisites, packing with cmcoder inside, the release bundle, installing on
-developers' PCs): [building/](building/README.md).
+developers' PCs): [build-package/](build-package/README.md).
 
 The code lives in one place (`src/cmcoder/`) and grows phase by phase. Each
 finished phase is frozen as a git snapshot, and its documents are frozen in
@@ -14,17 +14,17 @@ its own folder. The current phase's documents are updated as features land.
 
 | Phase | Status | Snapshot | Documents |
 |---|---|---|---|
-| **0 — Foundations** | ✅ Complete | commit `ba6669f` (tag `phase0`) | [phase0/](phase0/) |
-| **1 — Daily driver** | ✅ Complete | tag `phase1` | [phase1/](phase1/) |
-| **2 — VS Code** | ✅ Complete | tag `phase2` | [phase2/](phase2/) |
-| **3 — Extensibility** | ✅ Complete | tag `phase3` | [phase3/](phase3/) |
-| **4 — Hardening** | ✅ Complete | commit `e78bdb1` (code); [phase4/STATUS.md](phase4/STATUS.md) | [phase4/](phase4/) |
-| **5 — Code search (RAG)** | ✅ Complete | commit `46f2e75`; [phase5/STATUS.md](phase5/STATUS.md) | [phase5/](phase5/) |
-| **6 — Other IDEs** | ✅ Complete | [phase6/STATUS.md](phase6/STATUS.md) | [phase6/](phase6/) |
-| **7 — IntelliJ-based IDEs** | ✅ Complete (13 Oct 2026; the guide's screenshots to come) | [phase7/PLAN.md](phase7/PLAN.md) (status) | [phase7/](phase7/) |
+| **0 — Foundations** | ✅ Complete | commit `ba6669f` (tag `phase0`) | [project/phases/phase0/](project/phases/phase0/) |
+| **1 — Daily driver** | ✅ Complete | tag `phase1` | [project/phases/phase1/](project/phases/phase1/) |
+| **2 — VS Code** | ✅ Complete | tag `phase2` | [project/phases/phase2/](project/phases/phase2/) |
+| **3 — Extensibility** | ✅ Complete | tag `phase3` | [project/phases/phase3/](project/phases/phase3/) |
+| **4 — Hardening** | ✅ Complete | commit `e78bdb1` (code); [project/phases/phase4/STATUS.md](project/phases/phase4/STATUS.md) | [project/phases/phase4/](project/phases/phase4/) |
+| **5 — Code search (RAG)** | ✅ Complete | commit `46f2e75`; [project/phases/phase5/STATUS.md](project/phases/phase5/STATUS.md) | [project/phases/phase5/](project/phases/phase5/) |
+| **6 — Other IDEs** | ✅ Complete | [project/phases/phase6/STATUS.md](project/phases/phase6/STATUS.md) | [project/phases/phase6/](project/phases/phase6/) |
+| **7 — IntelliJ-based IDEs** | ✅ Complete (13 Oct 2026; the guide's screenshots to come) | [project/phases/phase7/PLAN.md](project/phases/phase7/PLAN.md) (status) | [project/phases/phase7/](project/phases/phase7/) |
 
 The overall design, decisions and roadmap stay in one living document:
-[DESIGN.md](DESIGN.md).
+[DESIGN.md](project/DESIGN.md).
 
 ## What each phase folder contains
 
@@ -47,6 +47,6 @@ git checkout phase0        # read-only snapshot; `git switch -` to go back
 
 ## Settings example
 
-[settings.example.json](settings.example.json) shows every setting the
-current code understands; [managed-settings.example.json](managed-settings.example.json)
+[settings.example.json](examples/settings.example.json) shows every setting the
+current code understands; [managed-settings.example.json](examples/managed-settings.example.json)
 is a starting point for administrators.

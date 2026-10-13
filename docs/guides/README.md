@@ -28,11 +28,11 @@ answers and your saved conversations. Each IDE extension contains its own copy
 of cmcoder, so you don't need the terminal package for them.
 
 Then, once, whichever you chose: [setup.md](setup.md) (your gateway and API
-key). Optional, for big projects: [code-search.md](code-search.md). Screenshots
-and other images: [images.md](images.md).
+key). Optional, for big projects: [code-search.md](../features/code-search.md). Screenshots
+and other images: [images.md](../features/images.md).
 Problems: [troubleshooting.md](troubleshooting.md).
 A team of agents (PM, developer, tester, DevOps) on one feature:
-[../setupteams.md](../setupteams.md).
+[../features/team.md](../features/team.md).
 
 ## What your PC needs
 
@@ -70,5 +70,5 @@ GitHub wraps every download in a `.zip`, unzip it once). Pick your platform: `wi
 Updates are new files: install the new one over the old one.
 
 Administrators (building, the gate report, handing out the files, managed
-settings): [admin.md](admin.md). Building each package step by step, with what
-the build machine needs: [../building/](../building/README.md).
+settings): [../admin/](../admin/README.md). Building each package step by step, with what
+the build machine needs: [../build-package/](../build-package/README.md).

@@ -4,7 +4,7 @@ An agentic coding assistant for the terminal (and, from Phase 2, VS Code), in th
 that works with **any OpenAI-compatible endpoint**, such as a LiteLLM gateway serving Qwen3 models on your network.
 
 The agent runs on your machine (it reads and edits files and runs commands there); the model always runs on a
-remote server. See [docs/DESIGN.md](docs/DESIGN.md) for the architecture and roadmap, and
+remote server. See [docs/project/DESIGN.md](docs/project/DESIGN.md) for the architecture and roadmap, and
 [docs/README.md](docs/README.md) for the per-phase plans and code guides (for Python developers and for
 LangChain/LangGraph developers).
 
@@ -12,9 +12,9 @@ LangChain/LangGraph developers).
 > hooks, skills, subagents), hardening (sandbox, standalone build, both gateways), code search, Visual Studio, Eclipse and
 > NetBeans, and IntelliJ IDEA and the other JetBrains IDEs.
 > **Install and use** (terminal, VS Code, Eclipse, NetBeans, IntelliJ IDEA and the other JetBrains IDEs; no Python needed on the PC): [docs/guides/](docs/guides/README.md).
-> **Build, pack and release** each package (build-machine prerequisites, the release bundle): [docs/building/](docs/building/README.md).
-> **Phase 6 (Visual Studio, Eclipse, NetBeans)**: [docs/phase6/STATUS.md](docs/phase6/STATUS.md). **Phase 7 (IntelliJ IDEA,
-> PyCharm, Rider and the other JetBrains IDEs)**: [docs/phase7/PLAN.md](docs/phase7/PLAN.md).
+> **Build, pack and release** each package (build-machine prerequisites, the release bundle): [docs/build-package/](docs/build-package/README.md).
+> **Phase 6 (Visual Studio, Eclipse, NetBeans)**: [docs/project/phases/phase6/STATUS.md](docs/project/phases/phase6/STATUS.md). **Phase 7 (IntelliJ IDEA,
+> PyCharm, Rider and the other JetBrains IDEs)**: [docs/project/phases/phase7/PLAN.md](docs/project/phases/phase7/PLAN.md).
 
 ## Install
 
@@ -29,8 +29,8 @@ for Windows on Windows (below):
   use the same folder: each copies its own cmcoder there when that one is newer, so the terminal and every IDE run
   one program.
 - **VS Code:** `cmcoder-<platform>.vsix` → Extensions → ⋯ → *Install from VSIX…*.
-- Eclipse ([guide](docs/guides/eclipse.md)), NetBeans ([guide](docs/guides/netbeans.md)) and Visual Studio: `cmcoder-eclipse`, `cmcoder-netbeans-<platform>.nbm`, `cmcoder-visualstudio.vsix`, gate-tested in each real IDE ([status](docs/phase6/STATUS.md)).
-- **IntelliJ IDEA, PyCharm, Rider and the other JetBrains IDEs** (2024.2+, [guide](docs/guides/intellij.md)): `cmcoder-jetbrains-<platform>.zip` → Settings → Plugins → ⚙ → *Install Plugin from Disk…*, gate-tested in a real IntelliJ IDEA on every platform ([Phase 7](docs/phase7/PLAN.md)).
+- Eclipse ([guide](docs/guides/eclipse.md)), NetBeans ([guide](docs/guides/netbeans.md)) and Visual Studio: `cmcoder-eclipse`, `cmcoder-netbeans-<platform>.nbm`, `cmcoder-visualstudio.vsix`, gate-tested in each real IDE ([status](docs/project/phases/phase6/STATUS.md)).
+- **IntelliJ IDEA, PyCharm, Rider and the other JetBrains IDEs** (2024.2+, [guide](docs/guides/intellij.md)): `cmcoder-jetbrains-<platform>.zip` → Settings → Plugins → ⚙ → *Install Plugin from Disk…*, gate-tested in a real IntelliJ IDEA on every platform ([Phase 7](docs/project/phases/phase7/PLAN.md)).
 
 **From source** (contributors). Works on **Windows, macOS and Linux**. Requires Python 3.11+ and bash:
 
@@ -59,11 +59,11 @@ or `bash packaging/package-vscode.sh` (macOS, Linux); the build PC needs uv and 
 
 **Your company's icon and name:** replace the files in `branding/` before building (icon, side-bar icon, name,
 VS Code publisher, colour, text logo); `cmcoder terminal-profile` adds a Windows Terminal profile with them. See
-[docs/phase4/branding.md](docs/phase4/branding.md).
+[docs/admin/branding.md](docs/admin/branding.md).
 
 ## Configure
 
-Create `~/.cmcoder/settings.json` (on Windows: `%USERPROFILE%\.cmcoder\settings.json`) (see [docs/settings.example.json](docs/settings.example.json)):
+Create `~/.cmcoder/settings.json` (on Windows: `%USERPROFILE%\.cmcoder\settings.json`) (see [docs/examples/settings.example.json](docs/examples/settings.example.json)):
 
 ```json
 {
@@ -89,7 +89,7 @@ the Qwen3 thinking switch and tool calling, and tells you what to fix.
 
 **Open WebUI instead of (or as well as) LiteLLM.** Give the provider `"type": "openwebui"` and the Open WebUI
 address; the key is an Open WebUI API key (Settings → Account → API keys). Models served by Ollama behind Open WebUI
-get their context window set by cmcoder on every request. Details: [docs/phase4/openwebui.md](docs/phase4/openwebui.md).
+get their context window set by cmcoder on every request. Details: [docs/features/openwebui.md](docs/features/openwebui.md).
 
 ```json
 { "providers": { "webui": { "type": "openwebui", "baseUrl": "https://chat.example.com" } },
@@ -136,7 +136,7 @@ nobody else changes `settings.local.json`. The VS Code extension passes `--trust
 Code itself trusts. `cmcoder doctor` shows the project's trust state and anything ignored.
 
 Examples of everything below, and what a repository needs your trust for:
-[docs/phase3/customising.md](docs/phase3/customising.md).
+[docs/features/README.md](docs/features/README.md).
 
 ### MCP servers
 
@@ -406,7 +406,7 @@ cmcoder index            # bring it up to date (changed files only); --status, -
 
 Inside a session: `/index` and `/index status`. VS Code: "cmcoder: Set Up Code Search", and the status bar item. The
 index stays current by itself; secret files are never indexed. The index can live on this machine (built in) or in
-Chroma, by its URL: running on this PC or a shared server. See [docs/phase5/code-search.md](docs/phase5/code-search.md).
+Chroma, by its URL: running on this PC or a shared server. See [docs/features/code-search.md](docs/features/code-search.md).
 
 ### Usage metrics (OpenTelemetry)
 
@@ -435,7 +435,7 @@ An organisation can enforce rules that users and repositories can't loosen, in a
 (macOS), `/etc/cmcoder/managed-settings.json` (Linux). It can disable `bypassPermissions`, deny high-risk commands,
 add deny rules, allow only its own allow rules, lock cmcoder to the company gateway (`lockProviders`) and set
 environment variables. If the file is broken, cmcoder won't start. See
-[docs/managed-settings.example.json](docs/managed-settings.example.json); `cmcoder doctor` shows what's enforced.
+[docs/examples/managed-settings.example.json](docs/examples/managed-settings.example.json); `cmcoder doctor` shows what's enforced.
 
 ### Context window
 

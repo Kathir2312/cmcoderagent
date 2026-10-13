@@ -23,7 +23,7 @@
 #
 # The build machine needs uv (https://docs.astral.sh/uv/), Node.js 22, JDK 21,
 # Maven 3.9+, access to download.eclipse.org, and git with the repository as
-# a git clone. docs/building/eclipse.md has the details.
+# a git clone. docs/build-package/eclipse.md has the details.
 set -euo pipefail
 
 skip_tests=0

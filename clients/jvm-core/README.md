@@ -5,7 +5,7 @@ plain Java 17 with no dependencies (so it can't clash with an IDE's own
 libraries). Each plugin adds only what needs its IDE's APIs, by implementing
 `Ide`.
 
-| Class | Does | Host duties (docs/phase6/PLAN.md) |
+| Class | Does | Host duties (docs/project/phases/phase6/PLAN.md) |
 |---|---|---|
 | `ProgramLocator` | finds the cmcoder program: the user's setting (a full path), else the copy in the plugin, else PATH without the project folder; never a batch file, never Python; restores the executable bit and clears macOS quarantine | H1 |
 | `AgentProcess` | starts `cmcoder --protocol stdio` (no shell), reads its JSON lines as UTF-8, sends messages, stops it (shutdown, end of input, then by force, with everything it started) | H2–H4 |

@@ -778,7 +778,7 @@ def load_settings(
         ):
             hint = (
                 "\nhint: `model` and `smallFastModel` go at the top level of settings.json, "
-                'next to "providers", not inside it (see docs/settings.example.json).'
+                'next to "providers", not inside it (see docs/examples/settings.example.json).'
             )
         raise SettingsError(f"Invalid settings: {e}{hint}") from e
     settings.sources = sources

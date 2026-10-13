@@ -41,7 +41,7 @@ docker run -d --name chroma --restart unless-stopped -p 127.0.0.1:8000:8000 -v c
 then choose **Chroma, by its URL** and enter `http://localhost:8000`.
 `127.0.0.1:` keeps it reachable from this PC only; don't open it to the
 network without your IT team (see the security notes in
-[../phase5/code-search.md](../phase5/code-search.md)).
+[../features/code-search.md](../features/code-search.md)).
 
 If Chroma isn't running, cmcoder says "Can't reach the Chroma server
 http://localhost:8000 … Is Chroma running on this PC?": start the container

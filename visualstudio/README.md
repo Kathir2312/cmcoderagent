@@ -3,7 +3,7 @@
 The chat panel, the Agent Navigator and proposed changes in Visual Studio's
 diff window, for Visual Studio 2022 (17.10 and newer, 64-bit). cmcoder itself
 is inside the extension, so developers install one file and need nothing
-else: no Python (docs/DESIGN.md D16).
+else: no Python (docs/project/DESIGN.md D16).
 
 ## For developers: install
 

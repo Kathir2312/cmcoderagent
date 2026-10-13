@@ -1,4 +1,4 @@
-"""docs/phase3/try-phase3.ps1, the hands-on test project, made with Windows
+"""docs/project/phases/phase3/try-phase3.ps1, the hands-on test project, made with Windows
 PowerShell 5.1 (the one every Windows machine has) and read back by cmcoder."""
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from cmcoder.core.skills import load_skills
 from cmcoder.core.subagents import load_agents
 from cmcoder.mcp_client import McpManager
 
-SCRIPT = Path(__file__).parent.parent / "docs" / "phase3" / "try-phase3.ps1"
+SCRIPT = Path(__file__).parent.parent / "docs" / "project" / "phases" / "phase3" / "try-phase3.ps1"
 
 pytestmark = pytest.mark.skipif(
     sys.platform != "win32" or shutil.which("powershell") is None,

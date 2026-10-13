@@ -11,4 +11,4 @@
   doctor), `protocol/` (events shared with front ends), `testing/` (mock server).
 - Never disable TLS verification. Never log or persist API keys outside `providers/auth.py`.
 - Tests must not need a real model: use `cmcoder.testing.mock_server`.
-- `docs/DESIGN.md` is the source of truth for architecture decisions; update it when a decision changes.
+- `docs/project/DESIGN.md` is the source of truth for architecture decisions; update it when a decision changes.

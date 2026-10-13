@@ -1,5 +1,5 @@
 """packaging/package-<package>.ps1 and .sh: one command per package that builds
-it with cmcoder inside, for PCs without Python (docs/building/). They must do
+it with cmcoder inside, for PCs without Python (docs/build-package/). They must do
 what the Release workflow does for that file, and refuse a file without the
 program. (package-vscode has its own test.) The CI workflow
 packaging-scripts.yml runs them for real on Windows, macOS and Linux."""
@@ -182,6 +182,6 @@ def test_the_guides_name_the_scripts() -> None:
         "visualstudio": "visualstudio.md",
     }
     for name, page in pages.items():
-        text = (ROOT / "docs" / "building" / page).read_text("utf-8")
-        assert f"package-{name}" in text, f"docs/building/{page} doesn't name package-{name}"
-    assert "package-all" in (ROOT / "docs" / "building" / "README.md").read_text("utf-8")
+        text = (ROOT / "docs" / "build-package" / page).read_text("utf-8")
+        assert f"package-{name}" in text, f"docs/build-package/{page} doesn't name package-{name}"
+    assert "package-all" in (ROOT / "docs" / "build-package" / "README.md").read_text("utf-8")

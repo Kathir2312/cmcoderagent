@@ -11,7 +11,7 @@ namespace Cmcoder.Core
     /// and relays between it, the chat page, the Agent Navigator page and the
     /// IDE (through <see cref="IIde"/>). A port of the JVM core's Host (the VS
     /// Code extension's chatView.ts and navigator.ts); the host duties are
-    /// H1-H24 in docs/phase6/PLAN.md.
+    /// H1-H24 in docs/project/phases/phase6/PLAN.md.
     /// </summary>
     public sealed class Host
     {

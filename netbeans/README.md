@@ -4,9 +4,9 @@ The chat, the Agent Navigator and proposed changes in NetBeans' diff viewer,
 for **NetBeans 28 to 31** (the latest four releases), on JDK 17 or newer.
 cmcoder itself and the browser for the chat (OpenJFX's WebView: NetBeans has
 none of its own) are inside the plugin file, so developers install one file and
-need nothing else: no Python (docs/DESIGN.md D16).
+need nothing else: no Python (docs/project/DESIGN.md D16).
 
-User guide: [docs/guides/netbeans.md](../docs/guides/netbeans.md).
+User guide: [../docs/guides/netbeans.md](../docs/guides/netbeans.md).
 
 ## For maintainers: build and test
 

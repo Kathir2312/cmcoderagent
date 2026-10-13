@@ -12,7 +12,7 @@
 #
 #     bash packaging/package-all.sh [--skip-tests] [--only terminal,vscode,...]
 #
-# The build machine needs what each package's page in docs/building/ lists;
+# The build machine needs what each package's page in docs/build-package/ lists;
 # --only leaves out the packages whose tools it doesn't have.
 #
 #   --skip-tests  leave out the test runs (try-outs only, never for release)

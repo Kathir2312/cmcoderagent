@@ -18,7 +18,7 @@ import java.util.regex.Pattern;
  * cmcoder process for a project and relays between it, the chat page, the
  * Agent Navigator page and the IDE (through {@link Ide}). The behaviour is the
  * VS Code extension's (chatView.ts, navigator.ts); the host duties it covers
- * are named H1-H24 in docs/phase6/PLAN.md.
+ * are named H1-H24 in docs/project/phases/phase6/PLAN.md.
  */
 public final class Host {
     /** Only a session id (from session_list) can become an argument (H12). */

@@ -1,6 +1,6 @@
 #!/bin/sh
 # Installs your company's managed settings on this Mac or Linux PC: the rules
-# developers can't change (docs/guides/admin.md, section 5). Run it as root:
+# developers can't change (docs/admin/README.md, section 5). Run it as root:
 #   sudo sh install-managed.sh [file]
 # Copies managed-settings.json (next to this script, or the file you name) to
 #   macOS: /Library/Application Support/cmcoder/managed-settings.json
