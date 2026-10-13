@@ -2,10 +2,10 @@
 # Manual edits can break the build and are not advised.
 # This file is expected to be part of source control.
 com.fasterxml.jackson.core:jackson-annotations:2.21=classpath
-com.fasterxml.jackson.core:jackson-core:2.21.4=classpath
-com.fasterxml.jackson.core:jackson-databind:2.21.4=classpath
-com.fasterxml.jackson.module:jackson-module-kotlin:2.21.4=classpath
-com.fasterxml.jackson:jackson-bom:2.21.4=classpath
+com.fasterxml.jackson.core:jackson-core:2.21.7=classpath
+com.fasterxml.jackson.core:jackson-databind:2.21.7=classpath
+com.fasterxml.jackson.module:jackson-module-kotlin:2.21.7=classpath
+com.fasterxml.jackson:jackson-bom:2.21.7=classpath
 com.fasterxml.woodstox:woodstox-core:7.1.0=classpath
 com.github.ben-manes.caffeine:caffeine:3.2.4=classpath
 com.google.errorprone:error_prone_annotations:2.49.0=classpath
@@ -68,7 +68,7 @@ org.jetbrains.kotlinx:kotlinx-serialization-core:1.11.0=classpath
 org.jetbrains.kotlinx:kotlinx-serialization-json-jvm:1.11.0=classpath
 org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0=classpath
 org.jetbrains:annotations:13.0=classpath
-org.jsoup:jsoup:1.22.2=classpath
+org.jsoup:jsoup:1.23.2=classpath
 org.jspecify:jspecify:1.0.0=classpath
 org.tukaani:xz:1.9=classpath
 org.wildfly.client:wildfly-client-config:1.0.1.Final=classpath

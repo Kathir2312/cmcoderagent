@@ -371,6 +371,7 @@ jobs:
         working-directory: jetbrains
         run: gradle --no-daemon --stacktrace verifyPlugin
       - name: The Gradle lock files are current (osv-scanner reads them)
+        if: ${{ !cancelled() }}  # also when the build failed: says why
         working-directory: jetbrains
         run: |
           gradle --no-daemon -q buildEnvironment dependencies --configuration runtimeClasspath --write-locks > /dev/null
@@ -382,6 +383,7 @@ jobs:
             exit 1
           fi
       - name: SpotBugs + FindSecBugs (fails on a security finding not reviewed in spotbugs/reviewed.xml)
+        if: ${{ !cancelled() }}
         working-directory: jetbrains
         run: |
           curl -fsSL --retry 3 -o "$RUNNER_TEMP/spotbugs.tgz" https://github.com/spotbugs/spotbugs/releases/download/4.10.4/spotbugs-4.10.4.tgz

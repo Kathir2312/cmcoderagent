@@ -27,6 +27,14 @@ import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask.FailureLeve
 //   gradle buildEnvironment dependencies --configuration runtimeClasspath --write-locks
 // (CI checks the files are current).
 buildscript {
+    dependencies {
+        // Fixed versions of what the IntelliJ Platform Gradle Plugin brings (osv-scanner
+        // found known vulnerabilities in the ones it asks for).
+        classpath(platform("com.fasterxml.jackson:jackson-bom:2.21.7"))
+        constraints {
+            classpath("org.jsoup:jsoup:1.23.2")
+        }
+    }
     configurations.classpath {
         resolutionStrategy.activateDependencyLocking()
     }
