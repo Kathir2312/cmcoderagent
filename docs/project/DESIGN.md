@@ -24,7 +24,7 @@ shell commands) runs locally; the model is always reached over the network.
 | D6 | Language / stack | **Python 3.11+ for the core engine and CLI**; TypeScript only for the VS Code extension, which VS Code requires. See §3.1. |
 | D7 | How the IDE uses the agent | The VS Code extension **runs the Python CLI as a child process** and talks to it over JSON over stdio, as Claude Code does. There is one engine. |
 | D8 | Where the model runs | **Never on the dev machine.** Always a remote URL, so TLS, auth headers, corporate proxies/CAs, latency and network errors are first-class concerns (§4.3–4.5). |
-| D9 | Reference deployment | A model server **on the company network**, reached over HTTPS through an internal domain name: `https://aiXIngerence.localnw.ae` (spelling to be confirmed). This is a user/project setting, never hard-coded. See §4.6. |
+| D9 | Reference deployment | A model server **on the company network**, reached over HTTPS through an internal domain name (in these docs: `https://ai-gateway.example.com`). The real address is a user/project setting, never hard-coded. See §4.6. |
 | D10 | Reference models | **Qwen3 ~7B** as the small/fast model and **Qwen3 ~27B** as the main model (exact IDs to be read from the server's `/v1/models`). See §5.1. |
 | D11 | Product and command name | Product **cmcoder**; command `cmcoder`; config folder `.cmcoder/`; memory file `CMCODER.md`. |
 | D12 | Model gateway | **LiteLLM proxy** exposing an OpenAI-compatible endpoint, with Qwen3 models behind it. See §4.7. |
@@ -211,7 +211,7 @@ The first target environment, and the one evals and `doctor` are tuned for:
 {
   "providers": {
     "corp": {
-      "baseUrl": "https://aiXIngerence.localnw.ae/v1",  // confirm exact host and path
+      "baseUrl": "https://ai-gateway.example.com/v1",   // your gateway's address
       "auth": { "type": "apiKey" },                     // key from CMCODER_API_KEY or OS keychain
       "caCertPath": "/path/to/corp-root-ca.pem"         // optional; OS trust store is used first
     }
@@ -233,7 +233,7 @@ Things this setup needs, all covered by §4.5:
 - **Internal DNS:** the name only resolves on the company network or VPN.
   `doctor` reports DNS failure separately from TLS and auth failures so users
   know whether to connect the VPN or fix a certificate.
-- **Proxies:** if a corporate proxy is set, `.localnw.ae` must be in `NO_PROXY`;
+- **Proxies:** if a corporate proxy is set, the gateway's domain (`.example.com` here) must be in `NO_PROXY`;
   `doctor` detects and warns about this.
 - **Authentication (confirmed: API key):** `cmcoder login` asks for the LiteLLM
   key once and stores it in the OS keychain; `CMCODER_API_KEY` overrides it for
