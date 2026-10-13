@@ -521,9 +521,11 @@ jobs:
           path: ${{ runner.temp }}/netbeans-${{ matrix.netbeans }}
           key: netbeans-${{ matrix.netbeans }}-bin
       - name: Get NetBeans ${{ matrix.netbeans }}
-        # The archive is slow and sometimes stalls: curl cuts a transfer under
-        # 20 KB/s for 2 minutes and tries again; the step gives up after 30.
-        timeout-minutes: 30
+        # Only the archive has older releases, and it's slow (515 MB at a few
+        # hundred KB/s: up to an hour) until the cache above has it again. curl
+        # cuts a stalled transfer (under 20 KB/s for 2 minutes) and tries again;
+        # the step gives up after 2 hours.
+        timeout-minutes: 120
         run: |
           nb="$RUNNER_TEMP/netbeans-${{ matrix.netbeans }}"
           [ -x "$nb/netbeans/bin/netbeans" ] && exit 0
