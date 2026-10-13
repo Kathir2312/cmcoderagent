@@ -1,0 +1,6 @@
+{
+  "prompt": "Add a --shout flag to cli.py that prints the greeting in upper case.",
+  "check": "\"$PYTHON\" cli.py --name bob --shout | tr -d '\\r' | grep -qx 'HELLO, BOB!' && \"$PYTHON\" cli.py --name bob | tr -d '\\r' | grep -qx 'Hello, bob!'",
+  "permission_mode": "bypassPermissions",
+  "max_turns": 20
+}

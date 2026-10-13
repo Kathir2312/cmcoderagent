@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": ["Bash(dotnet build:*)", "Bash(dotnet test:*)"]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {"matcher": "Edit|Write", "hooks": [{"type": "command", "command": "dotnet format --verify-no-changes >&2 || exit 2"}]}
+    ]
+  }
+}

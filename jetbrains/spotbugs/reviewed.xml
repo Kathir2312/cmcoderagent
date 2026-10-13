@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Security findings checked in the code and not exploitable
+     (docs/project/security/scan-2026-10-13.md), each with the reason. CI fails on any
+     other, including a new one of the same kind elsewhere in these classes. -->
+<FindBugsFilter>
+  <!-- cmcoder is started with an argument list, no shell; the program is the
+       bundled one, the shared copy, or a full path the user set in the IDE's own
+       settings (a project can't set it). -->
+  <Match>
+    <Class name="cmcoder.ide.core.AgentProcess"/>
+    <Method name="start"/>
+    <Bug pattern="COMMAND_INJECTION"/>
+  </Match>
+  <Match>
+    <Class name="cmcoder.idea.Diagnostics"/>
+    <Method name="output"/>
+    <Bug pattern="COMMAND_INJECTION"/>
+  </Match>
+  <!-- macOS: /usr/bin/xattr on the plugin's own program folder. -->
+  <Match>
+    <Class name="cmcoder.ide.core.ProgramLocator"/>
+    <Method name="prepare"/>
+    <Bug pattern="COMMAND_INJECTION"/>
+  </Match>
+  <!-- Paths from the user's own environment and settings: CMCODER_CONFIG_DIR,
+       the program setting (must be absolute), PATH entries. -->
+  <Match>
+    <Class name="cmcoder.ide.core.ProgramLocator"/>
+    <Or>
+      <Method name="sharedFolder"/>
+      <Method name="find"/>
+      <Method name="onPath"/>
+    </Or>
+    <Bug pattern="PATH_TRAVERSAL_IN"/>
+  </Match>
+  <!-- A file's name for the chat's label, nothing is read. -->
+  <Match>
+    <Class name="cmcoder.ide.core.EditorContext"/>
+    <Method name="label"/>
+    <Bug pattern="PATH_TRAVERSAL_IN"/>
+  </Match>
+  <!-- Case-insensitive matches where the system is: the PATH variable's name and
+       folders on Windows; the page's own file URL (a different case can only name
+       the same file on Windows and macOS, and the folder is the IDE's own). -->
+  <Match>
+    <Class name="cmcoder.ide.core.ProgramLocator"/>
+    <Method name="onPath"/>
+    <Bug pattern="IMPROPER_UNICODE"/>
+  </Match>
+  <Match>
+    <Class name="cmcoder.idea.Panel"/>
+    <Method name="samePage"/>
+    <Bug pattern="IMPROPER_UNICODE"/>
+  </Match>
+</FindBugsFilter>

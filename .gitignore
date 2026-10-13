@@ -1,0 +1,23 @@
+__pycache__/
+*.py[cod]
+.venv/
+dist/
+build/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.cmcoder/settings.local.json
+.cmcoder/credentials.json
+evals/.runs/
+.coverage
+vscode/bin/
+*.vsix
+
+# Eclipse plugin builds (Maven/Tycho)
+eclipse/**/target/
+eclipse/**/.tycho-consumer-pom.xml
+
+# IntelliJ plugin builds (Gradle)
+jetbrains/.gradle/
+jetbrains/.intellijPlatform/
+jetbrains/.kotlin/

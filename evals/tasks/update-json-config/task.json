@@ -1,0 +1,6 @@
+{
+  "prompt": "In settings.json, set the port to 9090 and turn debug off.",
+  "check": "\"$PYTHON\" -c \"import json; d = json.load(open('settings.json')); assert d == {'name': 'svc', 'port': 9090, 'debug': False}, d\"",
+  "permission_mode": "acceptEdits",
+  "max_turns": 20
+}

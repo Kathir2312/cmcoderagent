@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
+  <Metadata>
+    <Identity Id="cmcoder.visualstudio.6b1f4c0e" Version="0.1.0" Language="en-US" Publisher="cmcoder" />
+    <DisplayName>cmcoder</DisplayName>
+    <Description xml:space="preserve">A coding agent in Visual Studio: a chat that reads, explains and changes the code of your solution, with every change shown in the diff window first. cmcoder itself is inside; nothing else to install.</Description>
+    <Icon>icon.png</Icon>
+  </Metadata>
+  <Installation>
+    <!-- Visual Studio 2022 17.10 and newer, 64-bit (the bundled cmcoder is x64). -->
+    <InstallationTarget Id="Microsoft.VisualStudio.Community" Version="[17.10,19.0)">
+      <ProductArchitecture>amd64</ProductArchitecture>
+    </InstallationTarget>
+  </Installation>
+  <Prerequisites>
+    <Prerequisite Id="Microsoft.VisualStudio.Component.CoreEditor" Version="[17.0,)" DisplayName="Visual Studio core editor" />
+  </Prerequisites>
+  <Assets>
+    <Asset Type="Microsoft.VisualStudio.VsPackage" d:Source="Project" d:ProjectName="%CurrentProject%" Path="|%CurrentProject%;PkgdefProjectOutputGroup|" />
+  </Assets>
+</PackageManifest>

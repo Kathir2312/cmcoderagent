@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- What CI's SpotBugs run reports: FindSecBugs' security findings (the code-quality
+     notes aren't gated). -->
+<FindBugsFilter>
+  <Match>
+    <Bug category="SECURITY"/>
+  </Match>
+</FindBugsFilter>

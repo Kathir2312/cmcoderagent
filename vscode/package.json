@@ -1,0 +1,278 @@
+{
+  "name": "cmcoder",
+  "displayName": "cmcoder",
+  "description": "Agentic coding assistant for your company's model gateway, in VS Code.",
+  "version": "0.1.0",
+  "publisher": "cmcoder",
+  "icon": "media/icon.png",
+  "private": true,
+  "license": "UNLICENSED",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "In untrusted workspaces, the cmcoder command can't be changed by the workspace's settings.",
+      "restrictedConfigurations": [
+        "cmcoder.executable",
+        "cmcoder.executableArgs",
+        "cmcoder.permissionMode"
+      ]
+    }
+  },
+  "categories": [
+    "AI",
+    "Programming Languages"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "cmcoder",
+          "title": "cmcoder",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "cmcoder": [
+        {
+          "type": "webview",
+          "id": "cmcoder.chat",
+          "name": "Chat"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "cmcoder.newConversation",
+        "title": "New Conversation",
+        "category": "cmcoder",
+        "icon": "$(add)"
+      },
+      {
+        "command": "cmcoder.continueConversation",
+        "title": "Continue Last Conversation",
+        "category": "cmcoder"
+      },
+      {
+        "command": "cmcoder.stop",
+        "title": "Stop",
+        "category": "cmcoder",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "cmcoder.focus",
+        "title": "Open Chat",
+        "category": "cmcoder"
+      },
+      {
+        "command": "cmcoder.askAboutSelection",
+        "title": "Ask cmcoder About Selection",
+        "category": "cmcoder"
+      },
+      {
+        "command": "cmcoder.attachFile",
+        "title": "Attach File to Message",
+        "category": "cmcoder"
+      },
+      {
+        "command": "cmcoder.acceptChange",
+        "title": "Accept Change",
+        "category": "cmcoder",
+        "icon": "$(check)"
+      },
+      {
+        "command": "cmcoder.rejectChange",
+        "title": "Reject Change",
+        "category": "cmcoder",
+        "icon": "$(close)"
+      },
+      {
+        "command": "cmcoder.openTerminal",
+        "title": "Open in Terminal",
+        "category": "cmcoder",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "cmcoder.openNavigator",
+        "title": "Open Agent Navigator",
+        "category": "cmcoder",
+        "icon": "$(type-hierarchy)"
+      },
+      {
+        "command": "cmcoder.showLog",
+        "title": "Show Log",
+        "category": "cmcoder"
+      },
+      {
+        "command": "cmcoder.openSettings",
+        "title": "Open Settings File",
+        "category": "cmcoder"
+      },
+      {
+        "command": "cmcoder.setupCodeSearch",
+        "title": "Set Up Code Search",
+        "category": "cmcoder"
+      },
+      {
+        "command": "cmcoder.updateIndex",
+        "title": "Update Code Index",
+        "category": "cmcoder"
+      },
+      {
+        "command": "cmcoder.codeSearch",
+        "title": "Code Search…",
+        "category": "cmcoder"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "cmcoder.newConversation",
+          "when": "view == cmcoder.chat",
+          "group": "navigation@1"
+        },
+        {
+          "command": "cmcoder.openTerminal",
+          "when": "view == cmcoder.chat",
+          "group": "navigation@2"
+        },
+        {
+          "command": "cmcoder.openNavigator",
+          "when": "view == cmcoder.chat",
+          "group": "navigation@3"
+        },
+        {
+          "command": "cmcoder.continueConversation",
+          "when": "view == cmcoder.chat",
+          "group": "more"
+        },
+        {
+          "command": "cmcoder.openSettings",
+          "when": "view == cmcoder.chat",
+          "group": "more"
+        },
+        {
+          "command": "cmcoder.showLog",
+          "when": "view == cmcoder.chat",
+          "group": "more"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "cmcoder.acceptChange",
+          "when": "resourceScheme == cmcoder-diff",
+          "group": "navigation@1"
+        },
+        {
+          "command": "cmcoder.rejectChange",
+          "when": "resourceScheme == cmcoder-diff",
+          "group": "navigation@2"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "cmcoder.askAboutSelection",
+          "when": "editorHasSelection",
+          "group": "cmcoder@1"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "cmcoder.acceptChange",
+          "when": "resourceScheme == cmcoder-diff"
+        },
+        {
+          "command": "cmcoder.rejectChange",
+          "when": "resourceScheme == cmcoder-diff"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "cmcoder.focus",
+        "key": "ctrl+alt+k",
+        "mac": "cmd+alt+k"
+      },
+      {
+        "command": "cmcoder.askAboutSelection",
+        "key": "ctrl+alt+l",
+        "mac": "cmd+alt+l",
+        "when": "editorHasSelection"
+      }
+    ],
+    "configuration": {
+      "title": "cmcoder",
+      "properties": {
+        "cmcoder.executable": {
+          "type": "string",
+          "default": "cmcoder",
+          "markdownDescription": "The `cmcoder` command. A full path, or a name on `PATH`. To run it from a source checkout, set this to `uv` and `#cmcoder.executableArgs#` to `[\"run\", \"--project\", \"C:\\\\path\\\\to\\\\cmcoder\", \"cmcoder\"]`."
+        },
+        "cmcoder.executableArgs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Arguments placed before cmcoder's own (e.g. for `uv run`)."
+        },
+        "cmcoder.permissionMode": {
+          "type": "string",
+          "enum": [
+            "",
+            "default",
+            "acceptEdits",
+            "auto",
+            "plan",
+            "bypassPermissions"
+          ],
+          "enumDescriptions": [
+            "Your cmcoder settings decide",
+            "Ask before file edits and commands that change something",
+            "File edits in the project without asking; commands still ask",
+            "Ask only for risky actions: pushes, publishing, package installs, deleting in bulk, files outside the project",
+            "Read only: look and plan, change nothing",
+            "Ask only for high-risk commands"
+          ],
+          "default": "",
+          "description": "Permission mode for new conversations (empty: your cmcoder settings decide). User settings only: a workspace can't change it.",
+          "scope": "machine"
+        },
+        "cmcoder.diffReview": {
+          "type": "boolean",
+          "default": true,
+          "description": "Open proposed edits in VS Code's diff editor for review (Accept / Reject in its title bar)."
+        },
+        "cmcoder.autoContext": {
+          "type": "boolean",
+          "default": true,
+          "description": "Send the active file, the selection and its problems with each message (you can turn it off per message in the chat)."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "postinstall": "npm ci --prefix ../clients/web-panel --no-audit --no-fund",
+    "generate": "npm run generate --prefix ../clients/web-panel",
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "node esbuild.mjs && node esbuild.mjs --tests && node --test --test-reporter=spec \"dist-test/**/*.test.js\"",
+    "package": "node -e \"if (+process.versions.node.split('.')[0] < 22) { console.error('Packaging needs Node.js 22 or newer (you have ' + process.version + '). Install Node 22 LTS, or use the cmcoder.vsix from CI.'); process.exit(1) }\" && node esbuild.mjs --production && vsce package --skip-license --allow-missing-repository --out cmcoder.vsix",
+    "vscode:prepublish": "node esbuild.mjs --production",
+    "test:integration": "node esbuild.mjs && node esbuild.mjs --integration && node dist-integration/runTest.js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "~1.90.0",
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^4.0.0",
+    "esbuild": "^0.25.0",
+    "typescript": "~5.8.0"
+  }
+}

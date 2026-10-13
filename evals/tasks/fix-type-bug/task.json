@@ -1,0 +1,6 @@
+{
+  "prompt": "total('1,2,3') in total.py should return 6, but it returns '123'. Fix it.",
+  "check": "\"$PYTHON\" -c \"from total import total; assert total('1,2,3') == 6; assert total('10') == 10\"",
+  "permission_mode": "bypassPermissions",
+  "max_turns": 20
+}

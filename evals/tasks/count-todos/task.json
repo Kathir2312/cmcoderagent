@@ -1,0 +1,6 @@
+{
+  "prompt": "How many TODO comments are there in the src folder? Answer with just the number.",
+  "check": "grep -qw 4 \"$CMCODER_EVAL_OUTPUT\"",
+  "permission_mode": "plan",
+  "max_turns": 20
+}

@@ -1,0 +1,6 @@
+[
+  {"tool_calls": [{"name": "CodeSearch", "arguments": {"query": "value added tax computed on invoices"}}]},
+  {"tool_calls": [{"name": "Read", "arguments": {"file_path": "money/charges.py"}}]},
+  {"tool_calls": [{"name": "Edit", "arguments": {"file_path": "money/charges.py", "old_string": "LEVY_RATE = 0.25", "new_string": "LEVY_RATE = 0.20"}}]},
+  {"content": "The rate was 25% in money/charges.py; it's 20% now."}
+]

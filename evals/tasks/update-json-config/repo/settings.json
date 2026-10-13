@@ -1,0 +1,5 @@
+{
+  "name": "svc",
+  "port": 8000,
+  "debug": true
+}

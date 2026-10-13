@@ -1,0 +1,34 @@
+package cmcoder.idea;
+
+import org.jetbrains.annotations.NotNull;
+
+import com.intellij.openapi.actionSystem.ActionUpdateThread;
+import com.intellij.openapi.actionSystem.AnAction;
+import com.intellij.openapi.actionSystem.AnActionEvent;
+import com.intellij.openapi.actionSystem.CommonDataKeys;
+import com.intellij.openapi.project.DumbAware;
+import com.intellij.openapi.project.Project;
+
+import cmcoder.ide.core.Host;
+
+/** "Ask cmcoder About Selection" in the editor's menu and on Alt+Shift+K (H14; Ctrl+Alt+K is Commit and Push in JetBrains IDEs): the chat, with a prompt to finish. The text, with the brand's name, is in plugin.xml. */
+public final class AskAboutSelectionAction extends AnAction implements DumbAware {
+    @Override
+    public void actionPerformed(@NotNull AnActionEvent e) {
+        Project project = e.getProject();
+        if (project == null) return;
+        Session session = Session.get(project);
+        session.showChat(); // the chat opens (and cmcoder starts) if it wasn't open yet
+        session.run(Host::askAboutSelection);
+    }
+
+    @Override
+    public void update(@NotNull AnActionEvent e) {
+        e.getPresentation().setEnabledAndVisible(e.getProject() != null && e.getData(CommonDataKeys.EDITOR) != null);
+    }
+
+    @Override
+    public @NotNull ActionUpdateThread getActionUpdateThread() {
+        return ActionUpdateThread.BGT;
+    }
+}

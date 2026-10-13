@@ -1,0 +1,6 @@
+{
+  "prompt": "What is the maximum number of retries configured in this project? Answer with just the number.",
+  "check": "grep -qw 7 \"$CMCODER_EVAL_OUTPUT\"",
+  "permission_mode": "plan",
+  "max_turns": 20
+}

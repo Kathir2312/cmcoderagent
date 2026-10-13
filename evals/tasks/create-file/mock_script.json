@@ -1,0 +1,5 @@
+[
+  {"tool_calls": [{"name": "Bash", "arguments": {"command": "cat > settings.ini << 'EOF'\n[server]\nhost = localhost\nport = 8080\nEOF"}}]},
+  {"tool_calls": [{"name": "Write", "arguments": {"file_path": "settings.ini", "content": "[server]\nhost = localhost\nport = 8080\n"}}]},
+  {"content": "Created settings.ini with host localhost and port 8080."}
+]

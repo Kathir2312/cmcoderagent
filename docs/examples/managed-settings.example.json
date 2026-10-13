@@ -1,0 +1,18 @@
+{
+  "lockProviders": true,
+  "providers": {
+    "corp": {
+      "baseUrl": "https://YOUR-GATEWAY.example/v1",
+      "auth": { "type": "apiKey" },
+      "caCertPath": null
+    }
+  },
+  "permissions": {
+    "disableBypassPermissionsMode": "disable",
+    "highRiskCommands": "deny",
+    "deny": ["Bash(curl:*)", "Bash(wget:*)", "Bash(ssh:*)", "Bash(scp:*)"],
+    "allowManagedPermissionRulesOnly": false,
+    "allow": []
+  },
+  "env": {}
+}

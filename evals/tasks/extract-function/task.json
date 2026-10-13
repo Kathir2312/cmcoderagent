@@ -1,0 +1,6 @@
+{
+  "prompt": "In report.py, the price formatting is duplicated. Extract it into a function format_price(cents) and use it in both places, without changing the output.",
+  "check": "grep -q 'def format_price' report.py && [ \"$(grep -c 'format_price(' report.py)\" -ge 3 ] && \"$PYTHON\" -c \"import report as r; assert r.order_line('Tea', 1205) == 'Tea: \\$12.05'; assert r.total_line(99) == 'Total: \\$0.99'; assert r.format_price(100) == '\\$1.00'\"",
+  "permission_mode": "bypassPermissions",
+  "max_turns": 20
+}

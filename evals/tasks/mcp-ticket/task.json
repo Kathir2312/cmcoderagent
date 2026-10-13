@@ -1,0 +1,7 @@
+{
+  "prompt": "Look up ticket ABC-42 with the tickets MCP server and write only its title (without the 'Title:' prefix) to TITLE.txt.",
+  "check": "grep -qx -- 'Add a --version flag' TITLE.txt",
+  "permission_mode": "bypassPermissions",
+  "max_turns": 10,
+  "args": ["--mcp-config", "mcp.json"]
+}

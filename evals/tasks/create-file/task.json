@@ -1,0 +1,6 @@
+{
+  "prompt": "Create a file settings.ini with a [server] section containing host = localhost and port = 8080.",
+  "check": "\"$PYTHON\" -c \"import configparser; c = configparser.ConfigParser(); assert c.read('settings.ini'); assert c['server']['host'] == 'localhost'; assert c['server'].getint('port') == 8080\"",
+  "permission_mode": "acceptEdits",
+  "max_turns": 10
+}

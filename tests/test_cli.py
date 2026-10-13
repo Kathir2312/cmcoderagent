@@ -1,0 +1,339 @@
+"""End-to-end: the real `cmcoder` CLI as a subprocess against the mock server."""
+
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+from .conftest import API_KEY
+
+
+def cli(
+    args: list[str], cwd: Path, server: Any, extra_env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess[str]:
+    env = {k: v for k, v in os.environ.items() if not k.lower().endswith("_proxy")}
+    env.update(
+        {
+            "CMCODER_BASE_URL": server.base_url,
+            "CMCODER_API_KEY": API_KEY,
+            "CMCODER_MODEL": "qwen3-27b",
+            "NO_COLOR": "1",
+        }
+    )
+    env.update(extra_env or {})
+    return subprocess.run(
+        [sys.executable, "-m", "cmcoder", *args],
+        cwd=cwd,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=60,
+        stdin=subprocess.DEVNULL,
+    )
+
+
+SCRIPT = [
+    {
+        "tool_calls": [
+            {"name": "Write", "arguments": {"file_path": "hello.py", "content": "print('hi')\n"}}
+        ]
+    },
+    {"tool_calls": [{"name": "Bash", "arguments": {"command": "wc -l hello.py"}}]},
+    {"content": "Created hello.py; it prints hi."},
+]
+
+
+def test_print_mode_text(mock_server: Any, project: Path) -> None:
+    server = mock_server(list(SCRIPT))
+    r = cli(
+        [
+            "-p",
+            "make hello",
+            "--permission-mode",
+            "acceptEdits",
+            "--allowedTools",
+            "Bash(wc:*)",
+        ],
+        project,
+        server,
+    )
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.strip() == "Created hello.py; it prints hi."
+    assert (project / "hello.py").read_text() == "print('hi')\n"
+    tool_results = [m for m in server.requests[2]["messages"] if m["role"] == "tool"]
+    assert tool_results[1]["content"].split() == ["1", "hello.py"]  # BSD wc pads with spaces
+
+
+def test_print_mode_stream_json(mock_server: Any, project: Path) -> None:
+    server = mock_server(list(SCRIPT))
+    r = cli(
+        [
+            "-p",
+            "make hello",
+            "--output-format",
+            "stream-json",
+            "--permission-mode",
+            "bypassPermissions",
+        ],
+        project,
+        server,
+    )
+    assert r.returncode == 0, r.stderr
+    events = [json.loads(line) for line in r.stdout.splitlines()]
+    types = [e["type"] for e in events]
+    assert types[0] == "system_init" and types[-1] == "result"
+    assert events[0]["model"] == "qwen3-27b"
+    assert "tool_use" in types and "tool_result" in types and "usage" in types
+    assert events[-1]["subtype"] == "success"
+
+
+def test_print_mode_json_and_permission_denial(mock_server: Any, project: Path) -> None:
+    server = mock_server(
+        [
+            {"tool_calls": [{"name": "Bash", "arguments": {"command": "make deploy"}}]},
+            {"content": "I need permission to run make deploy."},
+        ]
+    )
+    r = cli(["-p", "deploy", "--output-format", "json"], project, server)
+    assert r.returncode == 0, r.stderr
+    out = json.loads(r.stdout)
+    assert out["type"] == "result" and out["result"] == "I need permission to run make deploy."
+    tool_msg = [m for m in server.requests[1]["messages"] if m["role"] == "tool"][0]
+    assert (
+        "Permission denied" in tool_msg["content"] and "Bash(make deploy:*)" in tool_msg["content"]
+    )
+
+
+def test_auth_failure_exit_code(mock_server: Any, project: Path) -> None:
+    server = mock_server([{"content": "never"}])
+    r = cli(["-p", "hi"], project, server, {"CMCODER_API_KEY": "wrong"})
+    assert r.returncode == 1
+    assert "Authentication failed" in r.stderr and "cmcoder login" in r.stderr
+
+
+def test_project_settings_and_memory_are_used(mock_server: Any, project: Path) -> None:
+    (project / "CMCODER.md").write_text("Always answer in French.")
+    (project / ".cmcoder").mkdir()
+    (project / ".cmcoder/settings.json").write_text(json.dumps({"permissions": {"deny": ["Read"]}}))
+    (project / "a.txt").write_text("x")
+    server = mock_server(
+        [
+            {"tool_calls": [{"name": "Read", "arguments": {"file_path": "a.txt"}}]},
+            {"content": "Non."},
+        ]
+    )
+    r = cli(["-p", "read a.txt"], project, server)
+    assert r.returncode == 0, r.stderr
+    first = server.requests[0]["messages"]
+    assert "Always answer in French." in first[0]["content"]
+    tool_msg = [m for m in server.requests[1]["messages"] if m["role"] == "tool"][0]
+    assert "denied by rule Read" in tool_msg["content"]
+
+
+def test_missing_model_config(project: Path) -> None:
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if not k.startswith("CMCODER_") or k == "CMCODER_CONFIG_DIR"
+    }
+    r = subprocess.run(
+        [sys.executable, "-m", "cmcoder", "-p", "hi"],
+        cwd=project,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=30,
+        stdin=subprocess.DEVNULL,
+    )
+    assert r.returncode == 2
+    assert "No model configured" in r.stderr
+
+
+def test_protocol_schema_command(project: Path) -> None:
+    r = subprocess.run(
+        [sys.executable, "-m", "cmcoder", "protocol-schema"],
+        cwd=project,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=30,
+    )
+    assert r.returncode == 0
+    schema = json.loads(r.stdout)
+    assert "result" in json.dumps(schema)
+
+
+@pytest.mark.parametrize("flag", ["--version"])
+def test_version(project: Path, flag: str) -> None:
+    r = subprocess.run(
+        [sys.executable, "-m", "cmcoder", flag],
+        cwd=project,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=30,
+    )
+    assert r.returncode == 0 and r.stdout.strip()
+
+
+def test_settings_env_reaches_bash_commands(mock_server: Any, project: Path) -> None:
+    (project / ".cmcoder").mkdir()
+    (project / ".cmcoder/settings.json").write_text(
+        json.dumps({"env": {"CMCODER_TEST_FLAG": "from-settings"}})
+    )
+    server = mock_server(
+        [
+            {"tool_calls": [{"name": "Bash", "arguments": {"command": "echo $CMCODER_TEST_FLAG"}}]},
+            {"content": "ok"},
+        ]
+    )
+    args = ["-p", "show flag", "--permission-mode", "bypassPermissions", "--trust-project"]
+    r = cli(args, project, server)
+    assert r.returncode == 0, r.stderr
+    tool_msg = [m for m in server.requests[1]["messages"] if m["role"] == "tool"][0]
+    assert tool_msg["content"] == "from-settings"
+
+
+def test_untrusted_project_env_is_ignored_with_a_warning(mock_server: Any, project: Path) -> None:
+    (project / ".cmcoder").mkdir()
+    (project / ".cmcoder/settings.json").write_text(
+        json.dumps({"env": {"CMCODER_TEST_FLAG": "from-settings"}})
+    )
+    server = mock_server(
+        [
+            {
+                "tool_calls": [
+                    {"name": "Bash", "arguments": {"command": "echo x$CMCODER_TEST_FLAG"}}
+                ]
+            },
+            {"content": "ok"},
+        ]
+    )
+    r = cli(["-p", "show flag", "--permission-mode", "bypassPermissions"], project, server)
+    assert r.returncode == 0, r.stderr
+    assert "isn't trusted: settings.json: env" in " ".join(r.stderr.split())
+    tool_msg = [m for m in server.requests[1]["messages"] if m["role"] == "tool"][0]
+    assert tool_msg["content"] == "x"
+
+
+def test_trust_command(project: Path) -> None:
+    (project / ".cmcoder").mkdir()
+    (project / ".cmcoder/settings.json").write_text(json.dumps({"env": {"A": "1"}}))
+    env = {k: v for k, v in os.environ.items() if not k.lower().endswith("_proxy")}
+
+    def trust(*args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [sys.executable, "-m", "cmcoder", "trust", *args],
+            cwd=project,
+            env=env,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=30,
+            stdin=subprocess.DEVNULL,
+        )
+
+    r = trust()  # no terminal: refuses without --yes
+    assert r.returncode == 2 and "--yes" in r.stderr
+    assert "settings.json: env" in r.stdout
+    r = trust("--yes")
+    assert r.returncode == 0 and "Trusted" in r.stdout, r.stderr
+    assert "already trusted" in trust().stdout
+    assert trust("--revoke").returncode == 0
+    assert trust().returncode == 2
+
+
+def test_login_rejects_paste_mistakes() -> None:
+    from cmcoder.cli.main import key_problem
+
+    assert key_problem("sk-abc123") is None
+    assert key_problem("") == "empty key"
+    assert "right-click" in (key_problem("\x16") or "")  # Ctrl+V typed into hidden input on Windows
+    assert "right-click" in (key_problem("sk-abc\x16") or "")
+    assert "spaces" in (key_problem("sk-abc def") or "")
+
+
+def test_command_output_preview() -> None:
+    """Hands-on test on Windows: a successful command showed only "exit 0",
+    so a failure hidden by a pipe couldn't be seen. Its output's start is shown."""
+    from cmcoder.cli.repl import output_preview
+    from cmcoder.protocol import events as ev
+
+    def res(content: str, name: str = "Bash") -> ev.ToolResult:
+        return ev.ToolResult(id="1", name=name, content=content, is_error=False)
+
+    out = "ERROR: Could not find a version\nline 2\nline 3\nline 4\nline 5"
+    assert output_preview(res(out), 3) == (
+        "    ERROR: Could not find a version\n    line 2\n    line 3\n    … 2 more lines"
+    )
+    assert output_preview(res("ok"), 3) == "    ok"
+    assert output_preview(res("(no output)"), 3) is None
+    assert output_preview(res("x = 1", name="Read"), 3) is None
+
+
+def test_mcp_commands(project: Path, tmp_path: Path) -> None:
+    env = {k: v for k, v in os.environ.items() if not k.lower().endswith("_proxy")}
+    env["CMCODER_CONFIG_DIR"] = str(tmp_path / "config")
+    demo = str(Path(__file__).parent / "mcp_servers" / "demo_server.py")
+
+    def mcp(*args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [sys.executable, "-m", "cmcoder", "mcp", *args],
+            cwd=project,
+            env=env,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=60,
+            stdin=subprocess.DEVNULL,
+        )
+
+    r = mcp("add", "demo", "--", sys.executable, demo)
+    assert r.returncode == 0, r.stderr
+    r = mcp(
+        "add", "web", "--url", "https://mcp.example/mcp", "-H", "Authorization: Bearer ${TOKEN}"
+    )
+    assert r.returncode == 0, r.stderr
+    saved = json.loads((tmp_path / "config" / "settings.json").read_text())
+    assert saved["mcpServers"]["web"]["headers"] == {"Authorization": "Bearer ${TOKEN}"}
+    assert mcp("remove", "web").returncode == 0
+    r = mcp("list", "--check")
+    assert r.returncode == 0 and "demo: connected · 4 tools" in " ".join(r.stdout.split()), r.stdout
+    assert mcp("add", "bad").returncode == 2  # neither --url nor a command
+    # `approve` on your own server: nothing to approve, and it says so.
+    r = mcp("approve", "demo")
+    out = " ".join(r.stdout.split())
+    assert r.returncode == 0 and "needs no approval" in out and "mcp list --check" in out
+
+    # A project's server: listed only once the project is trusted, then approved.
+    (project / ".mcp.json").write_text(
+        json.dumps({"mcpServers": {"proj": {"command": sys.executable, "args": [demo]}}})
+    )
+
+    def listed() -> str:
+        return " ".join(mcp("list").stdout.split())
+
+    assert "isn't trusted" in listed()
+    assert mcp("approve", "proj").returncode == 1
+    trusted = subprocess.run(
+        [sys.executable, "-m", "cmcoder", "trust", "--yes"],
+        cwd=project,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=60,
+        stdin=subprocess.DEVNULL,
+    )
+    assert ".mcp.json: mcpServers (proj)" in " ".join(trusted.stdout.split())
+    assert "not approved yet" in listed()
+    assert mcp("approve", "proj").returncode == 0
+    assert "this project; approved)" in listed()

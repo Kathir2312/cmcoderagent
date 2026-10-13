@@ -1,0 +1,27 @@
+[
+ {
+  "tool_calls": [
+   {
+    "name": "Read",
+    "arguments": {
+     "file_path": "settings.json"
+    }
+   }
+  ]
+ },
+ {
+  "tool_calls": [
+   {
+    "name": "Edit",
+    "arguments": {
+     "file_path": "settings.json",
+     "old_string": "\"port\": 8000,\n  \"debug\": true",
+     "new_string": "\"port\": 9090,\n  \"debug\": false"
+    }
+   }
+  ]
+ },
+ {
+  "content": "Port is 9090 and debug is off."
+ }
+]

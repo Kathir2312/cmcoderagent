@@ -1,0 +1,74 @@
+<!-- The cmcoder plugin for IntelliJ-based IDEs. Depends on the platform only,
+     so one plugin works in IntelliJ IDEA, Rider, PyCharm, WebStorm, GoLand,
+     Android Studio and the others. The build fills in the version, the build
+     range, the name and vendor, and the brand's product name (branding/brand.json)
+     where the texts have a token for it; ids keep "cmcoder". -->
+<idea-plugin>
+  <id>cmcoder.idea</id>
+  <name>cmcoder</name>
+  <vendor>cmcoder</vendor>
+  <description><![CDATA[
+    A coding assistant in your IDE: ask in plain language, and it reads your
+    project, explains code, and proposes changes and commands for you to approve.
+    The model runs on your company's AI gateway (LiteLLM or Open WebUI).
+  ]]></description>
+
+  <depends>com.intellij.modules.platform</depends>
+  <!-- The chat and the navigator are pages in JCEF. Newer IDEs (2026.2) ship JCEF
+       as a module of its own, whose classes a plugin sees only if it says so;
+       older ones have it built in (there this dependency is simply absent). -->
+  <depends optional="true" config-file="cmcoder-jcef.xml">com.intellij.modules.jcef</depends>
+
+  <extensions defaultExtensionNs="com.intellij">
+    <toolWindow id="cmcoder" anchor="right" secondary="false"
+                icon="/icons/toolWindow.svg"
+                factoryClass="cmcoder.idea.ChatToolWindowFactory"/>
+    <fileEditorProvider implementation="cmcoder.idea.NavigatorEditorProvider"/>
+    <fileIconProvider implementation="cmcoder.idea.NavigatorEditorProvider$TabIcon"/>
+    <statusBarWidgetFactory id="cmcoder.codeSearch" implementation="cmcoder.idea.CodeSearchWidget"/>
+    <applicationConfigurable parentId="tools" id="cmcoder.settings" instance="cmcoder.idea.SettingsPage"
+                             displayName="@product@"/>
+    <notificationGroup id="cmcoder" displayType="BALLOON"/>
+    <!-- The release gate's self-test, in the test build only (does nothing in a release). -->
+    <postStartupActivity implementation="cmcoder.idea.GateStarter"/>
+  </extensions>
+
+  <applicationListeners>
+    <!-- The release gate's self-test, in the test build only (does nothing in a release). -->
+    <listener class="cmcoder.idea.GateStarter" topic="com.intellij.ide.AppLifecycleListener"/>
+  </applicationListeners>
+
+  <actions>
+    <group id="cmcoder.Menu" text="@productInMenu@" popup="true">
+      <add-to-group group-id="ToolsMenu" anchor="last"/>
+      <action id="cmcoder.OpenChat" class="cmcoder.idea.Actions$OpenChat"
+              text="Open @productInMenu@ Chat"/>
+      <action id="cmcoder.AskAboutSelection" class="cmcoder.idea.AskAboutSelectionAction"
+              text="Ask @productInMenu@ About Selection"
+              description="Open the chat with the selected code and a prompt to finish">
+        <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+        <keyboard-shortcut keymap="$default" first-keystroke="alt shift K"/>
+      </action>
+      <action id="cmcoder.NewConversation" class="cmcoder.idea.Actions$NewConversation"
+              text="New @productInMenu@ Conversation"/>
+      <action id="cmcoder.Stop" class="cmcoder.idea.Actions$Stop"
+              text="Stop @productInMenu@" description="Stop the current turn"/>
+      <separator/>
+      <action id="cmcoder.OpenNavigator" class="cmcoder.idea.Actions$OpenNavigator"
+              text="Open @productInMenu@ Agent Navigator"
+              description="The current turn's tools and subagents, live, in an editor tab"/>
+      <action id="cmcoder.CodeSearch" class="cmcoder.idea.Actions$CodeSearch"
+              text="@productInMenu@ Code Search…"
+              description="Set up, update or rebuild this project's code index"/>
+      <separator/>
+      <action id="cmcoder.ShowLog" class="cmcoder.idea.Actions$ShowLog"
+              text="Show @productInMenu@ Log"/>
+      <action id="cmcoder.CopyDiagnostics" class="cmcoder.idea.Actions$CopyDiagnostics"
+              text="Copy @productInMenu@ Diagnostics"
+              description="Versions, settings, the program's checks and the recent log, to the clipboard (never the key)"
+              icon="AllIcons.Actions.Copy"/>
+      <action id="cmcoder.Settings" class="cmcoder.idea.Actions$OpenSettings"
+              text="@productInMenu@ Settings…" icon="AllIcons.General.Settings"/>
+    </group>
+  </actions>
+</idea-plugin>

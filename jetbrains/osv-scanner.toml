@@ -1,0 +1,9 @@
+# Known vulnerabilities osv-scanner skips in this folder's lock files, each
+# checked and given a date to look again (docs/project/security/scan-2026-10-13.md).
+
+[[IgnoredVulns]]
+id = "GHSA-3x3v-w654-m28m"
+ignoreUntil = 2027-01-13
+reason = """undertow-core (CVE-2026-3260, multipart parsing denial of service) is only in the \
+IntelliJ Platform Gradle Plugin's build-time classpath (buildscript-gradle.lockfile), not in the \
+plugin. It needs HTTP requests to an Undertow server; the builds serve none. No fixed version yet."""

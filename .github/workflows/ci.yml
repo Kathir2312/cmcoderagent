@@ -1,0 +1,553 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+# A newer push to the same branch replaces a run still going (tags each have their own).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Read-only token for every job.
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test (${{ matrix.os }}, py${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, python-version: "3.11" }
+          - { os: ubuntu-latest, python-version: "3.12" }
+          - { os: macos-latest, python-version: "3.12" }
+          - { os: windows-latest, python-version: "3.11" }
+          - { os: windows-latest, python-version: "3.12" }
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Install ripgrep and bubblewrap (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update && sudo apt-get install -y ripgrep bubblewrap
+          # Ubuntu 24.04 restricts unprivileged user namespaces, which bubblewrap needs.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+      - name: Install ripgrep (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ripgrep
+      # Windows: no ripgrep on purpose, so the built-in search fallback is what
+      # runs there. Git Bash comes with the runner image, as on most dev machines.
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: uv sync
+      - name: Lint
+        run: |
+          uv run ruff check src tests evals packaging
+          uv run ruff format --check src tests evals packaging
+      - name: Type check
+        run: uv run pyright
+      - name: Show environment (cmcoder doctor, local checks)
+        run: uv run cmcoder doctor --no-probe
+        continue-on-error: true
+      - name: Tests
+        run: uv run pytest -q
+      - name: Evals (scripted model), through -p and the VS Code protocol, with a parity check
+        run: uv run python evals/run.py --mock --via both
+      - name: Evals (scripted model) served the way Open WebUI serves an Ollama model
+        run: uv run python evals/run.py --mock --gateway openwebui-ollama
+      - name: Code search quality harness (mock embeddings; real scores need a real model)
+        run: uv run python evals/retrieval.py --mock
+
+  litellm-gateway:
+    name: integration (real LiteLLM proxy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          python-version: "3.12"
+      - run: uv sync
+      - name: Install LiteLLM proxy (separate venv)
+        run: |
+          uv venv /tmp/litellm --python 3.12
+          uv pip install --python /tmp/litellm/bin/python 'litellm[proxy]'
+      - name: Gateway tests
+        run: LITELLM_BIN=/tmp/litellm/bin/litellm uv run pytest -q tests/test_litellm_integration.py
+
+  chroma:
+    name: code search stores (real Chroma)
+    runs-on: ubuntu-latest
+    services:
+      # The Chroma server from its own image (pinned by digest): cmcoder reaches
+      # Chroma only by URL (D17), so the chromadb package isn't installed anywhere.
+      chroma:
+        image: chromadb/chroma:1.5.9@sha256:1e0b73a187a28757c572acba508c46f48c9e8b0acaf5c20e6d95cdedce1acdf6
+        ports:
+          - 8765:8000
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          python-version: "3.12"
+      - run: uv sync
+      - name: Wait for the Chroma server
+        run: for i in $(seq 60); do curl -sf http://localhost:8765/api/v2/heartbeat && break; sleep 1; done; curl -sf http://localhost:8765/api/v2/heartbeat
+      - name: Index tests on the built-in store and Chroma by its URL
+        env:
+          CMCODER_TEST_CHROMA_URL: http://localhost:8765
+        run: uv run --no-sync pytest -q tests/test_rag_index.py
+      - if: failure()
+        env:
+          CHROMA_CONTAINER: ${{ job.services.chroma.id }}
+        run: docker logs "$CHROMA_CONTAINER" 2>&1 | tail -50
+
+  vscode:
+    name: VS Code extension (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    defaults:
+      run:
+        working-directory: vscode
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            vscode/package-lock.json
+            clients/web-panel/package-lock.json
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          python-version: "3.12"
+      - run: uv sync --project ..
+      - run: npm ci  # also installs the shared panel's packages (postinstall)
+      - name: Type check
+        run: npm run typecheck
+      - name: Type check the shared panel (clients/web-panel)
+        working-directory: clients/web-panel
+        run: npm run typecheck
+      - name: Build
+        run: npm run build
+      - name: Browser for the chat panel tests
+        working-directory: clients/web-panel
+        run: npx playwright install ${{ runner.os == 'Linux' && '--with-deps' || '' }} chromium
+      - name: The shared panel, as each IDE connects to it (VS Code, WebView2, SWT, JavaFX)
+        working-directory: clients/web-panel
+        run: npm test
+      # The tests start cmcoder with this Python. (`uv run npm ...` can't start
+      # npm on Windows, where it is npm.cmd.)
+      - name: cmcoder's Python for the tests
+        shell: bash
+        run: echo "CMCODER_TEST_PYTHON=$(uv run --project .. python -c 'import sys; print(sys.executable)')" >> "$GITHUB_ENV"
+      - name: Tests (against the real cmcoder and the mock model server)
+        run: npm test
+      - name: Integration tests in a real VS Code
+        if: runner.os == 'Linux'
+        run: xvfb-run -a npm run test:integration
+      - name: Package
+        if: runner.os == 'Linux'
+        run: npm run package
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: runner.os == 'Linux'
+        with:
+          name: cmcoder-vsix
+          path: vscode/cmcoder.vsix
+
+  jvm-core:
+    # The IDE core shared by the Eclipse and NetBeans plugins (clients/jvm-core),
+    # on the oldest Java it supports. Its tests start cmcoder from source here
+    # (macOS, Linux); on Windows that needs the standalone cmcoder.exe, so the
+    # Release build runs all of them there (with no Python in reach).
+    name: IDE core for Eclipse/NetBeans (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          python-version: "3.12"
+      - run: uv sync
+      - name: Tests
+        shell: bash
+        run: |
+          export CMCODER_TEST_PYTHON="$(uv run python -c 'import sys; print(sys.executable)')"
+          mvn -B -f clients/jvm-core/pom.xml verify
+
+  visualstudio-core:
+    # The C# core of the Visual Studio extension (visualstudio/src/Cmcoder.Core),
+    # against cmcoder from source here; the Release build runs it on Windows with
+    # the standalone cmcoder.exe and no Python in reach.
+    name: Visual Studio core (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: "8.0.x"
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          python-version: "3.12"
+      - run: uv sync
+      - name: Tests
+        shell: bash
+        run: |
+          export CMCODER_TEST_PYTHON="$(uv run python -c 'import sys; print(sys.executable)')"
+          dotnet build visualstudio/src/Cmcoder.Core -c Release
+          dotnet test visualstudio/test/Cmcoder.Core.Tests -c Release --logger "console;verbosity=normal"
+
+  visualstudio-extension:
+    # The Visual Studio extension builds and packs (Windows, Visual Studio's
+    # MSBuild); the Release build runs it in a real Visual Studio.
+    name: Visual Studio extension (build)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+      - name: The shared chat panel
+        working-directory: clients/web-panel
+        run: npm ci && npm run build
+      - name: Build the .vsix (and the gate build)
+        shell: pwsh
+        run: |
+          ./visualstudio/build-vsix.ps1
+          ./visualstudio/build-vsix.ps1 -Gate
+
+  eclipse:
+    # The Eclipse plugin (eclipse/) in a real Eclipse, oldest and newest supported,
+    # with its real chat page, cmcoder from source and the mock model server. The
+    # Release build runs it again on every platform with the bundled cmcoder.
+    name: Eclipse plugin (${{ matrix.os }}, ${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, target: oldest }
+          - { os: ubuntu-latest, target: newest }
+          - { os: macos-latest, target: oldest }
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: A browser engine for Eclipse (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-0
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          python-version: "3.12"
+      - run: uv sync
+      - name: The shared chat panel
+        working-directory: clients/web-panel
+        run: npm ci && npm run build
+      - name: Build and test
+        working-directory: eclipse
+        shell: bash
+        run: |
+          export CMCODER_TEST_PYTHON="$(uv run python -c 'import sys; print(sys.executable)')"
+          run=""; [ "$RUNNER_OS" = Linux ] && run="xvfb-run -a"
+          $run mvn -B -Dtarget=${{ matrix.target }} verify
+
+  security:
+    # Findings checked and accepted are recorded where they are (nosemgrep with a
+    # reason, .gitleaksignore); docs/project/security/scan-2026-10-07.md has the triage.
+    name: security (SAST + dependency audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0 # gitleaks reads the whole history
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: vscode/package-lock.json
+      - name: Bandit (Python SAST; fails on medium or high severity)
+        run: uvx bandit -r src evals/run.py --severity-level medium
+      - name: pip-audit (known vulnerabilities in the locked Python packages)
+        run: |
+          uv export --format requirements-txt --no-hashes --no-emit-project --all-extras --all-groups > /tmp/requirements.txt
+          uvx pip-audit -r /tmp/requirements.txt --no-deps --disable-pip --strict
+      - name: OSV (OpenJFX in the NetBeans plugin, NuGet packages in the Visual Studio extension)
+        run: uv run --no-project python packaging/osv_check.py
+      - name: npm audit (extension and shared panel dependencies; fails on high or critical)
+        working-directory: vscode
+        run: |
+          npm ci
+          npm audit --audit-level=high
+          cd ../clients/web-panel && npm audit --audit-level=high
+      - name: Semgrep (SAST for every language; fails on error-level findings)
+        run: |
+          uvx semgrep==1.179.0 scan --metrics=off --error --severity ERROR \
+            --config p/default --config p/owasp-top-ten --config p/security-audit \
+            --config p/secrets --config p/github-actions \
+            --exclude node_modules --exclude 'dist*' --exclude target --exclude evals/fixtures .
+      - name: gitleaks (secrets in the whole git history)
+        run: |
+          go install github.com/zricethezav/gitleaks/v8@v8.30.1
+          "$(go env GOPATH)/bin/gitleaks" git . --redact --no-banner
+      - name: zizmor (the GitHub workflows)
+        run: uvx zizmor==1.30.1 --offline .github/workflows
+      - name: osv-scanner (every lock file and pom.xml, with transitive Maven dependencies)
+        run: |
+          go install github.com/google/osv-scanner/v2/cmd/osv-scanner@v2.6.0
+          "$(go env GOPATH)/bin/osv-scanner" scan source -r .
+
+  jetbrains:
+    # The plugin for IntelliJ-based IDEs (jetbrains/, Phase 7): built against
+    # the oldest supported release (2024.2) and checked by JetBrains' Plugin
+    # Verifier against it, the newest IntelliJ IDEA and the newest Rider (which
+    # needs a license to start, so the gate below can't run it). JetBrains' servers
+    # aren't reachable from every development environment, so CI builds it.
+    name: IntelliJ plugin (build, Plugin Verifier)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          gradle-version: "9.8.1"
+      - name: The shared chat panel
+        working-directory: clients/web-panel
+        run: npm ci && npm run build
+      - name: Build the plugin
+        working-directory: jetbrains
+        run: gradle --no-daemon --stacktrace buildPlugin
+      - name: Plugin Verifier (2024.2, the newest IntelliJ IDEA and Rider)
+        working-directory: jetbrains
+        run: gradle --no-daemon --stacktrace verifyPlugin
+      - name: The Gradle lock files are current (osv-scanner reads them)
+        if: ${{ !cancelled() }}  # also when the build failed: says why
+        working-directory: jetbrains
+        run: |
+          gradle --no-daemon -q buildEnvironment dependencies --configuration runtimeClasspath --write-locks > /dev/null
+          if [ -n "$(git status --porcelain -- '*.lockfile')" ]; then
+            for f in *.lockfile; do echo "--- jetbrains/$f"; cat "$f"; done
+            echo "These differ from the committed lock files: in jetbrains/, run" >&2
+            echo "  gradle buildEnvironment dependencies --configuration runtimeClasspath --write-locks" >&2
+            echo "and commit them." >&2
+            exit 1
+          fi
+      - name: SpotBugs + FindSecBugs (fails on a security finding not reviewed in spotbugs/reviewed.xml)
+        if: ${{ !cancelled() }}
+        working-directory: jetbrains
+        run: |
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/spotbugs.tgz" https://github.com/spotbugs/spotbugs/releases/download/4.10.4/spotbugs-4.10.4.tgz
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/findsecbugs.jar" https://repo1.maven.org/maven2/com/h3xstream/findsecbugs/findsecbugs-plugin/1.14.0/findsecbugs-plugin-1.14.0.jar
+          echo "72bc0d4edd686e462c0f71f42a049b27bf4da6708797ff7b2b56dd202714b4e5  $RUNNER_TEMP/spotbugs.tgz" | sha256sum -c
+          echo "6fa340344fa433ff46c2985dab1010e8bc739f9395c983594a5240095e92abc8  $RUNNER_TEMP/findsecbugs.jar" | sha256sum -c
+          tar -xzf "$RUNNER_TEMP/spotbugs.tgz" -C "$RUNNER_TEMP"
+          gradle --no-daemon -q printCompileClasspath | while read -r f; do [ -e "$f" ] && echo "$f"; done > "$RUNNER_TEMP/classpath.txt"
+          java -jar "$RUNNER_TEMP/spotbugs-4.10.4/lib/spotbugs.jar" -textui -effort:max -low \
+            -pluginList "$RUNNER_TEMP/findsecbugs.jar" -auxclasspathFromFile "$RUNNER_TEMP/classpath.txt" \
+            -include spotbugs/security.xml -exclude spotbugs/reviewed.xml \
+            -output "$RUNNER_TEMP/spotbugs.txt" build/classes/java/main
+          if [ -s "$RUNNER_TEMP/spotbugs.txt" ]; then
+            cat "$RUNNER_TEMP/spotbugs.txt"
+            echo "Security findings above: fix them, or check them and list them in jetbrains/spotbugs/reviewed.xml with the reason." >&2
+            exit 1
+          fi
+          echo "No security findings beyond the reviewed ones ($(wc -l < "$RUNNER_TEMP/classpath.txt") jars on the classpath)."
+      - name: The plugin zip and the verifier's reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: cmcoder-jetbrains-ci
+          path: |
+            jetbrains/build/distributions/*.zip
+            jetbrains/build/reports/pluginVerifier/
+          if-no-files-found: ignore
+
+  jetbrains-gate:
+    # The release gate for the IntelliJ plugin (Phase 7 item 5): the gate build
+    # (the self-test inside, never shipped) with the standalone cmcoder inside,
+    # unpacked into a fresh IDE profile as "Install Plugin from Disk" does, in a
+    # real IntelliJ IDEA with its real chat page in JCEF, the mock model server
+    # and no Python in reach. The IDE comes from JetBrains, checked against its
+    # published checksum (jetbrains/gate/get-ide.sh). IntelliJ IDEA: the oldest
+    # supported release on Linux, the newest on Linux, Windows and macOS. The
+    # same gate in the newest PyCharm (one plugin for every IntelliJ-based IDE;
+    # PyCharm looks for Python itself, which is a note, not a failure). Rider
+    # needs a license to start: the Plugin Verifier checks it instead.
+    name: IntelliJ plugin gate (${{ matrix.name }} ${{ matrix.version }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, name: IntelliJ IDEA, product: IIC, version: "2024.2.5" }
+          - { os: ubuntu-latest, name: IntelliJ IDEA, product: IIU, version: newest }
+          - { os: windows-latest, name: IntelliJ IDEA, product: IIU, version: newest }
+          - { os: macos-latest, name: IntelliJ IDEA, product: IIU, version: newest }
+          - { os: ubuntu-latest, name: PyCharm, product: PCP, version: newest, options: --ide-looks-for-python }
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          python-version: "3.12"
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          gradle-version: "9.8.1"
+      - run: uv sync
+      - name: ${{ matrix.name }} ${{ matrix.version }} (checked against JetBrains' checksum)
+        run: echo "IDE=$(bash jetbrains/gate/get-ide.sh ${{ matrix.product }} ${{ matrix.version }} "$RUNNER_TEMP/intellij")" >> "$GITHUB_ENV"
+      - name: The shared chat panel
+        working-directory: clients/web-panel
+        run: npm ci && npm run build
+      - name: The standalone cmcoder
+        run: uv run --with pyinstaller python packaging/build.py
+      - name: The gate build of the plugin, with cmcoder inside
+        working-directory: jetbrains
+        run: gradle --no-daemon --stacktrace -Pgate "-PcmcoderDir=$GITHUB_WORKSPACE/dist/cmcoder" buildPlugin
+      - name: Run the gate (no Python in reach)
+        run: |
+          x=()
+          if [ "$RUNNER_OS" = Linux ]; then
+            command -v import >/dev/null || sudo apt-get install -y -q imagemagick  # a screenshot if it hangs
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true    # Chromium (JCEF)
+            x=(xvfb-run -a -s "-screen 0 1600x1000x24")
+          fi
+          py="$(uv run python -c 'import sys; print(sys.executable)')"
+          # Git's bash by its full path: started from Python, Windows finds its own bash.exe (WSL) first.
+          sh=bash; [ "$RUNNER_OS" = Windows ] && sh="$(cygpath -w /usr/bin/bash.exe)"
+          CMCODER_GATE_SHOTS="$RUNNER_TEMP/shots" "${x[@]}" uv run python packaging/no_python.py run -- "$sh" jetbrains/gate/run-gate.sh \
+            --zip "$(ls jetbrains/build/distributions/cmcoder-jetbrains-*-gate.zip)" --ide "$IDE" --python "$py" --timeout 480 ${{ matrix.options }}
+      - name: Screenshots (chat, a diff, the navigator; the screen if it hung)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: gate-screenshots-${{ matrix.product }}-${{ matrix.version }}-${{ matrix.os }}
+          path: ${{ runner.temp }}/shots
+          if-no-files-found: ignore
+
+  netbeans:
+    # The NetBeans plugin (netbeans/) in a real NetBeans, oldest and newest
+    # supported, with its real chat page in JavaFX, the standalone cmcoder
+    # inside the .nbm, the mock model server and no Python in reach. The Release
+    # build runs it again on every platform.
+    name: NetBeans plugin (NetBeans ${{ matrix.netbeans }}, JDK ${{ matrix.jdk }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { netbeans: "28", jdk: "21" }
+          - { netbeans: "31", jdk: "25" }
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.jdk }}
+          cache: maven
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          python-version: "3.12"
+      - run: uv sync
+      - name: NetBeans ${{ matrix.netbeans }} (cached)
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ runner.temp }}/netbeans-${{ matrix.netbeans }}
+          key: netbeans-${{ matrix.netbeans }}-bin
+      - name: Get NetBeans ${{ matrix.netbeans }}
+        # Only the archive has older releases, and it's slow (515 MB at a few
+        # hundred KB/s: up to an hour) until the cache above has it again. curl
+        # cuts a stalled transfer (under 20 KB/s for 2 minutes) and tries again;
+        # the step gives up after 2 hours.
+        timeout-minutes: 120
+        run: |
+          nb="$RUNNER_TEMP/netbeans-${{ matrix.netbeans }}"
+          [ -x "$nb/netbeans/bin/netbeans" ] && exit 0
+          mkdir -p "$nb" && cd "$nb"
+          # downloads.apache.org is fast but holds only the newest release; the archive has all, slowly.
+          v=${{ matrix.netbeans }}
+          get() { curl -fsSL --connect-timeout 30 --speed-limit 20000 --speed-time 120 --retry 5 --retry-delay 15 -O "$1"; }  # a stalled transfer is cut and tried again
+          for base in https://downloads.apache.org/netbeans/netbeans/$v https://archive.apache.org/dist/netbeans/netbeans/$v; do
+            get $base/netbeans-$v-bin.zip && get $base/netbeans-$v-bin.zip.sha512 && break
+          done
+          [ "$(cut -d' ' -f1 netbeans-*-bin.zip.sha512)" = "$(sha512sum netbeans-*-bin.zip | cut -d' ' -f1)" ]
+          unzip -q netbeans-*-bin.zip && rm netbeans-*-bin.zip
+      - name: The shared chat panel
+        working-directory: clients/web-panel
+        run: npm ci && npm run build
+      - name: The standalone cmcoder
+        run: uv run --with pyinstaller python packaging/build.py
+      - name: Build the gate .nbm with cmcoder inside, and run the gate
+        run: |
+          mkdir -p netbeans/bin && cp -RL dist/cmcoder netbeans/bin/cmcoder
+          (cd netbeans && mvn -B package -Dplatform=linux -Pgate)
+          py="$(uv run python -c 'import sys; print(sys.executable)')"
+          xvfb-run -a -s "-screen 0 1600x1000x24" uv run python packaging/no_python.py run -- bash netbeans/gate/run-gate.sh \
+            --nbm netbeans/target/cmcoder-netbeans-linux-x64.nbm --netbeans "$RUNNER_TEMP/netbeans-${{ matrix.netbeans }}/netbeans" \
+            --python "$py" --jdk "$JAVA_HOME"

@@ -1,0 +1,17 @@
+[
+ {
+  "tool_calls": [
+   {
+    "name": "Grep",
+    "arguments": {
+     "pattern": "TODO",
+     "path": "src",
+     "output_mode": "count"
+    }
+   }
+  ]
+ },
+ {
+  "content": "4"
+ }
+]

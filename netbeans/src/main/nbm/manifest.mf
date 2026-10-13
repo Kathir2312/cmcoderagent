@@ -1,0 +1,5 @@
+Manifest-Version: 1.0
+OpenIDE-Module-Localizing-Bundle: cmcoder/netbeans/Bundle.properties
+OpenIDE-Module-Requires: ${os.token}
+OpenIDE-Module-Install: cmcoder/netbeans/Installer.class
+OpenIDE-Module-Layer: cmcoder/netbeans/layer.xml

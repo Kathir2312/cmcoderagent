@@ -1,0 +1,6 @@
+{
+  "prompt": "Running app.py fails with an ImportError. Fix it.",
+  "check": "\"$PYTHON\" app.py | tr -d '\\r' | grep -qx 'hello-world'",
+  "permission_mode": "bypassPermissions",
+  "max_turns": 20
+}

@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  cmcoder for Eclipse (Phase 6 item 6): the plugin, its tests, the feature and
+  a p2 repository (an update-site archive developers install from a file).
+
+  Built with Maven + Tycho. Before it, build the shared chat panel:
+    (cd ../clients/web-panel && npm ci && npm run build)
+    mvn -B verify                                   # here
+  The tests start a real cmcoder: CMCODER_TEST_BINARY (the standalone
+  program) or CMCODER_TEST_PYTHON (cmcoder from source; macOS, Linux).
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>cmcoder.eclipse</groupId>
+  <artifactId>cmcoder-eclipse-parent</artifactId>
+  <version>0.1.0-SNAPSHOT</version>
+  <packaging>pom</packaging>
+
+  <properties>
+    <tycho.version>5.0.4</tycho.version>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <!-- The Eclipse to build and test against: the oldest supported by default;
+         CI also runs -Dtarget=newest. -->
+    <target>oldest</target>
+    <!-- The Java the target resolves against: newer Eclipse bundles need 21;
+         the plugin itself stays Java 17 (its manifest). -->
+    <resolve.ee>JavaSE-17</resolve.ee>
+  </properties>
+
+  <profiles>
+    <profile>
+      <id>newest</id>
+      <activation><property><name>target</name><value>newest</value></property></activation>
+      <properties><resolve.ee>JavaSE-21</resolve.ee></properties>
+    </profile>
+  </profiles>
+
+  <modules>
+    <module>plugins/cmcoder.eclipse</module>
+    <module>fragments/cmcoder.eclipse.win32.x86_64</module>
+    <module>fragments/cmcoder.eclipse.linux.x86_64</module>
+    <module>fragments/cmcoder.eclipse.macosx.aarch64</module>
+    <module>features/cmcoder.eclipse.feature</module>
+    <!-- After the feature: the tests install it. -->
+    <module>tests/cmcoder.eclipse.tests</module>
+    <module>site</module>
+  </modules>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.eclipse.tycho</groupId>
+        <artifactId>tycho-maven-plugin</artifactId>
+        <version>${tycho.version}</version>
+        <extensions>true</extensions>
+      </plugin>
+      <plugin>
+        <groupId>org.eclipse.tycho</groupId>
+        <artifactId>target-platform-configuration</artifactId>
+        <version>${tycho.version}</version>
+        <configuration>
+          <target>
+            <file>${maven.multiModuleProjectDirectory}/target-platform/${target}.target</file>
+          </target>
+          <executionEnvironment>${resolve.ee}</executionEnvironment>
+          <environments>
+            <environment><os>win32</os><ws>win32</ws><arch>x86_64</arch></environment>
+            <environment><os>linux</os><ws>gtk</ws><arch>x86_64</arch></environment>
+            <environment><os>macosx</os><ws>cocoa</ws><arch>aarch64</arch></environment>
+          </environments>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.eclipse.tycho</groupId>
+        <artifactId>tycho-compiler-plugin</artifactId>
+        <version>${tycho.version}</version>
+        <configuration>
+          <compilerArgs>
+            <arg>-Xlint:all,-options,-serial</arg>
+          </compilerArgs>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

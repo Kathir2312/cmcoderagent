@@ -1,0 +1,49 @@
+[
+ {
+  "tool_calls": [
+   {
+    "name": "Read",
+    "arguments": {
+     "file_path": "fetch.py"
+    }
+   }
+  ]
+ },
+ {
+  "tool_calls": [
+   {
+    "name": "Edit",
+    "arguments": {
+     "file_path": "fetch.py",
+     "old_string": "def fetch(timeout=10):",
+     "new_string": "def fetch(timeout=config.TIMEOUT):"
+    }
+   }
+  ]
+ },
+ {
+  "tool_calls": [
+   {
+    "name": "Read",
+    "arguments": {
+     "file_path": "upload.py"
+    }
+   }
+  ]
+ },
+ {
+  "tool_calls": [
+   {
+    "name": "Edit",
+    "arguments": {
+     "file_path": "upload.py",
+     "old_string": "def upload(timeout=10):",
+     "new_string": "def upload(timeout=config.TIMEOUT):"
+    }
+   }
+  ]
+ },
+ {
+  "content": "Both now default to config.TIMEOUT."
+ }
+]

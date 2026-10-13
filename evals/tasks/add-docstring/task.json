@@ -1,0 +1,6 @@
+{
+  "prompt": "Add a docstring to area() in geometry.py that explains its arguments and return value.",
+  "check": "\"$PYTHON\" -c \"import geometry as g; d = g.area.__doc__ or ''; assert 'width' in d.lower() and 'height' in d.lower(), d; assert g.area(2, 3) == 6\"",
+  "permission_mode": "acceptEdits",
+  "max_turns": 20
+}

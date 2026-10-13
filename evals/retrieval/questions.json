@@ -1,0 +1,22 @@
+[
+  {"q": "how long to wait before retrying after a rate limit or a server error", "file": "providers/openai_compat.py", "symbol": "_backoff"},
+  {"q": "find the model's context window size in an error message from the server", "file": "providers/openai_compat.py", "symbol": "parse_context_window"},
+  {"q": "decide whether a file is a secret such as an env file or a private key", "file": "sensitive.py", "symbol": "is_secret"},
+  {"q": "summarise the older part of the conversation when the context fills up", "file": "core/compaction.py", "symbol": "compact"},
+  {"q": "split source files into pieces along function and class boundaries", "file": "rag/chunker.py", "symbol": "chunk_file"},
+  {"q": "proxy that only lets sandboxed commands reach allowed hosts", "file": "sandbox/proxy.py", "symbol": "host_allowed"},
+  {"q": "turn agent events into usage metrics such as tokens and tool calls", "file": "telemetry.py", "symbol": "observe"},
+  {"q": "put files back the way they were before the agent changed them", "file": "core/checkpoints.py", "symbol": "restore"},
+  {"q": "put a slash command's arguments into its prompt text", "file": "core/commands.py", "symbol": "substitute"},
+  {"q": "is a shell command dangerous, like deleting files recursively", "file": "core/risk.py", "symbol": "high_risk_reason"},
+  {"q": "where the Windows Terminal profile file is written", "file": "cli/terminal_profile.py", "symbol": "fragment_file"},
+  {"q": "show only the start and end of an API key so it's never printed in full", "file": "providers/auth.py", "symbol": "mask_key"},
+  {"q": "which models behind Open WebUI are served by Ollama", "file": "providers/openwebui.py", "symbol": "model_info"},
+  {"q": "list the saved conversations of a project, newest first", "file": "core/sessions.py", "symbol": "list_sessions"},
+  {"q": "change a file by replacing one exact piece of text with another", "file": "tools/files.py", "symbol": "EditTool"},
+  {"q": "the product's name, colour and text logo for the terminal", "file": "brand.py", "symbol": "load"},
+  {"q": "the persistent shell that keeps its working directory between commands", "file": "tools/shell.py", "symbol": "PersistentShell"},
+  {"q": "which files of the project may be indexed for code search", "file": "rag/files.py", "symbol": "FileSelector"},
+  {"q": "embed texts in batches with the gateway's embedding model", "file": "rag/embed.py", "symbol": "Embedder"},
+  {"q": "load the layered settings files and merge them with the environment", "file": "config/settings.py", "symbol": "load_settings"}
+]
