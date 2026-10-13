@@ -252,7 +252,7 @@ public final class Gate {
         ApplicationManager.getApplication().invokeLater(() -> {
             try {
                 result.complete(read.call());
-            } catch (Exception e) {
+            } catch (Exception | AssertionError e) { // a failed check too: it's the step's result
                 result.completeExceptionally(e);
             }
         });
@@ -263,6 +263,7 @@ public final class Gate {
             throw new AssertionError("the IDE's UI thread didn't run a step within 60 s. Windows: " + windows());
         } catch (ExecutionException e) {
             if (e.getCause() instanceof Exception cause) throw cause;
+            if (e.getCause() instanceof AssertionError cause) throw cause;
             throw e;
         }
     }
@@ -463,7 +464,7 @@ public final class Gate {
         });
         until("the prompt", () -> chat.evaluate("document.querySelector('textarea').value").get(10, TimeUnit.SECONDS)
                 .contains("Explain the selected code."));
-        // Its keyboard shortcut (Ctrl+Alt+K; on a Mac, the keymap's own) is its own: no
+        // Its keyboard shortcut (Ctrl+Alt+Shift+K; on a Mac, the keymap's own) is its own: no
         // action of the IDE's has it in the keymap in use.
         step("Ask About Selection's shortcut is its own: " + ui(() -> {
             Keymap keymap = KeymapManager.getInstance().getActiveKeymap();

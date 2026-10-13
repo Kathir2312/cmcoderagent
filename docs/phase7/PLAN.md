@@ -10,10 +10,11 @@ Its guide is [../guides/intellij.md](../guides/intellij.md).
 
 Open points:
 
-- The guide has no screenshots yet: the gate takes them (`gate-screenshots-*`
-  artifacts), but they couldn't be downloaded into this environment.
-- Rider runs only the Plugin Verifier, not the live gate: Rider needs a
-  license to start. Phase 6 is complete ([../phase6/STATUS.md](../phase6/STATUS.md)); this
+- The guide's screenshots (`docs/guides/screenshots/intellij-1-chat.png`,
+  `-2-diff`, `-3-navigator`) are to be committed from the release build's
+  `gate-screenshots-*` artifact; this environment can't download artifacts.
+- Rider: the Plugin Verifier only (decided 13 Oct). Rider needs a license
+  to start, so it doesn't run the live gate. Phase 6 is complete ([../phase6/STATUS.md](../phase6/STATUS.md)); this
 phase adds the IDE family Phase 6 dropped.
 
 > **Note: developers' PCs may not have Python installed** (nor uv, pip or
@@ -231,6 +232,8 @@ Plus:
   the file per platform, installing from disk, first-time setup, the chat,
   reviewing a change, everyday actions, settings, project trust, updating
   and fixes. The guides' index, setup, images, troubleshooting, admin guide
-  and README name it. The gate also checks that Ctrl+Alt+K (Ask About
-  Selection) belongs to no other action in the IDE's keymap. Screenshots
-  are still to come (see Status).
+  and README name it. The gate also checks that Ask About Selection's
+  shortcut belongs to no other action in the IDE's keymap: it found Ctrl+Alt+K
+  is Commit and Push in JetBrains IDEs, so the plugin uses Ctrl+Alt+Shift+K
+  there (decided 13 Oct). Screenshots: the guide links them; they are added
+  from the release build's `gate-screenshots-*` artifact (see Status).

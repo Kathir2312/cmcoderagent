@@ -47,7 +47,7 @@
               text="Ask @productInMenu@ About Selection"
               description="Open the chat with the selected code and a prompt to finish">
         <add-to-group group-id="EditorPopupMenu" anchor="last"/>
-        <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt K"/>
+        <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt shift K"/>
       </action>
       <action id="cmcoder.NewConversation" class="cmcoder.idea.Actions$NewConversation"
               text="New @productInMenu@ Conversation"/>

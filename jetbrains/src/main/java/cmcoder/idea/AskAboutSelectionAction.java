@@ -11,7 +11,7 @@ import com.intellij.openapi.project.Project;
 
 import cmcoder.ide.core.Host;
 
-/** "Ask cmcoder About Selection" in the editor's menu and on Ctrl+Alt+K (H14): the chat, with a prompt to finish. The text, with the brand's name, is in plugin.xml. */
+/** "Ask cmcoder About Selection" in the editor's menu and on Ctrl+Alt+Shift+K (H14; Ctrl+Alt+K is Commit and Push in JetBrains IDEs): the chat, with a prompt to finish. The text, with the brand's name, is in plugin.xml. */
 public final class AskAboutSelectionAction extends AnAction implements DumbAware {
     @Override
     public void actionPerformed(@NotNull AnActionEvent e) {

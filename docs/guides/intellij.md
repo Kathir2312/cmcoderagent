@@ -5,6 +5,8 @@ file works in **IntelliJ IDEA** (Community or Ultimate), **PyCharm**,
 **Rider**, **WebStorm**, **GoLand**, **PhpStorm**, **CLion**, **RubyMine** and
 **Android Studio**. You don't need Python or the terminal package.
 
+![The cmcoder chat in IntelliJ IDEA](screenshots/intellij-1-chat.png)
+
 ## What you need
 
 | | |
@@ -87,11 +89,13 @@ answer in the chat: **Allow**, **Always allow** (this kind of action in this
 project, from now on) or **Deny** (with a note telling cmcoder what to do
 instead). Closing the window answers nothing: the chat still asks.
 
+![A proposed change in IntelliJ IDEA's diff viewer](screenshots/intellij-2-diff.png)
+
 ### Everyday actions
 
 | To | Do |
 |---|---|
-| Ask about some code | select it, then **Ctrl+Alt+K** (Mac: **⌥⌘K**) or right-click → **Ask cmcoder About Selection** |
+| Ask about some code | select it, then **Ctrl+Alt+Shift+K** (Mac: **⌥⇧⌘K**; not Ctrl+Alt+K as in the other IDEs, which is Commit and Push here) or right-click → **Ask cmcoder About Selection** |
 | See what goes with your message | the 📎 line above the input: the open file, the selection and its problems. Untick it to leave them out once |
 | Show an image (a screenshot, an error dialog) | **Ctrl+V** in the input, drop the file on the chat, or the **Image** button ([images.md](images.md)) |
 | Stop cmcoder | **Esc**, **Stop**, or **Tools → cmcoder → Stop cmcoder** |
@@ -105,6 +109,10 @@ instead). Closing the window answers nothing: the chat still asks.
 
 All of these are under **Tools → cmcoder** too, and in **Find Action**
 (**Ctrl+Shift+A**, Mac: **⇧⌘A**): type "cmcoder".
+
+![The Agent Navigator in IntelliJ IDEA](screenshots/intellij-3-navigator.png)
+
+*The Agent Navigator: the current turn and any helpers it started.*
 
 Closing the chat stops cmcoder; opening it starts a new one. Your
 conversations are kept (**History**).
@@ -148,7 +156,7 @@ Deployment → Trusted Locations**, then reopen the chat.
 | "Plugin … is incompatible" / not compatible with this version | the IDE is older than 2024.2: update the IDE |
 | The chat says the IDE's runtime has no built-in browser (JCEF) | **Help → Find Action → "Choose Boot Java Runtime for the IDE"**, pick a JetBrains Runtime with JCEF, restart |
 | The program can't start | empty **cmcoder program** in the settings; or the file is another platform's: install the one for your computer |
-| **Ctrl+Alt+K** does something else | another plugin or your keymap uses it: **Settings → Keymap**, search "Ask cmcoder", **Add Keyboard Shortcut** |
+| **Ctrl+Alt+Shift+K** does something else | another plugin or your keymap uses it: **Settings → Keymap**, search "Ask cmcoder", **Add Keyboard Shortcut** |
 | "Can't reach the gateway" | connect the VPN; check `baseUrl` in your settings file |
 | "No API key" / 401 | run `login` again (step 3); keys expire |
 | Certificate error | add your company's root certificate: [setup.md](setup.md) |
