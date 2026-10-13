@@ -8,10 +8,12 @@ remote server. See [docs/DESIGN.md](docs/DESIGN.md) for the architecture and roa
 [docs/README.md](docs/README.md) for the per-phase plans and code guides (for Python developers and for
 LangChain/LangGraph developers).
 
-> Status: **Phases 0–6 complete** (Windows, macOS and Linux): the terminal and TUI, VS Code, extensibility (MCP,
-> hooks, skills, subagents), hardening (sandbox, standalone build, both gateways), code search, and Visual Studio, Eclipse and NetBeans.
+> Status: **Phases 0–7 complete** (Windows, macOS and Linux): the terminal and TUI, VS Code, extensibility (MCP,
+> hooks, skills, subagents), hardening (sandbox, standalone build, both gateways), code search, Visual Studio, Eclipse and
+> NetBeans, and IntelliJ IDEA and the other JetBrains IDEs.
 > **Install and use** (terminal, VS Code, Eclipse, NetBeans, IntelliJ IDEA and the other JetBrains IDEs; no Python needed on the PC): [docs/guides/](docs/guides/README.md).
-> **Phase 6 (Visual Studio, Eclipse, NetBeans) is complete**: [docs/phase6/STATUS.md](docs/phase6/STATUS.md).
+> **Phase 6 (Visual Studio, Eclipse, NetBeans)**: [docs/phase6/STATUS.md](docs/phase6/STATUS.md). **Phase 7 (IntelliJ IDEA,
+> PyCharm, Rider and the other JetBrains IDEs)**: [docs/phase7/PLAN.md](docs/phase7/PLAN.md).
 
 ## Install
 

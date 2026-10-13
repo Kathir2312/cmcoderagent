@@ -1,10 +1,19 @@
 # Phase 7 — IntelliJ-based IDEs: plan
 
-**Status:** in progress (12 October 2026). Items 1–5 done: the whole host
-builds, passes the Plugin Verifier on 2024.2 and 2026.2, and passes the
-release gate in a real IntelliJ IDEA on Windows, macOS and Linux (the release
-build, each platform's cmcoder inside) and in PyCharm. Next: item 6, the
-release bundle. Phase 6 is complete ([../phase6/STATUS.md](../phase6/STATUS.md)); this
+**Status:** complete (13 October 2026), with two open points below. The
+plugin builds and passes the Plugin Verifier on 2024.2, the newest IntelliJ
+IDEA and the newest Rider. It passes the release gate in a real IntelliJ IDEA
+on Windows, macOS and Linux (in the release build, each platform's cmcoder
+inside) and in PyCharm. It is in the release bundle and has passed its
+security review ([../security/scan-2026-10-13.md](../security/scan-2026-10-13.md)).
+Its guide is [../guides/intellij.md](../guides/intellij.md).
+
+Open points:
+
+- The guide has no screenshots yet: the gate takes them (`gate-screenshots-*`
+  artifacts), but they couldn't be downloaded into this environment.
+- Rider runs only the Plugin Verifier, not the live gate: Rider needs a
+  license to start. Phase 6 is complete ([../phase6/STATUS.md](../phase6/STATUS.md)); this
 phase adds the IDE family Phase 6 dropped.
 
 > **Note: developers' PCs may not have Python installed** (nor uv, pip or
@@ -202,6 +211,26 @@ Plus:
   fresh profile it shows the license dialog and closes), so the Plugin
   Verifier checks the newest Rider instead; a license kept as a CI secret
   would let the gate run there too.)
-- [ ] 6. Release bundle, versions, dependency scanning
-- [ ] 7. Security review
-- [ ] 8. Docs
+- [x] 6. Release bundle, versions, dependency scanning (13 Oct: the bundle
+  has `jetbrains/cmcoder-jetbrains-<platform>.zip`, and there is no bundle
+  without all three. README-FIRST says how to install it in any JetBrains
+  IDE. The gate report lists the release build's IntelliJ check and what
+  isn't tested: 2024.2 only on Linux, PyCharm in CI, Rider by the verifier.
+  The version is in `tests/test_versions.py`. Gradle dependency locking:
+  `gradle.lockfile` shows the plugin ships no third-party library, and
+  `buildscript-gradle.lockfile` pins the build's 73 tools for osv-scanner.
+  CI fails if the lock files aren't current.)
+- [x] 7. Security review (13 Oct, [scan-2026-10-13.md](../security/scan-2026-10-13.md)).
+  The JCEF page's hardening was checked against the code and the gate.
+  SpotBugs + FindSecBugs now run in CI, failing on any security finding not
+  reviewed: of 11, one was fixed and 10 are listed with reasons in
+  `jetbrains/spotbugs/reviewed.xml`. osv-scanner found vulnerable jackson
+  and jsoup in the build's tools (fixed by pinning) and an undertow flaw
+  with no fix, which builds can't reach (skipped until 2027-01-13).
+- [x] 8. Docs (13 Oct). `docs/guides/intellij.md` covers what's needed,
+  the file per platform, installing from disk, first-time setup, the chat,
+  reviewing a change, everyday actions, settings, project trust, updating
+  and fixes. The guides' index, setup, images, troubleshooting, admin guide
+  and README name it. The gate also checks that Ctrl+Alt+K (Ask About
+  Selection) belongs to no other action in the IDE's keymap. Screenshots
+  are still to come (see Status).
