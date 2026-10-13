@@ -94,12 +94,15 @@ The bundle is made **only if every check passed**.
 You need one build machine per platform: Windows x64, an Apple silicon Mac
 and Linux x64. You also need all the tools from the package pages.
 
-1. On each platform, build that platform's packages, following each page:
-   [cli.md](cli.md), [vscode.md](vscode.md), [netbeans.md](netbeans.md) and
-   [intellij.md](intellij.md); on Windows also
+1. On each platform, build that platform's packages:
+   `packaging\package-all.ps1` on Windows, `bash packaging/package-all.sh`
+   on macOS and Linux ([README.md](README.md#one-command-per-package)), or
+   one by one following each page: [cli.md](cli.md), [vscode.md](vscode.md),
+   [netbeans.md](netbeans.md) and [intellij.md](intellij.md); on Windows also
    [visualstudio.md](visualstudio.md). Install each one on a test PC without
    Python, as each page's check section says.
-2. Build [eclipse.md](eclipse.md) once, from the three platforms' cmcoder.
+2. Build [eclipse.md](eclipse.md) once, from the three platforms' cmcoder
+   (`packaging/package-eclipse.sh` or `.ps1`).
 3. Collect the files in this layout (the folder names are what
    `packaging/bundle.py` reads). Here for Windows; the same for
    `darwin-arm64` and `linux-x64`:
@@ -108,11 +111,11 @@ and Linux x64. You also need all the tools from the package pages.
    artifacts/
      cmcoder-terminal-win32-x64/cmcoder-win32-x64.zip          (dist/terminal/…)
      cmcoder-win32-x64.vsix/cmcoder-win32-x64.vsix             (vscode/…)
-     cmcoder-netbeans-win32-x64.nbm/cmcoder-netbeans-win32-x64.nbm
-     cmcoder-jetbrains-win32-x64.zip/cmcoder-jetbrains-win32-x64.zip
+     cmcoder-netbeans-win32-x64.nbm/cmcoder-netbeans-win32-x64.nbm     (dist/…)
+     cmcoder-jetbrains-win32-x64.zip/cmcoder-jetbrains-win32-x64.zip   (dist/…)
      gate-win32-x64/gate-win32-x64.txt                          (see below)
-     cmcoder-visualstudio.vsix/cmcoder-visualstudio.vsix       (Windows only)
-     cmcoder-eclipse/cmcoder-eclipse-0.2.0.zip                  (once)
+     cmcoder-visualstudio.vsix/cmcoder-visualstudio.vsix       (Windows only; dist/cmcoder-visualstudio-win32-x64.vsix, renamed)
+     cmcoder-eclipse/cmcoder-eclipse-0.2.0.zip                  (once; eclipse/site/target/…)
    ```
 
    `gate-<platform>.txt` lists, one per line, what you checked on that

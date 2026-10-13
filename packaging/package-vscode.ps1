@@ -21,11 +21,12 @@ with it (and the brand in branding\), and checks cmcoder.exe is in the file.
 
     -SkipTests   don't run the built cmcoder before packaging (faster); also
                  goes on when git can't name the build ("unknown")
+    -UseBuilt    use dist\cmcoder from an earlier run (built and checked then)
 
 The other "cmcoder.vsix" (npm run package, or CI's cmcoder-vsix artifact)
 has no cmcoder inside: it's for testing on PCs that have cmcoder already.
 #>
-param([switch]$SkipTests)
+param([switch]$SkipTests, [switch]$UseBuilt)
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
@@ -67,12 +68,16 @@ if ($LASTEXITCODE -ne 0) {
     Write-Warning "$why`nGoing on (-SkipTests): the build will say 'unknown' instead of its commit."
 }
 
-Step "Python environment for the build (uv)" $root { uv sync --python 3.12 }
-Step "Standalone cmcoder (PyInstaller)" $root { uv run --with pyinstaller python packaging/build.py }
 $exe = Join-Path $root "dist\cmcoder\cmcoder.exe"
-if (-not (Test-Path $exe)) { throw "The build made no $exe" }
+if ($UseBuilt) {
+    if (-not (Test-Path $exe)) { throw "-UseBuilt: there's no $exe (run without -UseBuilt)" }
+} else {
+    Step "Python environment for the build (uv)" $root { uv sync --python 3.12 }
+    Step "Standalone cmcoder (PyInstaller)" $root { uv run --with pyinstaller python packaging/build.py }
+    if (-not (Test-Path $exe)) { throw "The build made no $exe" }
+}
 
-if (-not $SkipTests) {
+if (-not $SkipTests -and -not $UseBuilt) {
     $env:CMCODER_TEST_BINARY = $exe
     $env:CMCODER_TEST_NO_PYTHON = "1"
     try {

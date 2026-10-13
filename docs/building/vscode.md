@@ -63,7 +63,10 @@ The script does what the Release build does for this platform:
 The output is `vscode/cmcoder-<platform>.vsix`.
 
 `-SkipTests` (Windows) or `--skip-tests` leaves out step 3. Use it only
-while trying things: a release should always pass it.
+while trying things: a release should always pass it. `-UseBuilt` or
+`--use-built` uses `dist/cmcoder` from an earlier run instead of building it
+again. To build every package for this platform in one go, use `package-all`
+([README.md](README.md#one-command-per-package)).
 
 ### The same steps by hand
 

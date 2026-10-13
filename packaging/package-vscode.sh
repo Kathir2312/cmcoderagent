@@ -6,7 +6,7 @@
 #
 # Run it on a build machine (not the developers'), in the repository:
 #
-#     bash packaging/package-vscode.sh [--skip-tests]
+#     bash packaging/package-vscode.sh [--skip-tests] [--use-built]
 #
 # The build machine needs uv (https://docs.astral.sh/uv/; it downloads its own
 # Python 3.12 if there's none), Node.js 22 or newer, and git with the repository
@@ -18,13 +18,18 @@
 #
 # The other "cmcoder.vsix" (npm run package, or CI's cmcoder-vsix artifact) has
 # no cmcoder inside: it's for testing on machines that have cmcoder already.
+#
+#   --skip-tests  leave out the test run (try-outs only, never for release)
+#   --use-built   use dist/cmcoder from an earlier run (built and checked then)
 set -euo pipefail
 
 skip_tests=0
+use_built=0
 for arg in "$@"; do
   case "$arg" in
     --skip-tests) skip_tests=1 ;;
-    -h|--help) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --use-built) use_built=1 ;;
+    -h|--help) awk 'NR > 1 && !/^#/ { exit } NR > 1 { sub(/^# ?/, ""); print }' "$0"; exit 0 ;;
     *) echo "unknown option: $arg (see --help)" >&2; exit 2 ;;
   esac
 done
@@ -64,14 +69,18 @@ if ! commit="$(git -C "$root" rev-parse --short=7 HEAD 2>&1)"; then
   printf 'WARNING: %s\nGoing on (--skip-tests): the build will say "unknown" instead of its commit.\n' "$why" >&2
 fi
 
-step "Python environment for the build (uv)"
-uv sync --python 3.12
-step "Standalone cmcoder (PyInstaller)"
-uv run --with pyinstaller python packaging/build.py
 exe="$root/dist/cmcoder/cmcoder"
-[ -x "$exe" ] || { echo "The build made no $exe" >&2; exit 1; }
+if [ "$use_built" = 1 ]; then
+  [ -x "$exe" ] || { echo "--use-built: there's no $exe (run without --use-built)" >&2; exit 1; }
+else
+  step "Python environment for the build (uv)"
+  uv sync --python 3.12
+  step "Standalone cmcoder (PyInstaller)"
+  uv run --with pyinstaller python packaging/build.py
+  [ -x "$exe" ] || { echo "The build made no $exe" >&2; exit 1; }
+fi
 
-if [ "$skip_tests" = 0 ]; then
+if [ "$skip_tests" = 0 ] && [ "$use_built" = 0 ]; then
   step "cmcoder, run as developers run it (no Python in reach)"
   CMCODER_TEST_BINARY="$exe" CMCODER_TEST_NO_PYTHON=1 uv run pytest -q tests/test_standalone.py
 fi

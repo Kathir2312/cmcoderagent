@@ -63,8 +63,53 @@ your own. See [release.md](release.md).
 
 **B. On your own build machine.** Use this to build one package for one
 platform, for example to try a branding change or to build inside a network
-that GitHub can't reach. Follow the package's page. Before handing the file
-out, install it on a test PC without Python (each page says how).
+that GitHub can't reach. Each package has a one-command script (below); the
+package's page lists what the build machine needs and the same steps by
+hand. Before handing the file out, install it on a test PC without Python
+(each page says how).
+
+## One command per package
+
+Run these in the repository (a git clone), on the platform you build for.
+Each does what the Release build does for its file: builds the standalone
+cmcoder, runs it with no Python in reach, builds the chat page, makes the
+package with cmcoder inside, checks the program really is in the file, and
+prints the file's path and SHA256.
+
+| Package | Windows (PowerShell) | macOS, Linux | Makes |
+|---|---|---|---|
+| Terminal | `packaging\package-terminal.ps1` | `packaging/package-terminal.sh` | `dist/cmcoder-terminal-<platform>.zip` |
+| VS Code | `packaging\package-vscode.ps1` | `packaging/package-vscode.sh` | `vscode/cmcoder-<platform>.vsix` |
+| Visual Studio | `packaging\package-visualstudio.ps1` | — | `dist\cmcoder-visualstudio-win32-x64.vsix` |
+| NetBeans | `packaging\package-netbeans.ps1` | `packaging/package-netbeans.sh` | `dist/cmcoder-netbeans-<platform>.nbm` |
+| JetBrains | `packaging\package-jetbrains.ps1` | `packaging/package-jetbrains.sh` | `dist/cmcoder-jetbrains-<platform>.zip` |
+| Eclipse (all platforms in one file) | `packaging\package-eclipse.ps1` | `packaging/package-eclipse.sh` | `dist/cmcoder-eclipse.zip` |
+| **Every package above but Eclipse** | `packaging\package-all.ps1` | `packaging/package-all.sh` | all of them, cmcoder built once |
+
+Run the `.ps1` scripts with `powershell -ExecutionPolicy Bypass -File …`
+and the `.sh` scripts with `bash …`. What each one needs is at the top of
+the script (`--help` prints it for the `.sh` ones). The options:
+
+| Windows / macOS, Linux | What it does |
+|---|---|
+| `-SkipTests` / `--skip-tests` | leaves out the test runs. Only for try-outs: a release always passes them |
+| `-UseBuilt` / `--use-built` | uses `dist/cmcoder` from an earlier run instead of building it again |
+| `-Only terminal,vscode` / `--only terminal,vscode` | `package-all` only: just these packages, for a build machine that lacks some packages' tools |
+
+The Eclipse script also takes the other platforms' cmcoder: see
+[eclipse.md](eclipse.md#the-quick-way-one-command).
+
+For example, everything for Windows on a build PC with all the tools:
+
+```
+powershell -ExecutionPolicy Bypass -File packaging\package-all.ps1
+```
+
+or, on a Mac without Gradle:
+
+```
+bash packaging/package-all.sh --only terminal,vscode,netbeans
+```
 
 ## Before the first build: your company's details
 

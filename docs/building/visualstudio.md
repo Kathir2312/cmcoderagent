@@ -35,6 +35,37 @@ Use a git clone (the build is named after its commit). Put your company's
 details in `branding/` first
 ([README.md](README.md#before-the-first-build-your-companys-details)).
 
+## The quick way: one command
+
+```
+powershell -ExecutionPolicy Bypass -File packaging\package-visualstudio.ps1
+```
+
+The script does sections 3 to 5 in one go, as the Release build does:
+
+1. checks the tools (Visual Studio 2022, Node.js 22) and that git can name
+   the build;
+2. builds the standalone cmcoder and runs it with no Python in reach;
+3. builds the shared chat page;
+4. puts a fresh copy of cmcoder into the extension and builds it with
+   `visualstudio\build-vsix.ps1`;
+5. checks `cmcoder.exe` and the chat page are inside the file, and prints
+   the file's path and SHA256.
+
+The output is `dist\cmcoder-visualstudio-win32-x64.vsix`. Then go on with
+section 6.
+
+| Option | What it does |
+|---|---|
+| `-SkipTests` | leaves out the test run. Only for try-outs: a release always passes it |
+| `-UseBuilt` | uses `dist\cmcoder` from an earlier run (built and checked then) instead of building it again |
+
+`packaging\package-all.ps1` builds this and the other Windows packages in
+one go ([README.md](README.md#one-command-per-package)).
+
+Sections 3 to 5 are the same steps by hand, for when you can't run the
+script.
+
 ## 3. Build cmcoder and check it without Python
 
 ```

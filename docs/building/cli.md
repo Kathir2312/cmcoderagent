@@ -52,6 +52,38 @@ commit, and the build is then named `unknown`. On Windows, if git says
 Put your company's details in `branding/` first if you have them
 ([README.md](README.md#before-the-first-build-your-companys-details)).
 
+## The quick way: one command
+
+```
+# Windows (PowerShell)
+powershell -ExecutionPolicy Bypass -File packaging\package-terminal.ps1
+
+# macOS, Linux
+bash packaging/package-terminal.sh
+```
+
+The script does sections 3 to 5 in one go, as the Release build does:
+
+1. checks that git can name the build (and says how to fix it if not);
+2. builds the standalone cmcoder with PyInstaller;
+3. runs it with no Python in reach (`tests/test_standalone.py`);
+4. packs the terminal package and tests it (`tests/test_terminal_package.py`;
+   on Windows the installer part runs only in CI, as section 5 says);
+5. checks `cmcoder` is inside the file, and prints the file's path and SHA256.
+
+The output is `dist/cmcoder-terminal-<platform>.zip`, already named for
+release. Then go on with section 6.
+
+| Option (Windows / macOS, Linux) | What it does |
+|---|---|
+| `-SkipTests` / `--skip-tests` | leaves out the test runs. Only for try-outs: a release always passes them |
+| `-UseBuilt` / `--use-built` | uses `dist/cmcoder` from an earlier run (built and checked then) instead of building it again |
+
+To build every package for this platform in one go, use `package-all`
+([README.md](README.md#one-command-per-package)).
+
+Sections 3 to 5 are the same steps by hand, for when you can't run the script.
+
 ## 3. Build cmcoder
 
 ```

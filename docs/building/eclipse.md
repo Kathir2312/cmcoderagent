@@ -64,6 +64,55 @@ Release build → the run → Artifacts**): `cmcoder-win32-x64`,
 wraps each in a `.zip`: unzip each into a folder of its own (the zip drops
 the executable mark; step 4's `chmod` puts it back).
 
+## The quick way: one command
+
+With the other platforms' cmcoder from section 3 (folders, or the Release
+build's zips as downloaded), one command does sections 4 and 5 and the first
+check of section 6. The build machine's own platform may be left out: the
+script then builds its cmcoder there and runs it with no Python in reach.
+
+```
+# Windows (PowerShell)
+powershell -ExecutionPolicy Bypass -File packaging\package-eclipse.ps1 `
+    -DarwinArm64 C:\path\to\cmcoder-darwin-arm64.zip -LinuxX64 C:\path\to\cmcoder-linux-x64.zip
+
+# Linux (on a Mac: --win32-x64 and --linux-x64)
+bash packaging/package-eclipse.sh \
+    --win32-x64 /path/to/cmcoder-win32-x64.zip --darwin-arm64 /path/to/cmcoder-darwin-arm64.zip
+```
+
+Each of `-Win32X64`, `-DarwinArm64`, `-LinuxX64` (or `--win32-x64`,
+`--darwin-arm64`, `--linux-x64`) takes a `dist/cmcoder` folder or a zip of
+one. The script:
+
+1. checks the tools (Node.js 22, JDK 21, Maven 3.9+) and that git can name
+   the build;
+2. builds this platform's cmcoder, unless you gave it;
+3. builds the shared chat page;
+4. puts each platform's cmcoder into its fragment (links copied as files,
+   the executable mark set; on Windows the plugin sets it the first time it
+   starts);
+5. builds the archive with `mvn -B -DskipTests verify`;
+6. checks every platform's cmcoder is inside, and prints the file's path
+   and SHA256;
+7. empties the fragments again, so no copy is left for the next build.
+
+The output is `dist/cmcoder-eclipse.zip`. Then install it on a test PC
+(section 6, step 2).
+
+It stops if a platform's cmcoder is missing. For a try-out with this
+platform's cmcoder only, add `-OnePlatform` (`--one-platform`): the file is
+then named `cmcoder-eclipse-TRYOUT-<platform>-only.zip`. Don't hand that one
+out: on the other platforms the plugin would look for cmcoder on PATH.
+
+| Option (Windows / macOS, Linux) | What it does |
+|---|---|
+| `-SkipTests` / `--skip-tests` | leaves out the test runs. Only for try-outs: a release always passes them |
+| `-UseBuilt` / `--use-built` | uses `dist/cmcoder` from an earlier run (built and checked then) instead of building it again |
+
+Sections 4 and 5 are the same steps by hand, for when you can't run the
+script.
+
 ## 4. Put each cmcoder into its fragment
 
 The fragments are named after Eclipse's platform names:

@@ -48,6 +48,40 @@ Use a git clone (the build is named after its commit). Put your company's
 details in `branding/` first: the plugin's name, vendor, menus and icons
 come from it ([README.md](README.md#before-the-first-build-your-companys-details)).
 
+## The quick way: one command
+
+```
+# Windows (PowerShell)
+powershell -ExecutionPolicy Bypass -File packaging\package-jetbrains.ps1
+
+# macOS, Linux
+bash packaging/package-jetbrains.sh
+```
+
+The script does sections 3 and 4 and the first check of section 5, as the
+Release build does:
+
+1. checks the tools (Node.js 22, JDK 21, Gradle 9+) and that git can name the
+   build;
+2. builds the standalone cmcoder and runs it with no Python in reach;
+3. builds the shared chat page;
+4. builds the plugin with cmcoder inside (`-PcmcoderDir`); the first build
+   downloads the IntelliJ Platform, about 1 GB;
+5. checks `cmcoder` and the chat page are inside the file, and prints the
+   file's path and SHA256.
+
+The output is `dist/cmcoder-jetbrains-<platform>.zip`, the plugin for every
+JetBrains IDE on that platform. Then install it on a test PC (section 5,
+step 2).
+
+| Option (Windows / macOS, Linux) | What it does |
+|---|---|
+| `-SkipTests` / `--skip-tests` | leaves out the test runs. Only for try-outs: a release always passes them |
+| `-UseBuilt` / `--use-built` | uses `dist/cmcoder` from an earlier run (built and checked then) instead of building it again |
+
+Sections 3 and 4 are the same steps by hand, for when you can't run the
+script.
+
 ## 3. Build cmcoder and check it without Python
 
 ```

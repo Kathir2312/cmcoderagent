@@ -51,6 +51,40 @@ Use a git clone (the build is named after its commit). Put your company's
 details in `branding/` first
 ([README.md](README.md#before-the-first-build-your-companys-details)).
 
+## The quick way: one command
+
+```
+# Windows (PowerShell)
+powershell -ExecutionPolicy Bypass -File packaging\package-netbeans.ps1
+
+# macOS, Linux
+bash packaging/package-netbeans.sh
+```
+
+The script does sections 3 and 4 and the first check of section 5, as the
+Release build does:
+
+1. checks the tools (Node.js 22, a JDK 17 or newer, Maven 3.9+) and that git
+   can name the build;
+2. builds the standalone cmcoder and runs it with no Python in reach;
+3. builds the shared chat page;
+4. puts a fresh copy of cmcoder in `netbeans/bin/cmcoder` and builds the
+   `.nbm` for this platform (the `-Dplatform=` from the table above);
+5. checks `cmcoder` and the chat page are inside the file (the Maven build
+   alone would make a file without cmcoder, silently, if the copy were
+   missing), and prints the file's path and SHA256.
+
+The output is `dist/cmcoder-netbeans-<platform>.nbm`. Then install it on a
+test PC (section 5, step 2).
+
+| Option (Windows / macOS, Linux) | What it does |
+|---|---|
+| `-SkipTests` / `--skip-tests` | leaves out the test runs. Only for try-outs: a release always passes them |
+| `-UseBuilt` / `--use-built` | uses `dist/cmcoder` from an earlier run (built and checked then) instead of building it again |
+
+Sections 3 and 4 are the same steps by hand, for when you can't run the
+script.
+
 ## 3. Build cmcoder and check it without Python
 
 ```
