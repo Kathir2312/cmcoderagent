@@ -1,7 +1,12 @@
 # cmcoder documentation
 
-**Installing and using cmcoder** (terminal, VS Code, Eclipse, NetBeans; no Python
-needed): [guides/](guides/README.md).
+**Installing and using cmcoder** (terminal, VS Code, Visual Studio, Eclipse,
+NetBeans, IntelliJ IDEA and the other JetBrains IDEs; no Python needed):
+[guides/](guides/README.md).
+
+**Building, packing and releasing** each package (build-machine
+prerequisites, packing with cmcoder inside, the release bundle, installing on
+developers' PCs): [building/](building/README.md).
 
 The code lives in one place (`src/cmcoder/`) and grows phase by phase. Each
 finished phase is frozen as a git snapshot, and its documents are frozen in

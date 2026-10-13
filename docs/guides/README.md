@@ -70,4 +70,5 @@ GitHub wraps every download in a `.zip`, unzip it once). Pick your platform: `wi
 Updates are new files: install the new one over the old one.
 
 Administrators (building, the gate report, handing out the files, managed
-settings): [admin.md](admin.md).
+settings): [admin.md](admin.md). Building each package step by step, with what
+the build machine needs: [../building/](../building/README.md).

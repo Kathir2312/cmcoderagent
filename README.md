@@ -12,6 +12,7 @@ LangChain/LangGraph developers).
 > hooks, skills, subagents), hardening (sandbox, standalone build, both gateways), code search, Visual Studio, Eclipse and
 > NetBeans, and IntelliJ IDEA and the other JetBrains IDEs.
 > **Install and use** (terminal, VS Code, Eclipse, NetBeans, IntelliJ IDEA and the other JetBrains IDEs; no Python needed on the PC): [docs/guides/](docs/guides/README.md).
+> **Build, pack and release** each package (build-machine prerequisites, the release bundle): [docs/building/](docs/building/README.md).
 > **Phase 6 (Visual Studio, Eclipse, NetBeans)**: [docs/phase6/STATUS.md](docs/phase6/STATUS.md). **Phase 7 (IntelliJ IDEA,
 > PyCharm, Rider and the other JetBrains IDEs)**: [docs/phase7/PLAN.md](docs/phase7/PLAN.md).
 

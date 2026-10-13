@@ -4,6 +4,12 @@ Everything developers install is built by GitHub Actions in this repository,
 tested in the real IDEs, and collected into one **release bundle**. You hand
 out that bundle (or the files in it); developers need no Python.
 
+Step-by-step pages for each package (what the build machine needs, building
+and packing it with cmcoder inside, releasing it, installing it on developers'
+PCs) are in [../building/](../building/README.md): the terminal package
+([cli.md](../building/cli.md)), VS Code, Visual Studio, Eclipse, NetBeans, the
+JetBrains IDEs, and the release bundle ([release.md](../building/release.md)).
+
 ## 1. Before the first release: your company's details
 
 | What | Where | Notes |
@@ -143,6 +149,8 @@ server for a team". Read the security notes there first. Developers can
 also run Chroma on their own PC by its URL ([code-search.md](code-search.md)).
 
 ## 7. Build the VS Code file yourself (without the Release workflow)
+
+(The other packages, built by hand: [../building/](../building/README.md).)
 
 When you need just the VS Code extension, for example to try a branding
 change, build it on a build PC with one command. Developers' PCs need nothing
