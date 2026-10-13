@@ -10,7 +10,7 @@ Run it on a build PC (not the developers'), in the repository:
 
 The build PC needs uv (https://docs.astral.sh/uv/), Node.js 22, a JDK 17 or
 newer (21 recommended), Maven 3.9+ and Git for Windows, with the repository
-as a git clone. docs\building\netbeans.md has the details.
+as a git clone. docs\build-package\netbeans.md has the details.
 
 It does what the Release workflow does for this file: builds cmcoder with
 PyInstaller, runs it with no Python in reach, builds the chat page, puts

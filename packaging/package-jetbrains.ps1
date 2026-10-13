@@ -10,7 +10,7 @@ Run it on a build PC (not the developers'), in the repository:
 
 The build PC needs uv (https://docs.astral.sh/uv/), Node.js 22, JDK 21,
 Gradle 9.8.1, access to JetBrains' servers and Git for Windows, with the
-repository as a git clone. docs\building\intellij.md has the details.
+repository as a git clone. docs\build-package\intellij.md has the details.
 
 It does what the Release workflow does for this file: builds cmcoder with
 PyInstaller, runs it with no Python in reach, builds the chat page, builds the

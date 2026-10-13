@@ -44,7 +44,7 @@ Then: `code --install-extension cmcoder.vsix --force` (or Extensions view →
 ## 3. Make the test project
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File docs\phase3\try-phase3.ps1
+powershell -ExecutionPolicy Bypass -File docs\project\phases\phase3\try-phase3.ps1
 ```
 
 It makes `%TEMP%\cmcoder-phase3` (or the folder you give with `-Path`) with:

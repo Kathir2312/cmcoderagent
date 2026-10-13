@@ -9,15 +9,19 @@
   unless you already have one with that name. Nothing else is changed.
 
 .EXAMPLE
-  powershell -ExecutionPolicy Bypass -File docs\phase3\try-phase3.ps1
+  powershell -ExecutionPolicy Bypass -File docs\project\phases\phase3\try-phase3.ps1
 
 .EXAMPLE
-  powershell -ExecutionPolicy Bypass -File docs\phase3\try-phase3.ps1 -Path C:\temp\p3test
+  powershell -ExecutionPolicy Bypass -File docs\project\phases\phase3\try-phase3.ps1 -Path C:\temp\p3test
 #>
 param([string]$Path = (Join-Path $env:TEMP "cmcoder-phase3"))
 
 $ErrorActionPreference = "Stop"
-$Repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+# The repository: the nearest folder above this script with pyproject.toml
+# (so the script keeps working wherever docs/ puts it).
+$Repo = $PSScriptRoot
+while ($Repo -and -not (Test-Path (Join-Path $Repo "pyproject.toml"))) { $Repo = Split-Path -Parent $Repo }
+if (-not $Repo) { throw "Run this script from inside the cmcoder repository." }
 $Marker = ".cmcoder-phase3-test"
 $NoBom = New-Object System.Text.UTF8Encoding($false)
 

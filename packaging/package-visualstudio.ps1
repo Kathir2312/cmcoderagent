@@ -10,7 +10,7 @@ Run it on a build PC (not the developers'), in the repository:
 The build PC needs Visual Studio 2022 with the "Visual Studio extension
 development" workload, uv (https://docs.astral.sh/uv/), Node.js 22 and Git
 for Windows, with the repository as a git clone (the build is named after its
-commit). docs\building\visualstudio.md has the details.
+commit). docs\build-package\visualstudio.md has the details.
 
 It does what the Release workflow does for this file: builds cmcoder with
 PyInstaller, runs it with no Python in reach, builds the chat page, puts

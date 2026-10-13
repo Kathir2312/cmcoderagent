@@ -13,7 +13,7 @@ package-eclipse.ps1 and the three platforms' cmcoder.
 
     powershell -ExecutionPolicy Bypass -File packaging\package-all.ps1 [-SkipTests] [-Only terminal,vscode,...]
 
-The build PC needs what each package's page in docs\building\ lists; -Only
+The build PC needs what each package's page in docs\build-package\ lists; -Only
 leaves out the packages whose tools it doesn't have.
 
     -SkipTests   leave out the test runs (try-outs only, never for release)
