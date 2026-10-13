@@ -1,7 +1,7 @@
 {
   "providers": {
     "corp": {
-      "baseUrl": "https://aiXIngerence.localnw.ae/v1",
+      "baseUrl": "https://ai-gateway.example.com/v1",
       "auth": {
         "type": "apiKey"
       },
