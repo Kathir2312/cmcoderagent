@@ -122,6 +122,7 @@ for p in $platforms; do
 done
 
 step "The update-site archive (the gate test runs in the Release build: it needs a real Eclipse)"
+rm -f eclipse/site/target/cmcoder-eclipse-*.zip # not an earlier build's
 (cd eclipse && mvn -B -DskipTests verify)
 site="$(ls eclipse/site/target/cmcoder-eclipse-*.zip 2>/dev/null | head -n 1 || true)"
 [ -n "$site" ] || die "The build made no eclipse/site/target/cmcoder-eclipse-*.zip"

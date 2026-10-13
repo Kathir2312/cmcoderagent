@@ -103,6 +103,7 @@ try {
     # Windows can't mark the macOS and Linux programs executable: the plugin
     # does it the first time it starts there.
 
+    Remove-Item (Join-Path $root "eclipse\site\target\cmcoder-eclipse-*.zip") -ErrorAction SilentlyContinue # not an earlier build's
     Step "The update-site archive (the gate test runs in the Release build: it needs a real Eclipse)" (Join-Path $root "eclipse") {
         mvn -B "-DskipTests" verify
     }
