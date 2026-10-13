@@ -176,6 +176,7 @@ ide_pid=
 # The report is Json.write's output: {"ok":true,...}, the steps one per line below.
 echo "Result: $(head -c 4000 "$result")" | sed 's/\\n/\n  /g'
 if ! grep -q '"ok":true' "$result"; then
+  show "$result.steps"  # the steps in full (the report above is cut at 4000 characters)
   grep -E 'cmcoder|SEVERE|ERROR' "$work/log/idea.log" 2>/dev/null | tail -60 | sed 's/^/  log: /' || true
   # The IDE saves thread dumps when its UI or write actions stall: the UI thread's stack says why.
   for dump in "$work"/log/*/thread-dump-*.txt "$work"/log/threadDumps-*/*.txt; do
