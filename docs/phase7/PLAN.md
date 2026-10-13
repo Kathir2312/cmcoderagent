@@ -234,6 +234,7 @@ Plus:
   and fixes. The guides' index, setup, images, troubleshooting, admin guide
   and README name it. The gate also checks that Ask About Selection's
   shortcut belongs to no other action in the IDE's keymap: it found Ctrl+Alt+K
-  is Commit and Push in JetBrains IDEs, so the plugin uses Ctrl+Alt+Shift+K
-  there (decided 13 Oct). Screenshots: the guide links them; they are added
+  is Commit and Push in JetBrains IDEs, and the next choice, Ctrl+Alt+Shift+K,
+  is Convert Java to Kotlin; the plugin uses Alt+Shift+K, free in every keymap
+  the gate runs (decided 13 Oct). Screenshots: the guide links them; they are added
   from the release build's `gate-screenshots-*` artifact (see Status).
