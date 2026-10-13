@@ -7,7 +7,8 @@ when all of them are there (each build job passed its gates first).
 DIR holds the downloaded artifacts, one folder per artifact (as
 actions/download-artifact writes them). Output: the bundle folder with
 README-FIRST.txt, GATE-REPORT.md (from the gate-<target> artifacts: what each
-platform's build job ran and passed), SHA256SUMS.txt, the files by IDE, and
+platform's build job ran and passed), SHA256SUMS.txt, the files by IDE
+(terminal, VS Code, Visual Studio, Eclipse, NetBeans, IntelliJ), and
 admin/ for IT: the managed settings and the scripts that install them
 (packaging/admin; the company's branding/managed-settings.json if there is
 one, else the example to fill in).
@@ -56,6 +57,14 @@ def items() -> list[Item]:
                 f"cmcoder-netbeans-{t}.nbm",
                 f"cmcoder-netbeans-{t}.nbm",
                 f"cmcoder-netbeans-{t}.nbm",
+            )
+        )
+        out.append(
+            Item(
+                "jetbrains",
+                f"cmcoder-jetbrains-{t}.zip",
+                f"cmcoder-jetbrains-{t}.zip",
+                f"cmcoder-jetbrains-{t}.zip",
             )
         )
     out.append(
@@ -133,7 +142,12 @@ def gate_report(artifacts: Path, ver: str) -> str:
         "- Visual Studio 2022 itself: GitHub's runner has a newer Visual Studio; the "
         "extension is compiled against the 17.10 SDK.\n"
         "- Older IDE versions on Windows and macOS: Eclipse's oldest supported "
-        "version and NetBeans 28 run on Linux and macOS (Eclipse) or Linux (NetBeans).\n"
+        "version and NetBeans 28 run on Linux and macOS (Eclipse) or Linux (NetBeans), "
+        "IntelliJ IDEA 2024.2 on Linux (in CI, not this build).\n"
+        "- JetBrains IDEs other than IntelliJ IDEA: the same plugin, on the same "
+        "platform. CI runs the gate in PyCharm (Linux); Rider needs a license to "
+        "start, so JetBrains' Plugin Verifier checks it instead; WebStorm, GoLand "
+        "and the others aren't tested separately.\n"
         "- The code search set-up dialogs in the IDEs (the steps behind them are "
         "tested through cmcoder).\n"
     )
@@ -160,6 +174,11 @@ no Python, no Node.js. On Windows, shell commands need Git for Windows.
 
   NetBeans 28+   netbeans/cmcoder-netbeans-<platform>.nbm
                  Tools → Plugins → Downloaded → Add Plugins…, the file.
+
+  IntelliJ IDEA  jetbrains/cmcoder-jetbrains-<platform>.zip
+  2024.2+        Settings → Plugins → ⚙ → Install Plugin from Disk…, the zip
+                 (don't unzip it). The same file for PyCharm, Rider, WebStorm,
+                 GoLand and the other JetBrains IDEs, 2024.2 or newer.
 
   <platform>: win32-x64 (Windows), darwin-arm64 (Mac, Apple silicon),
   linux-x64 (Linux).

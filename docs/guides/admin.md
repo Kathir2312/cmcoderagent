@@ -66,6 +66,7 @@ vscode/                cmcoder-<platform>.vsix
 visualstudio/          cmcoder-visualstudio-win32-x64.vsix
 eclipse/               cmcoder-eclipse.zip (all platforms)
 netbeans/              cmcoder-netbeans-<platform>.nbm
+jetbrains/             cmcoder-jetbrains-<platform>.zip (IntelliJ IDEA, PyCharm, Rider, …)
 admin/                 managed settings and the scripts that install them
 ```
 

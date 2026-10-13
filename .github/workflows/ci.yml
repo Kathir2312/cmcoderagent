@@ -370,6 +370,17 @@ jobs:
       - name: Plugin Verifier (2024.2, the newest IntelliJ IDEA and Rider)
         working-directory: jetbrains
         run: gradle --no-daemon --stacktrace verifyPlugin
+      - name: The Gradle lock files are current (osv-scanner reads them)
+        working-directory: jetbrains
+        run: |
+          gradle --no-daemon -q buildEnvironment dependencies --configuration runtimeClasspath --write-locks > /dev/null
+          if [ -n "$(git status --porcelain -- '*.lockfile')" ]; then
+            for f in *.lockfile; do echo "--- jetbrains/$f"; cat "$f"; done
+            echo "These differ from the committed lock files: in jetbrains/, run" >&2
+            echo "  gradle buildEnvironment dependencies --configuration runtimeClasspath --write-locks" >&2
+            echo "and commit them." >&2
+            exit 1
+          fi
       - name: The plugin zip and the verifier's reports
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

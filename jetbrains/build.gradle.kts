@@ -19,6 +19,19 @@ import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
 import org.jetbrains.intellij.platform.gradle.models.ProductRelease
 import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask.FailureLevel
 
+// The build's own tools (the Gradle plugins and what they pull in) are pinned
+// in buildscript-gradle.lockfile, and what the plugin ships with it in
+// gradle.lockfile (nothing: the IDE provides the platform), so osv-scanner
+// checks them and a new dependency can't come in unseen. After changing a
+// plugin's version or adding a dependency:
+//   gradle buildEnvironment dependencies --configuration runtimeClasspath --write-locks
+// (CI checks the files are current).
+buildscript {
+    configurations.classpath {
+        resolutionStrategy.activateDependencyLocking()
+    }
+}
+
 plugins {
     java
     id("org.jetbrains.intellij.platform") version "2.19.0"
@@ -47,6 +60,10 @@ repositories {
     intellijPlatform {
         defaultRepositories()
     }
+}
+
+configurations.runtimeClasspath {
+    resolutionStrategy.activateDependencyLocking()
 }
 
 dependencies {

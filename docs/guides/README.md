@@ -47,6 +47,7 @@ download.
 | **JDK 17 or newer** | runs NetBeans itself | NetBeans users (NetBeans 28 or newer) |
 | **WebKitGTK** (`libwebkit2gtk-4.1-0`) | the chat panel in Eclipse | Eclipse on Linux |
 | **GTK 3** (`libgtk-3-0`) | the chat panel in NetBeans (its browser is inside the plugin) | NetBeans on Linux; desktop Linux has it |
+| nothing more | the chat panel in IntelliJ IDEA and the other JetBrains IDEs uses the browser built into the IDE (JCEF) | JetBrains IDE users (2024.2 or newer) |
 | Network access to your AI gateway | the model | everyone (often: the VPN) |
 
 ## Where the files come from
@@ -62,6 +63,7 @@ GitHub wraps every download in a `.zip`, unzip it once). Pick your platform: `wi
 | `cmcoder-<platform>.vsix` | the VS Code extension (cmcoder inside) |
 | `cmcoder-eclipse` (a `.zip`) | the Eclipse plugin, every platform in one file |
 | `cmcoder-netbeans-<platform>.nbm` | the NetBeans plugin (cmcoder and its chat browser inside) |
+| `cmcoder-jetbrains-<platform>.zip` | the plugin for IntelliJ IDEA, PyCharm, Rider and the other JetBrains IDEs (cmcoder inside; install the zip as it is) |
 | `cmcoder-visualstudio-win32-x64.vsix` | the Visual Studio 2022 extension (Windows; on GitHub's Artifacts list: `cmcoder-visualstudio.vsix`) |
 
 Updates are new files: install the new one over the old one.

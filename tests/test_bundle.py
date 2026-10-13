@@ -38,7 +38,7 @@ def artifacts(tmp: Path, skip: str | None = None) -> Path:
 def test_bundle(tmp_path: Path) -> None:
     out = tmp_path / "bundle"
     files = bundle.assemble(artifacts(tmp_path), out)
-    assert len(files) == 16
+    assert len(files) == 19
     names = {f.relative_to(out).as_posix() for f in files}
     # For IT: the managed settings (the example, until the company sets its own).
     assert {
@@ -51,24 +51,28 @@ def test_bundle(tmp_path: Path) -> None:
     assert "visualstudio/cmcoder-visualstudio-win32-x64.vsix" in names
     assert "eclipse/cmcoder-eclipse.zip" in names
     assert "netbeans/cmcoder-netbeans-darwin-arm64.nbm" in names
+    assert {f"jetbrains/cmcoder-jetbrains-{t}.zip" for t in bundle.TARGETS} <= names
     assert "terminal/cmcoder-terminal-linux-x64.zip" in names
     readme = (out / "README-FIRST.txt").read_text(encoding="utf-8")
     assert bundle.version() in readme and "NetBeans" in readme and "no Python" in readme
+    assert "Install Plugin from Disk" in readme and "PyCharm, Rider" in readme
     assert "admin/README.txt" in readme and "cmcoder setup" in readme
     report = (out / "GATE-REPORT.md").read_text(encoding="utf-8")
     assert "| Standalone cmcoder, no Python | ✅ | ✅ | ✅ |" in report
     assert "| Visual Studio extension in Visual Studio | ✅ | — | — |" in report
     assert "Not covered by automated tests" in report
+    assert "Plugin Verifier" in report  # what stands in for Rider
     for line in (out / "SHA256SUMS.txt").read_text(encoding="utf-8").splitlines():
         digest, name = line.split("  ", 1)
         assert hashlib.sha256((out / name).read_bytes()).hexdigest() == digest
 
 
-def test_no_bundle_without_every_file(tmp_path: Path) -> None:
-    with pytest.raises(SystemExit, match="cmcoder-netbeans-linux-x64.nbm"):
-        bundle.assemble(
-            artifacts(tmp_path, skip="cmcoder-netbeans-linux-x64.nbm"), tmp_path / "bundle"
-        )
+@pytest.mark.parametrize(
+    "missing", ["cmcoder-netbeans-linux-x64.nbm", "cmcoder-jetbrains-darwin-arm64.zip"]
+)
+def test_no_bundle_without_every_file(tmp_path: Path, missing: str) -> None:
+    with pytest.raises(SystemExit, match=missing):
+        bundle.assemble(artifacts(tmp_path, skip=missing), tmp_path / "bundle")
     assert not (tmp_path / "bundle").exists()
 
 
