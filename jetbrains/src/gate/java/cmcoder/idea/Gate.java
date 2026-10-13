@@ -466,6 +466,17 @@ public final class Gate {
                 .contains("Explain the selected code."));
         // Its keyboard shortcut (Ctrl+Alt+Shift+K; on a Mac, the keymap's own) is its own: no
         // action of the IDE's has it in the keymap in use.
+        // Which actions have some other shortcuts here, to choose a free one (report only).
+        step("candidate shortcuts: " + ui(() -> {
+            Keymap keymap = KeymapManager.getInstance().getActiveKeymap();
+            StringBuilder out = new StringBuilder(keymap.getName());
+            for (String keys : new String[] {"alt shift K", "ctrl alt shift J", "ctrl alt shift Q", "alt shift Q",
+                    "ctrl alt shift SLASH", "ctrl alt shift SEMICOLON", "ctrl alt shift COMMA", "alt shift SLASH"}) {
+                KeyboardShortcut shortcut = KeyboardShortcut.fromString(keys);
+                out.append(" | ").append(KeymapUtil.getShortcutText(shortcut)).append(": ").append(keymap.getActionIdList(shortcut));
+            }
+            return out.toString();
+        }));
         step("Ask About Selection's shortcut is its own: " + ui(() -> {
             Keymap keymap = KeymapManager.getInstance().getActiveKeymap();
             for (Shortcut shortcut : keymap.getShortcuts("cmcoder.AskAboutSelection")) {
