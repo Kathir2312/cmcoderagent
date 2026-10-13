@@ -170,6 +170,12 @@ intellijPlatform {
     }
 }
 
+// For CI's SpotBugs run: what the plugin's classes are compiled against (the IDE's), one per line.
+tasks.register("printCompileClasspath") {
+    val classpath = sourceSets.main.get().compileClasspath
+    doLast { classpath.files.forEach { println(it) } }
+}
+
 // plugin.xml's texts with the brand's name (ids keep "cmcoder"), in the
 // patched plugin.xml: the one that goes into the jar.
 tasks.patchPluginXml {

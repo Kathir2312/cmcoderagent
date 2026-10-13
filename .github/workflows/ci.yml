@@ -381,6 +381,25 @@ jobs:
             echo "and commit them." >&2
             exit 1
           fi
+      - name: SpotBugs + FindSecBugs (fails on a security finding not reviewed in spotbugs/reviewed.xml)
+        working-directory: jetbrains
+        run: |
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/spotbugs.tgz" https://github.com/spotbugs/spotbugs/releases/download/4.10.4/spotbugs-4.10.4.tgz
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/findsecbugs.jar" https://repo1.maven.org/maven2/com/h3xstream/findsecbugs/findsecbugs-plugin/1.14.0/findsecbugs-plugin-1.14.0.jar
+          echo "72bc0d4edd686e462c0f71f42a049b27bf4da6708797ff7b2b56dd202714b4e5  $RUNNER_TEMP/spotbugs.tgz" | sha256sum -c
+          echo "6fa340344fa433ff46c2985dab1010e8bc739f9395c983594a5240095e92abc8  $RUNNER_TEMP/findsecbugs.jar" | sha256sum -c
+          tar -xzf "$RUNNER_TEMP/spotbugs.tgz" -C "$RUNNER_TEMP"
+          gradle --no-daemon -q printCompileClasspath | while read -r f; do [ -e "$f" ] && echo "$f"; done > "$RUNNER_TEMP/classpath.txt"
+          java -jar "$RUNNER_TEMP/spotbugs-4.10.4/lib/spotbugs.jar" -textui -effort:max -low \
+            -pluginList "$RUNNER_TEMP/findsecbugs.jar" -auxclasspathFromFile "$RUNNER_TEMP/classpath.txt" \
+            -include spotbugs/security.xml -exclude spotbugs/reviewed.xml \
+            -output "$RUNNER_TEMP/spotbugs.txt" build/classes/java/main
+          if [ -s "$RUNNER_TEMP/spotbugs.txt" ]; then
+            cat "$RUNNER_TEMP/spotbugs.txt"
+            echo "Security findings above: fix them, or check them and list them in jetbrains/spotbugs/reviewed.xml with the reason." >&2
+            exit 1
+          fi
+          echo "No security findings beyond the reviewed ones ($(wc -l < "$RUNNER_TEMP/classpath.txt") jars on the classpath)."
       - name: The plugin zip and the verifier's reports
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

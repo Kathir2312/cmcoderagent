@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Security findings checked in the code and not exploitable (docs/security/),
+     each with the reason. CI fails on any other. -->
+<FindBugsFilter>
+</FindBugsFilter>
