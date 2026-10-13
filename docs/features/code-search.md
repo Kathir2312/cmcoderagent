@@ -1,9 +1,9 @@
-# Code search: setup and use
+# Code search (RAG): setup and use
 
 Code search gives the model an **index of the project's code**, so it can find
-code by what it does ("where is the VAT computed?"), not only by exact words.
-It works with both gateways (LiteLLM and Open WebUI), in the terminal and in
-VS Code.
+code by what it does ("where is the VAT computed?"), not only by exact words
+(retrieval-augmented generation). It works with both gateways (LiteLLM and
+Open WebUI), in the terminal and in every IDE. Small projects don't need it.
 
 - **`CodeSearch` tool:** the model calls it like Grep, describing what the
   code does.
@@ -52,18 +52,30 @@ Without questions (scripts, CI):
 
 ```
 cmcoder rag setup -m corp:bge-m3 --store local --scope user --index --yes
-cmcoder rag setup -m corp:bge-m3 --store chroma-server --url https://chroma.corp:8000 --read-only --yes
+cmcoder rag setup -m corp:bge-m3 --store chroma-server --url https://chroma.example.com:8000 --read-only --yes
 cmcoder rag setup -m corp:bge-m3 --store chroma-server --url http://localhost:8000 --yes
 ```
 
-**Chroma on this PC** without Python: Docker
-(`docker run -d -p 127.0.0.1:8000:8000 -v chroma-data:/data chromadb/chroma`), then
-the URL `http://localhost:8000`. See [code-search.md](code-search.md).
-
 **VS Code:** Command Palette → **"cmcoder: Set Up Code Search"** (or click
-"Code search: off" in the status bar). **Eclipse / Visual Studio:** the code
-search item above the chat. The same four steps, in the IDE's dialogs. All
-write the same settings.
+"Code search: off" in the status bar). **Eclipse, NetBeans, Visual Studio:**
+the **Code search** item above the chat. **IntelliJ IDEA and the other
+JetBrains IDEs:** the **Code search** status bar item, or **Tools → cmcoder →
+cmcoder Code Search…**. The same four steps, in the IDE's dialogs. All write
+the same settings.
+
+### Chroma on this PC, without Python
+
+Run Chroma's official container (Docker Desktop or Podman):
+
+```
+docker run -d --name chroma --restart unless-stopped -p 127.0.0.1:8000:8000 -v chroma-data:/data chromadb/chroma
+```
+
+then choose **Chroma, by its URL** and enter `http://localhost:8000`.
+`127.0.0.1:` keeps it reachable from this PC only; don't open it to the
+network without your IT team (section 5). If Chroma isn't running, cmcoder
+says "Can't reach the Chroma server http://localhost:8000 … Is Chroma running
+on this PC?": start the container (`docker start chroma`).
 
 ## 3. Use it
 
@@ -121,12 +133,12 @@ One index for everyone on a repository, kept current by CI:
    instance per team.
 2. **CI** (on the default branch) keeps it current:
    ```
-   cmcoder rag setup -m corp:bge-m3 --store chroma-server --url https://chroma.corp:8000 --scope user --yes
+   cmcoder rag setup -m corp:bge-m3 --store chroma-server --url https://chroma.example.com:8000 --scope user --yes
    CMCODER_CHROMA_API_KEY=$CHROMA_WRITE_KEY cmcoder index
    ```
 3. **Developers** search it read-only:
    ```
-   cmcoder rag setup -m corp:bge-m3 --store chroma-server --url https://chroma.corp:8000 --read-only
+   cmcoder rag setup -m corp:bge-m3 --store chroma-server --url https://chroma.example.com:8000 --read-only
    ```
    (or VS Code: "Only search it").
 
@@ -134,7 +146,19 @@ Every clone finds the same collection: its name comes from the git remote
 (`cmcoder-<repo>-<hash>`) and the embedding model; `store.collection` sets
 it explicitly. Everyone must use the **same embedding model** as the writer.
 
-## 6. Measuring it
+## 6. With the other features
+
+- **Subagents and team roles:** give a role the `CodeSearch` tool
+  (`tools: Read, Grep, Glob, Edit, Bash, CodeSearch`) so it finds code by
+  meaning too ([agents.md](agents.md), [team.md](team.md)).
+- **Settings for the team:** run `cmcoder rag setup` with "the project's
+  settings": the embedding model and the store go in `.cmcoder/settings.json`
+  for everyone ([settings.md](settings.md)).
+- **Administrators** can require the company's Chroma server or turn code
+  search off in the managed settings
+  ([../admin/README.md](../admin/README.md#5-managed-settings-rules-developers-cant-change)).
+
+## 7. Measuring it
 
 ```
 uv run python evals/retrieval.py                 # your embedding model

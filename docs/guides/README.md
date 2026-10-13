@@ -28,11 +28,14 @@ answers and your saved conversations. Each IDE extension contains its own copy
 of cmcoder, so you don't need the terminal package for them.
 
 Then, once, whichever you chose: [setup.md](setup.md) (your gateway and API
-key). Optional, for big projects: [code-search.md](../features/code-search.md). Screenshots
-and other images: [images.md](../features/images.md).
-Problems: [troubleshooting.md](troubleshooting.md).
-A team of agents (PM, developer, tester, DevOps) on one feature:
-[../features/team.md](../features/team.md).
+key). Problems: [troubleshooting.md](troubleshooting.md).
+
+Everything else is in [../features/](../features/README.md), one page per
+feature: code search for big projects
+([code-search.md](../features/code-search.md)), screenshots and other images
+([images.md](../features/images.md)), MCP servers, hooks, slash commands,
+skills, subagents, permissions, and a team of agents (PM, developer, tester,
+DevOps) on one feature ([team.md](../features/team.md)).
 
 ## What your PC needs
 

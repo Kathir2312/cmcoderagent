@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "jira": {
+      "url": "https://mcp.example.com/jira",
+      "headers": { "Authorization": "Bearer ${JIRA_TOKEN}" }
+    }
+  }
+}

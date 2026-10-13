@@ -1,10 +1,30 @@
-# A project team in cmcoder: PM, developer, tester, DevOps
+# A complete team in cmcoder: PM, developer, tester, DevOps
 
 cmcoder can work like a small team: the main agent is the **team lead**, and
 each role (product manager, developer, tester, DevOps engineer) is a
 **subagent** with its own instructions and tools. The lead plans the work,
 hands each piece to the right role, reads their reports, and keeps going
-until the feature is done. This page sets that up in about 15 minutes.
+until the feature is done. This page sets that up in about 15 minutes, and
+connects every feature to it: memory, skills, subagents, a command, code
+search (RAG), MCP and hooks.
+
+## The pieces, and where each feature fits
+
+| Piece | Feature | File (in the project, committed) | Guide |
+|---|---|---|---|
+| The team process the lead follows | project memory | `CMCODER.md` | [memory.md](memory.md) |
+| The roles | subagents | `.cmcoder/agents/pm.md`, `developer.md`, `tester.md`, `devops.md` | [agents.md](agents.md) |
+| The know-how the roles load | skills | `.cmcoder/skills/coding-standards/`, `testing-guide/` | [skills.md](skills.md) |
+| One command for the whole flow | slash command | `.cmcoder/commands/feature.md` | [commands.md](commands.md) |
+| Finding code by meaning (big projects) | code search (RAG) | `rag` in `.cmcoder/settings.json` | [code-search.md](code-search.md) |
+| Tickets and wiki for the PM (optional) | MCP server | `.mcp.json` | [mcp.md](mcp.md) |
+| Quality gates the roles can't skip | hooks | `hooks` in `.cmcoder/settings.json` | [hooks.md](hooks.md) |
+| What runs without asking | permissions, sandbox | `permissions`, `sandbox` in `.cmcoder/settings.json` | [permissions.md](permissions.md), [sandbox.md](sandbox.md) |
+
+**The fast way:** copy the ready-made folder
+[../examples/team/](../examples/team/README.md) into your project, fill in the
+`...` in the two skills, and go on with step 6 below. The steps explain each
+file.
 
 ## How it works
 
@@ -57,7 +77,9 @@ The files go in your project (shared with the whole team through git):
 ```
 <your project>\
   CMCODER.md                          the team process (the lead reads it every session)
+  .mcp.json                           MCP servers, e.g. your ticket system (optional, step 7)
   .cmcoder\
+    settings.json                     code search, hooks, shared rules (steps 6, 8)
     agents\     pm.md  developer.md  tester.md  devops.md     the roles
     skills\     coding-standards\SKILL.md  testing-guide\SKILL.md   the know-how
     commands\   feature.md            /feature runs the whole flow
@@ -73,7 +95,7 @@ mkdir .cmcoder\agents .cmcoder\skills\coding-standards .cmcoder\skills\testing-g
 
 **Just for you instead?** Put `agents\`, `skills\` and `commands\` in
 `%USERPROFILE%\.cmcoder\` (`~/.cmcoder/`). They then work in every project,
-with no trust step (step 6). A project's roles are used only in a trusted
+with no trust step (step 9). A project's roles are used only in a trusted
 project.
 
 Rules for every file below:
@@ -217,7 +239,68 @@ Follow the team process in CMCODER.md from step 1. Plan the steps with TodoWrite
 
 `$ARGUMENTS` is whatever you type after `/feature`.
 
-## Step 6: Trust the project, and give the lead room
+## Step 6: Code search for the roles (RAG)
+
+For a big project, give the roles the index, so they find code by meaning
+("where are orders validated?") instead of grepping blindly. Once, in the
+project:
+
+```
+cmcoder rag setup
+```
+
+Choose your gateway's embedding model, where the index lives (this PC, or a
+team Chroma server that CI keeps current), and **the project's settings**, so
+everyone gets it ([code-search.md](code-search.md)). The developer and tester
+roles above already list `CodeSearch` in their tools; it works once the
+project is indexed. Small projects can skip this step.
+
+## Step 7: Tickets through MCP (optional)
+
+The PM can read the ticket and write the stories back if your ticket system
+has an MCP server. `.mcp.json` in the project root:
+
+```json
+{
+  "mcpServers": {
+    "jira": {
+      "url": "https://mcp.example.com/jira",
+      "headers": { "Authorization": "Bearer ${JIRA_TOKEN}" }
+    }
+  }
+}
+```
+
+Each person sets `JIRA_TOKEN` in their environment (never in the file). Give
+the PM the server's tools by adding `mcp__jira` to its `tools` line, and say
+in `pm.md` what to do with them ("read the ticket given in the task; add the
+acceptance criteria to it as a comment"). See [mcp.md](mcp.md).
+
+## Step 8: Quality gates with hooks
+
+Hooks run on every role's edits, so the team's checks can't be skipped. In
+`.cmcoder\settings.json`:
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      {"matcher": "Edit|Write", "hooks": [{"type": "command", "command": "dotnet format --verify-no-changes >&2 || exit 2"}]}
+    ],
+    "SubagentStop": [
+      {"hooks": [{"type": "command", "command": "dotnet build -nologo -v q >&2 || exit 2"}]}
+    ]
+  }
+}
+```
+
+Use your own formatter and build: with exit 2 the role is told what failed
+and fixes it before it reports ([hooks.md](hooks.md)). Shared allow rules
+(`"permissions": {"allow": ["Bash(dotnet build:*)", "Bash(dotnet test:*)"]}`)
+in the same file let every role build and test without asking
+([permissions.md](permissions.md)).
+
+## Step 9: Trust the project, and give the lead room
 
 1. **Trust the project**, so its roles are used:
 
@@ -227,6 +310,7 @@ Follow the team process in CMCODER.md from step 1. Plan the steps with TodoWrite
    | VS Code | trust the workspace (VS Code's own workspace trust) |
    | Visual Studio | cmcoder's options: "Use the solution's own .cmcoder settings" |
    | Eclipse, NetBeans | cmcoder's options: "Use the project's own .cmcoder settings" |
+   | IntelliJ IDEA and the other JetBrains IDEs | trust the project when the IDE asks |
 
 2. **More steps for the lead.** A whole feature takes many hand-offs; by
    default the lead may make 50 model calls per request. In
@@ -236,7 +320,7 @@ Follow the team process in CMCODER.md from step 1. Plan the steps with TodoWrite
    "maxTurns": 100
    ```
 
-## Step 7: Check that it's all there
+## Step 10: Check that it's all there
 
 ```bat
 cmcoder doctor
@@ -244,12 +328,13 @@ cmcoder doctor
 
 The section **"Commands, agents and skills"** lists `pm`, `developer`,
 `tester`, `devops`, both skills and `/feature`. Agents listed as ignored mean
-the project isn't trusted yet (step 6).
+the project isn't trusted yet (step 9). `cmcoder mcp list --check` starts the
+MCP servers, and `/index status` shows the code index.
 
 In the chat or the terminal, `/agents` shows the agent types with their tools
 and model.
 
-## Step 8: Run it
+## Step 11: Run it
 
 In the IDE chat, or in the terminal (`cmcoder`):
 

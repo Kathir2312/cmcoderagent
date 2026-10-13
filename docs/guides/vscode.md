@@ -29,7 +29,7 @@ wraps each download in a `.zip`: unzip it to get the file.
 Only these files have cmcoder inside. A file named just `cmcoder.vsix` (the
 `cmcoder-vsix` artifact of the CI workflow) is a test build **without**
 cmcoder: on a PC without it, the chat can't start. To build the right file
-yourself, see [../admin/](../admin/README.md), section 7.
+yourself, see [../build-package/vscode.md](../build-package/vscode.md).
 
 ## 2. Install
 
@@ -84,6 +84,13 @@ More (Open WebUI, certificates, proxies, doing it by hand): [setup.md](setup.md)
 
 cmcoder reads files on its own. **Before it changes a file or runs a command,
 it asks you.**
+
+While it works, a progress line above the input shows what it's doing
+("Thinking…", "Running… Bash(dotnet build)", "Waiting for your answer…"), the
+time, the tokens written this turn, and "Esc to interrupt". You can keep
+typing: messages sent meanwhile are queued above the input (× drops one) and
+go out together when the turn ends; if you interrupt, they come back into the
+input to edit.
 
 ### Review a change
 

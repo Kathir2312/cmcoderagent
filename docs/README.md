@@ -1,52 +1,46 @@
 # cmcoder documentation
 
-**Installing and using cmcoder** (terminal, VS Code, Visual Studio, Eclipse,
-NetBeans, IntelliJ IDEA and the other JetBrains IDEs; no Python needed):
-[guides/](guides/README.md).
+cmcoder is a coding agent in the style of Claude Code, for the terminal and
+for VS Code, Visual Studio, Eclipse, NetBeans, IntelliJ IDEA and the other
+JetBrains IDEs. It works with your company's AI gateway (LiteLLM or Open
+WebUI), and developers' PCs need no Python.
 
-**Building, packing and releasing** each package (build-machine
-prerequisites, packing with cmcoder inside, the release bundle, installing on
-developers' PCs): [build-package/](build-package/README.md).
+## Start here: who are you?
 
-The code lives in one place (`src/cmcoder/`) and grows phase by phase. Each
-finished phase is frozen as a git snapshot, and its documents are frozen in
-its own folder. The current phase's documents are updated as features land.
-
-| Phase | Status | Snapshot | Documents |
-|---|---|---|---|
-| **0 — Foundations** | ✅ Complete | commit `ba6669f` (tag `phase0`) | [project/phases/phase0/](project/phases/phase0/) |
-| **1 — Daily driver** | ✅ Complete | tag `phase1` | [project/phases/phase1/](project/phases/phase1/) |
-| **2 — VS Code** | ✅ Complete | tag `phase2` | [project/phases/phase2/](project/phases/phase2/) |
-| **3 — Extensibility** | ✅ Complete | tag `phase3` | [project/phases/phase3/](project/phases/phase3/) |
-| **4 — Hardening** | ✅ Complete | commit `e78bdb1` (code); [project/phases/phase4/STATUS.md](project/phases/phase4/STATUS.md) | [project/phases/phase4/](project/phases/phase4/) |
-| **5 — Code search (RAG)** | ✅ Complete | commit `46f2e75`; [project/phases/phase5/STATUS.md](project/phases/phase5/STATUS.md) | [project/phases/phase5/](project/phases/phase5/) |
-| **6 — Other IDEs** | ✅ Complete | [project/phases/phase6/STATUS.md](project/phases/phase6/STATUS.md) | [project/phases/phase6/](project/phases/phase6/) |
-| **7 — IntelliJ-based IDEs** | ✅ Complete (13 Oct 2026; the guide's screenshots to come) | [project/phases/phase7/PLAN.md](project/phases/phase7/PLAN.md) (status) | [project/phases/phase7/](project/phases/phase7/) |
-
-The overall design, decisions and roadmap stay in one living document:
-[DESIGN.md](project/DESIGN.md).
-
-## What each phase folder contains
-
-| File | For whom | Contents |
+| You are | You want to | Start with |
 |---|---|---|
-| `PLAN.md` | everyone | Scope, order, acceptance checks and a progress checklist. Written when the phase starts. |
-| `python-guide.md` | Python developers (from day 1) | The phase's code explained step by step. |
-| `langgraph-guide.md` | LangChain / LangGraph developers | The phase's features mapped to their LangChain/LangGraph equivalents. |
-| `STATUS.md` | everyone | What was delivered, how it was validated, what changed from the plan. Written when the phase ends. |
+| **A developer using cmcoder** | install it in your IDE or terminal, set it up, use it | [guides/](guides/README.md) |
+| **A team lead** | code search, MCP, hooks, skills, subagents, a whole agent team for your repository | [features/](features/README.md), then [features/team.md](features/team.md) |
+| **An administrator (IT)** | roll it out: company settings, managed rules, branding, the release bundle | [admin/](admin/README.md) |
+| **A release engineer** | build and pack each package with cmcoder inside, and release them | [build-package/](build-package/README.md) |
+| **A new developer on cmcoder itself** | learn the code, run the tests, make a change | [learn/](learn/README.md) |
+| **A maintainer** | the design, the phase plans, the security reviews | [project/](project/README.md) |
 
-## Getting the code as it was at the end of a phase
+## What's where
 
-From GitHub: open the repository, switch to the tag (e.g. `phase0`) and use
-**Code → Download ZIP**. With git:
-
-```bash
-git fetch --tags
-git checkout phase0        # read-only snapshot; `git switch -` to go back
+```
+docs/
+  guides/          install and use: each IDE, the terminal, first-time setup, troubleshooting
+  features/        one guide per feature: settings, gateway and models, code search (RAG),
+                   MCP, hooks, commands, memory, skills, subagents, the team, permissions,
+                   sandbox, critic, sessions, images, usage metrics
+  admin/           roll-out: settings template, managed settings, branding, the bundle
+  build-package/   build, pack and release each package (one-command scripts per IDE)
+  learn/           the learning path: source map, contributing, the phase-by-phase code guides
+  project/         DESIGN.md, each phase's plan, status, testing and security review, scans
+  examples/        settings, managed settings, a ready-made team folder
 ```
 
-## Settings example
+Each IDE folder in the repository also has a `README.md` for the people who
+work on that plugin ([learn/source-map.md](learn/source-map.md)).
 
-[settings.example.json](examples/settings.example.json) shows every setting the
-current code understands; [managed-settings.example.json](examples/managed-settings.example.json)
-is a starting point for administrators.
+## Keeping these docs tidy
+
+- Put a page where its reader looks first: using → `guides/`, setting up a
+  feature → `features/`, rolling out → `admin/`, building → `build-package/`,
+  learning the code → `learn/`, decisions and history → `project/`.
+- One topic, one place: link to it instead of repeating it.
+- `tests/test_docs_links.py` fails on a dead link or `#section`, so moving a
+  page means fixing its links in the same change.
+- Example addresses only (`example.com`, `<your repository URL>`), and never a
+  key or token.

@@ -1,14 +1,17 @@
-# For administrators: building and handing out cmcoder
+# For administrators: rolling out cmcoder
 
 Everything developers install is built by GitHub Actions in this repository,
 tested in the real IDEs, and collected into one **release bundle**. You hand
 out that bundle (or the files in it); developers need no Python.
 
-Step-by-step pages for each package (what the build machine needs, building
-and packing it with cmcoder inside, releasing it, installing it on developers'
-PCs) are in [../build-package/](../build-package/README.md): the terminal package
-([cli.md](../build-package/cli.md)), VS Code, Visual Studio, Eclipse, NetBeans, the
-JetBrains IDEs, and the release bundle ([release.md](../build-package/release.md)).
+| You want | Page |
+|---|---|
+| Your company's name, icon and colours in every package | [branding.md](branding.md) |
+| Your gateway and models pre-filled for everyone | section 1 below; [../features/gateway.md](../features/gateway.md) |
+| Rules developers can't change | section 5 below |
+| Each package step by step: build machine, one-command scripts, release, client install | [../build-package/](../build-package/README.md) |
+| The features to set up for teams (code search, MCP, hooks, skills, agents) | [../features/](../features/README.md) |
+| Usage and cost metrics for every PC | [../features/telemetry.md](../features/telemetry.md) |
 
 ## 1. Before the first release: your company's details
 
@@ -77,7 +80,7 @@ admin/                 managed settings and the scripts that install them
 ```
 
 Put it on a share or the intranet with the guides
-([README.md](../guides/README.md) and the pages it links). Developers install the file
+([../guides/](../guides/README.md) and the pages it links). Developers install the file
 for their IDE; updates are a new file over the old one. A problem report
 should include the output of **Copy Diagnostics**, which never contains keys.
 
@@ -144,40 +147,23 @@ would put that account's files in the wrong profile.
 
 ## 6. Code search with a shared Chroma server (optional)
 
-See [../features/code-search.md](../features/code-search.md), "A shared Chroma
-server for a team". Read the security notes there first. Developers can
-also run Chroma on their own PC by its URL ([code-search.md](../features/code-search.md)).
+One index for everyone on a repository, kept current by CI:
+[../features/code-search.md](../features/code-search.md#5-a-shared-chroma-server-for-a-team).
+Read the security notes there first. Developers can also run Chroma on their
+own PC by its URL, or use the built-in index.
 
-## 7. Build the VS Code file yourself (without the Release workflow)
+## 7. Building a package yourself (without the Release workflow)
 
-(The other packages, built by hand: [../build-package/](../build-package/README.md).)
+To build one package on your own build machine, for example to try a
+branding change, use its one-command script: `packaging\package-<name>.ps1`
+on Windows, `bash packaging/package-<name>.sh` on macOS and Linux, or
+`package-all` for every package of a platform. Each builds cmcoder, runs it
+with no Python in reach, makes the package with cmcoder inside and checks the
+program is in the file. What the build machine needs, the options and the
+same steps by hand: [../build-package/](../build-package/README.md#one-command-per-package).
 
-When you need just the VS Code extension, for example to try a branding
-change, build it on a build PC with one command. Developers' PCs need nothing
-but VS Code: cmcoder is inside the file. The build PC needs **uv**
-(<https://docs.astral.sh/uv/>, one program; it downloads its own Python, so
-Python needn't be installed), **Node.js 22** and **Git**, with the repository
-as a **git clone** (`git clone`, then check out the branch): the build is named
-after its commit, which a copied folder or a downloaded zip doesn't have. Build
-on the platform you build for: Windows for `cmcoder-win32-x64.vsix`.
-
-```
-powershell -ExecutionPolicy Bypass -File packaging\package-vscode.ps1     # Windows
-bash packaging/package-vscode.sh                                          # macOS, Linux
-```
-
-It builds cmcoder (PyInstaller), runs it with no Python in reach, builds the
-chat panel, packages the extension with cmcoder and your `branding/`, checks
-the program is in the file, and prints the file's path and SHA256.
-`-SkipTests` (`--skip-tests`) leaves out the test run.
-
-If it stops with "git can't read this folder's commit": for "dubious
-ownership" (common on a second drive such as `E:`), run the
-`git config --global --add safe.directory …` line it prints; for "not a git
-repository", use a git clone instead of a copied folder. (With `-SkipTests` it
-goes on, and the build says `unknown` instead of its commit.)
-
-Hand out `vscode\cmcoder-win32-x64.vsix`, never `cmcoder.vsix`: that one (from
-`npm run package`, or the CI workflow's `cmcoder-vsix` artifact) is a test
-build without cmcoder inside. The Release workflow (section 2) remains the
-way to build everything, tested in the real IDEs.
+Hand out `vscode\cmcoder-win32-x64.vsix` (and the other platforms' files),
+never `cmcoder.vsix`: that one (from `npm run package`, or the CI workflow's
+`cmcoder-vsix` artifact) is a test build without cmcoder inside. The Release
+workflow (section 2) remains the way to build everything, tested in the real
+IDEs.

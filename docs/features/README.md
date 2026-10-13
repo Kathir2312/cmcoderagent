@@ -1,16 +1,52 @@
-# Customising cmcoder
+# cmcoder features: set up and connect
 
-Everything here is files: put them in your home folder for yourself, or in
-the repository for your team. The formats are Claude Code's, so existing
-examples work.
+One page per feature: what it's for, how to set it up for yourself or for the
+whole team, and how it works with the others. The formats are Claude Code's,
+so existing examples work.
 
-| You want | Add | Yours (every project) | The team's (in the repository) |
-|---|---|---|---|
-| New tools (GitHub, Jira, a database) | an MCP server | `mcpServers` in `~/.cmcoder/settings.json`, or `cmcoder mcp add` | `.mcp.json` |
-| Automatic checks (format after an edit, block a command) | a hook | `hooks` in `~/.cmcoder/settings.json` | `hooks` in `.cmcoder/settings.json` |
-| A shortcut for a prompt you type often | a slash command | `~/.cmcoder/commands/<name>.md` | `.cmcoder/commands/<name>.md` |
-| A helper for side jobs (search, review) | a subagent | `~/.cmcoder/agents/<name>.md` | `.cmcoder/agents/<name>.md` |
-| Know-how loaded only when needed | a skill | `~/.cmcoder/skills/<name>/SKILL.md` | `.cmcoder/skills/<name>/SKILL.md` |
+New to cmcoder? Install it first ([../guides/](../guides/README.md)) and do the
+first-time setup ([../guides/setup.md](../guides/setup.md)).
+
+## The features
+
+| You want | Feature | Guide |
+|---|---|---|
+| Where every setting lives, and which one wins | settings files, environment variables | [settings.md](settings.md) |
+| Your company's AI gateway, models, certificates, proxies | gateway and models (LiteLLM, Open WebUI) | [gateway.md](gateway.md), [openwebui.md](openwebui.md) |
+| Find code by meaning in a big project | code search (RAG) | [code-search.md](code-search.md) |
+| New tools: tickets, wikis, databases, internal APIs | MCP servers | [mcp.md](mcp.md) |
+| Automatic checks: format after an edit, block a command | hooks | [hooks.md](hooks.md) |
+| A shortcut for a prompt you type often | slash commands | [commands.md](commands.md) |
+| Rules and context the agent always follows | project memory (`CMCODER.md`) | [memory.md](memory.md) |
+| Know-how loaded only when it's needed | skills | [skills.md](skills.md) |
+| Helpers for side jobs, or roles in a team | subagents | [agents.md](agents.md) |
+| **A whole team: PM, developer, tester, DevOps, on one feature** | all of the above, together | [team.md](team.md) |
+| What runs without asking, and what asks first | permissions, modes, trust | [permissions.md](permissions.md) |
+| Commands that can't touch what they shouldn't | the Bash sandbox | [sandbox.md](sandbox.md) |
+| A second check of each answer before you see it | the critic | [critic.md](critic.md) |
+| Continue, resume, rewind; long conversations | sessions and context | [sessions.md](sessions.md) |
+| Screenshots, error dialogs, diagrams in a message | images (and the vision helper) | [images.md](images.md) |
+| Usage and cost numbers for your team | usage metrics (OpenTelemetry) | [telemetry.md](telemetry.md) |
+
+## Yours, or the team's
+
+Everything is files. Put them in your home folder for yourself, or in the
+repository (committed) for everyone who works on it:
+
+| Feature | Yours (every project) | The team's (in the repository) |
+|---|---|---|
+| Settings | `~/.cmcoder/settings.json` | `.cmcoder/settings.json` |
+| MCP servers | `mcpServers` in `~/.cmcoder/settings.json`, or `cmcoder mcp add` | `.mcp.json` |
+| Hooks | `hooks` in `~/.cmcoder/settings.json` | `hooks` in `.cmcoder/settings.json` |
+| Slash commands | `~/.cmcoder/commands/<name>.md` | `.cmcoder/commands/<name>.md` |
+| Project memory | `~/.cmcoder/CMCODER.md` | `CMCODER.md` (root and subfolders) |
+| Skills | `~/.cmcoder/skills/<name>/SKILL.md` | `.cmcoder/skills/<name>/SKILL.md` |
+| Subagents | `~/.cmcoder/agents/<name>.md` | `.cmcoder/agents/<name>.md` |
+| Code search | `rag` in `~/.cmcoder/settings.json` | `rag` in `.cmcoder/settings.json` |
+
+`~/.cmcoder` is `%USERPROFILE%\.cmcoder` on Windows. Yours win over a
+repository's on a name clash. A ready-made team folder to copy:
+[../examples/team/](../examples/team/README.md).
 
 ## What a repository needs your trust for
 
@@ -18,118 +54,18 @@ A repository you clone could contain any of these files, so the ones that
 **run something or change permissions** are used only after you trust the
 project, and each server or hook is approved once more before it first runs:
 
-| From a repository | Untrusted | Trusted (`cmcoder trust`, or a workspace VS Code trusts) |
+| From a repository | Untrusted | Trusted (`cmcoder trust`, or a workspace the IDE trusts) |
 |---|---|---|
 | MCP servers (`.mcp.json`) | ignored | each one asks once before it starts |
 | hooks | ignored | each command asks once before it first runs |
 | subagents | ignored | used |
 | slash commands | used (they're prompts you run) | used, and their `allowed-tools` apply |
 | skills, `CMCODER.md` | used (text only) | used |
+| settings: `env`, allow rules, `acceptEdits`/`bypassPermissions` | ignored, with a warning | used |
+| settings: `providers` (the gateway) | ignored | **ignored**: a repository can never receive your API key |
 
-Yours always win over a repository's on a name clash, and a repository's
-files must really be inside it (a symlink to `~/.ssh` is ignored).
-`cmcoder trust` shows what trusting a project would enable;
-`cmcoder doctor` lists everything that's active and where it comes from.
-
-## Examples
-
-### An MCP server: your tickets
-
-```bash
-cmcoder mcp add jira --url https://mcp.example.com/jira --header "Authorization: Bearer \${JIRA_TOKEN}"
-cmcoder mcp list --check
-```
-
-`${JIRA_TOKEN}` is read from your environment when the server starts, so the
-token never sits in a file. The model now has `mcp__jira__*` tools; they ask
-before running unless you allow them (`"allow": ["mcp__jira"]` for all of
-them). Type `/mcp` to see the servers' state. For one run only:
-`cmcoder --mcp-config servers.json`.
-
-### A hook: format Python after every edit
-
-`.cmcoder/settings.json`:
-
-```json
-{
-  "hooks": {
-    "PostToolUse": [
-      {"matcher": "Edit|Write", "hooks": [{"type": "command", "command": "ruff format --quiet . && ruff check --quiet . >&2 || exit 2"}]}
-    ]
-  }
-}
-```
-
-The hook gets the tool call as JSON on stdin. Exit 2 sends its stderr back to
-the model ("line 3: unused import"), so the model fixes it. Hooks run with
-bash (Git Bash on Windows).
-
-### A slash command: a review checklist
-
-`.cmcoder/commands/review.md`:
-
-```markdown
----
-description: Review a file against our checklist
-argument-hint: <file>
-allowed-tools: Read, Grep, Bash(git diff:*)
----
-Review $1 against our checklist:
-1. Errors are handled, not ignored.
-2. New functions have tests.
-3. No secrets or URLs are hard-coded.
-Report each problem with file:line. Don't change any file.
-```
-
-Run it with `/review src/app.py` (Tab completes the name in the terminal;
-VS Code shows a list as you type `/`).
-
-### A subagent: a reviewer with fewer tools
-
-`.cmcoder/agents/reviewer.md`:
-
-```markdown
----
-name: reviewer
-description: Reviews the current changes for bugs. Use after finishing a change.
-tools: Read, Grep, Glob, Bash
-model: small
----
-You review code changes. Run `git diff` to see them, read the files around
-them, and report real bugs only, each with file:line and a suggested fix.
-```
-
-The main model hands it a job with the `Task` tool ("use the reviewer to
-check my change"); its steps show inside the Task call, and only its report
-comes back to the main conversation. `model: small` uses your
-`smallFastModel`. The built-in `explore` agent does read-only searches.
-
-To run several at once, ask for it ("one explore subagent per project, then
-one summary"): Task calls in one reply run in parallel, up to
-`maxParallelSubagents` (default 4). Each subagent may make `subagentMaxTurns`
-model calls (default 100); at the limit it writes its report from what it
-found instead of stopping mid-sentence. The agent map shows each one's state,
-steps, tools, tokens and time while they work; stop one with the Stop button
-(VS Code), Ctrl+C then its number (terminal) or `/agents stop <n>` (TUI), and
-see its steps and report afterwards with `/agents <n>`.
-
-### A skill: release notes in your format
-
-`.cmcoder/skills/release-notes/SKILL.md`:
-
-```markdown
----
-name: release-notes
-description: Writes release notes in our format. Use when asked for release notes or a changelog entry.
----
-1. Find the last tag: `git describe --tags --abbrev=0`.
-2. List the changes since then: `git log --oneline <tag>..HEAD`.
-3. Fill in template.md (in this skill's folder), grouping changes by area.
-```
-
-Put `template.md` next to it. Only the description is in the system prompt;
-the model loads the rest with the `Skill` tool when you ask for release
-notes, and `template.md` with `Skill(skill="release-notes", file="template.md")`.
+A repository's files must really be inside it (a symlink to `~/.ssh` is
+ignored). How to trust a project in each IDE: [permissions.md](permissions.md#trusting-a-project).
 
 ## Checking it all
 
@@ -138,3 +74,10 @@ cmcoder doctor            # what's configured, where it's from, what's ignored a
 cmcoder trust             # what trusting this project would enable
 cmcoder mcp list --check  # starts each MCP server and lists its tools
 ```
+
+In the chat, `/agents` lists the agent types, `/mcp` the servers, `/help` the
+commands. In Visual Studio, Eclipse, NetBeans and the JetBrains IDEs, **Copy
+Diagnostics** includes the `doctor` report.
+
+Administrators can set rules no one can loosen (managed settings):
+[../admin/README.md](../admin/README.md#5-managed-settings-rules-developers-cant-change).
