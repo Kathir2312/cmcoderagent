@@ -19,10 +19,16 @@
 # runs `uv python dir`): what the IDE's own process starts is a note, not a
 # failure (no_python.py's IDE_VARIABLE; the plugin's code runs in that process
 # too, so IntelliJ IDEA's gate, which has no such option, still holds it).
+# --startup-timeout S (default 240): an IDE that hasn't started the self-test
+# by then is stuck starting up (seen on macOS runners: IntelliJ waits for its
+# licensing service and never gets past its configuration store). It's stopped
+# and started once more with a fresh profile; the result says so. Not on
+# Windows, where the launcher may hand over to another process.
 set -euo pipefail
 trap 'echo "run-gate.sh: line $LINENO failed (exit $?): $BASH_COMMAND" >&2' ERR
 
 timeout_s=900
+startup_s=240
 ide_looks_for_python=0
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -30,6 +36,7 @@ while [ $# -gt 0 ]; do
     --ide) ide=$2; shift 2 ;;
     --python) python=$2; shift 2 ;;
     --timeout) timeout_s=$2; shift 2 ;;
+    --startup-timeout) startup_s=$2; shift 2 ;;
     --ide-looks-for-python) ide_looks_for_python=1; shift ;;
     *) echo "unknown option $1" >&2; exit 2 ;;
   esac
@@ -69,7 +76,7 @@ echo "IDE: $product on $system ($launcher, settings through \$$properties_variab
 
 work=$(mktemp -d "${TMPDIR:-/tmp}/cmcoder-ij-gate-XXXXXX")
 project="$work/project"
-mkdir -p "$project" "$work/config" "$work/system" "$work/plugins" "$work/log" "$work/cmcoder"
+mkdir -p "$project" "$work/plugins" "$work/cmcoder"
 printf 'first line\nsecond line\n' > "$project/app.txt"
 git -C "$project" init -q 2>/dev/null || mkdir -p "$project/.git"
 result="$work/result.json"
@@ -114,57 +121,90 @@ if [ -z "$url" ]; then
 fi
 echo "Mock model server: $url"
 
-# A fresh profile, no first-start dialogs (privacy policy, data sharing,
-# settings import, tips), the project trusted (a developer opening their own
-# project); IntelliJ makes each line here a system property.
-{
-  echo "idea.config.path=$(setting "$work/config")"
-  echo "idea.system.path=$(setting "$work/system")"
-  echo "idea.plugins.path=$(setting "$work/plugins")"
-  echo "idea.log.path=$(setting "$work/log")"
-  echo "jb.privacy.policy.text=<!--999.999-->"
-  echo "jb.consents.confirmation.enabled=false"
-  echo "idea.initially.ask.config=never"
-  echo "ide.show.tips.on.startup.default.value=false"
-  echo "ide.newUsersOnboarding=false"
-  echo "idea.trust.all.projects=true"
-  echo "cmcoder.gate=$(setting "$result")"
-  echo "cmcoder.gate.project=$(setting "$project")"
-  [ -n "${CMCODER_GATE_SHOTS:-}" ] && echo "cmcoder.gate.shots=$(setting "$CMCODER_GATE_SHOTS")"
-  true
-} > "$work/idea.properties"
-
 export CMCODER_BASE_URL="$url" CMCODER_API_KEY="$api_key" CMCODER_MODEL=qwen3-27b
 export CMCODER_CONFIG_DIR="$(native "$work/cmcoder")" PYTHON_KEYRING_BACKEND=keyring.backends.fail.Keyring
-export "$properties_variable=$(native "$work/idea.properties")"
 unset HTTPS_PROXY HTTP_PROXY ALL_PROXY https_proxy http_proxy all_proxy JAVA_TOOL_OPTIONS JAVA_HOME || true
 if [ "$ide_looks_for_python" = 1 ]; then export CMCODER_PYTHON_TRAP_IDE="$(cd "$ide" && pwd -P)"; fi
 
-"$launcher" "$(native "$project")" > "$work/ide.out" 2>&1 &
-ide_pid=$!
+# start_ide N: the IDE on the test project, with profile N. A fresh profile, no
+# first-start dialogs (privacy policy, data sharing, settings import, tips), the
+# project trusted (a developer opening their own project); IntelliJ makes each
+# line of the properties file a system property.
+start_ide() {
+  profile="$work/profile$1"
+  log_dir="$profile/log"
+  ide_out="$profile/ide.out"
+  mkdir -p "$profile/config" "$profile/system" "$log_dir"
+  {
+    echo "idea.config.path=$(setting "$profile/config")"
+    echo "idea.system.path=$(setting "$profile/system")"
+    echo "idea.plugins.path=$(setting "$work/plugins")"
+    echo "idea.log.path=$(setting "$log_dir")"
+    echo "jb.privacy.policy.text=<!--999.999-->"
+    echo "jb.consents.confirmation.enabled=false"
+    echo "idea.initially.ask.config=never"
+    echo "ide.show.tips.on.startup.default.value=false"
+    echo "ide.newUsersOnboarding=false"
+    echo "idea.trust.all.projects=true"
+    echo "cmcoder.gate=$(setting "$result")"
+    echo "cmcoder.gate.project=$(setting "$project")"
+    [ -n "${CMCODER_GATE_SHOTS:-}" ] && echo "cmcoder.gate.shots=$(setting "$CMCODER_GATE_SHOTS")"
+    true
+  } > "$profile/idea.properties"
+  export "$properties_variable=$(native "$profile/idea.properties")"
+  "$launcher" "$(native "$project")" > "$ide_out" 2>&1 &
+  ide_pid=$!
+  started=$(date +%s)
+}
 
-end=$(( $(date +%s) + timeout_s ))
+# stop_ide: the IDE and what it started, politely, then by force.
+stop_ide() {
+  local kids
+  kids=$(pgrep -P "$ide_pid" 2>/dev/null || true)
+  kill "$ide_pid" $kids 2>/dev/null || true
+  for _ in $(seq 30); do kill -0 "$ide_pid" 2>/dev/null || break; sleep 1; done
+  kill -9 "$ide_pid" $kids 2>/dev/null || true
+  wait "$ide_pid" 2>/dev/null || true
+}
+
+restarted=0
+start_ide 1
+end=$(( started + timeout_s ))
 # (On Windows a launcher may hand over to another process and end: there, only the time limit counts.)
 alive() { [ "$windows" = 1 ] || kill -0 "$ide_pid" 2>/dev/null; }
-while [ ! -f "$result" ] && [ "$(date +%s)" -lt "$end" ] && alive; do sleep 2; done
+while [ ! -f "$result" ] && [ "$(date +%s)" -lt "$end" ] && alive; do
+  # The self-test's first step ("loaded in ...") comes as the IDE's frame or the
+  # project opens. None by now: stuck starting up. Once, a fresh start.
+  if [ "$restarted" = 0 ] && [ "$windows" = 0 ] && [ ! -f "$result.steps" ] \
+      && [ $(( $(date +%s) - started )) -ge "$startup_s" ]; then
+    echo "The IDE hasn't started the self-test after $startup_s s: stuck starting up. Its log, last lines:"
+    tail -12 "$log_dir/idea.log" 2>/dev/null | cut -c1-300 | sed 's/^/  log: /' || true
+    echo "Stopping it and starting it once more, with a fresh profile."
+    stop_ide
+    restarted=1
+    start_ide 2
+    end=$(( started + timeout_s ))
+  fi
+  sleep 2
+done
 show() { [ -f "$1" ] && { echo "--- $(basename "$1"):"; sed 's/^/  /' "$1"; } || true; }
 if [ ! -f "$result" ]; then
   show "$result.steps"
   if [ -n "${CMCODER_GATE_SHOTS:-}" ] && [ -n "${DISPLAY:-}" ] && command -v import >/dev/null; then
     mkdir -p "$CMCODER_GATE_SHOTS" && import -window root "$CMCODER_GATE_SHOTS/intellij-timeout.png" || true
   fi
-  tail -40 "$work/ide.out" 2>/dev/null | sed 's/^/  ide: /' || true
+  tail -40 "$ide_out" 2>/dev/null | sed 's/^/  ide: /' || true
   if [ "$windows" = 0 ] && kill -0 "$ide_pid" 2>/dev/null; then
     # The JVM prints its threads on SIGQUIT: the UI thread's and the gate's say what they wait for.
     kill -QUIT "$ide_pid" 2>/dev/null || true
     sleep 3
     echo "--- the IDE's UI thread and the gate's (thread dump):"
-    awk '/^"/ { show = ($0 ~ /AWT-EventQueue|cmcoder gate/) } show' "$work/ide.out" 2>/dev/null | head -150 | sed 's/^/  /' || true
+    awk '/^"/ { show = ($0 ~ /AWT-EventQueue|cmcoder gate/) } show' "$ide_out" 2>/dev/null | head -150 | sed 's/^/  /' || true
   fi
   echo "--- the plugin in the IDE's log:"
-  grep -E 'custom plugins|PluginManager.*(cmcoder|disabled|incompatible)|cmcoder|SEVERE' "$work/log/idea.log" 2>/dev/null | head -40 | cut -c1-400 | sed 's/^/  log: /' || true
+  grep -E 'custom plugins|PluginManager.*(cmcoder|disabled|incompatible)|cmcoder|SEVERE' "$log_dir/idea.log" 2>/dev/null | head -40 | cut -c1-400 | sed 's/^/  log: /' || true
   echo "--- the IDE's log, last lines:"
-  tail -60 "$work/log/idea.log" 2>/dev/null | cut -c1-400 | sed 's/^/  log: /' || true
+  tail -60 "$log_dir/idea.log" 2>/dev/null | cut -c1-400 | sed 's/^/  log: /' || true
   echo "No gate result after $timeout_s s (the IDE still running: $(kill -0 "$ide_pid" 2>/dev/null && echo yes || echo no))" >&2
   exit 1
 fi
@@ -177,9 +217,9 @@ ide_pid=
 echo "Result: $(head -c 4000 "$result")" | sed 's/\\n/\n  /g'
 if ! grep -q '"ok":true' "$result"; then
   show "$result.steps"  # the steps in full (the report above is cut at 4000 characters)
-  grep -E 'cmcoder|SEVERE|ERROR' "$work/log/idea.log" 2>/dev/null | tail -60 | sed 's/^/  log: /' || true
+  grep -E 'cmcoder|SEVERE|ERROR' "$log_dir/idea.log" 2>/dev/null | tail -60 | sed 's/^/  log: /' || true
   # The IDE saves thread dumps when its UI or write actions stall: the UI thread's stack says why.
-  for dump in "$work"/log/*/thread-dump-*.txt "$work"/log/threadDumps-*/*.txt; do
+  for dump in "$log_dir"/*/thread-dump-*.txt "$log_dir"/threadDumps-*/*.txt; do
     [ -f "$dump" ] || continue
     echo "--- the UI thread in $(basename "$(dirname "$dump")")/$(basename "$dump"):"
     awk '/^"/ { show = ($0 ~ /AWT-EventQueue|cmcoder gate/) } show' "$dump" | head -60 | sed 's/^/  /' || true
@@ -188,4 +228,8 @@ if ! grep -q '"ok":true' "$result"; then
   echo "The IntelliJ gate failed." >&2
   exit 1
 fi
-echo "The IntelliJ gate passed ($product on $system)."
+if [ "$restarted" = 1 ]; then
+  echo "The IntelliJ gate passed ($product on $system), on the second start: the first was stuck starting up."
+else
+  echo "The IntelliJ gate passed ($product on $system)."
+fi

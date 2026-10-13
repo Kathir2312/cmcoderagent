@@ -14,7 +14,15 @@ Open points:
   `-2-diff`, `-3-navigator`) are to be committed from the release build's
   `gate-screenshots-*` artifact; this environment can't download artifacts.
 - Rider: the Plugin Verifier only (decided 13 Oct). Rider needs a license
-  to start, so it doesn't run the live gate. Phase 6 is complete ([../phase6/STATUS.md](../phase6/STATUS.md)); this
+  to start, so it doesn't run the live gate.
+
+Known CI issue (13 Oct): on macOS runners IntelliJ IDEA 2026.2.3 sometimes
+never finishes starting (it waits for its licensing service and stays at its
+configuration store), so the gate timed out. `jetbrains/gate/run-gate.sh` now
+stops an IDE that hasn't started the self-test within `--startup-timeout`
+(240 s) and starts it once more with a fresh profile; the gate's last line says
+when that happened. A second stuck start still fails the gate
+(`tests/test_jetbrains_gate_runner.py`). Phase 6 is complete ([../phase6/STATUS.md](../phase6/STATUS.md)); this
 phase adds the IDE family Phase 6 dropped.
 
 > **Note: developers' PCs may not have Python installed** (nor uv, pip or
