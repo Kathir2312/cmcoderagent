@@ -41,6 +41,8 @@ SH_SCRIPTS = [s for s in SCRIPTS if s.suffix == ".sh"] + [PACKAGING / "package-a
 PS1_SCRIPTS = [s for s in SCRIPTS if s.suffix == ".ps1"] + [
     PACKAGING / "package-all.ps1",
     PACKAGING / "package-common.ps1",
+    ROOT / "visualstudio" / "find-msbuild.ps1",
+    ROOT / "visualstudio" / "build-vsix.ps1",
 ]
 
 

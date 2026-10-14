@@ -6,9 +6,7 @@
 #>
 param([switch]$Gate)
 $ErrorActionPreference = 'Stop'
-$vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
-$msbuild = & $vswhere -latest -products * -requires Microsoft.Component.MSBuild -find 'MSBuild\**\Bin\MSBuild.exe' | Select-Object -First 1
-if (-not $msbuild) { throw 'MSBuild (Visual Studio) not found' }
+$msbuild = & (Join-Path $PSScriptRoot 'find-msbuild.ps1') # or stops with what's missing
 $project = Join-Path $PSScriptRoot 'src\Cmcoder.VisualStudio\Cmcoder.VisualStudio.csproj'
 $name = if ($Gate) { 'Gate' } else { 'Release' }
 $out = Join-Path $PSScriptRoot "src\Cmcoder.VisualStudio\bin\$name\"
