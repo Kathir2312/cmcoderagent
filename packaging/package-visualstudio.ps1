@@ -26,10 +26,9 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "package-common.ps1")
 
-$vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
-if (-not (Test-Path $vswhere)) {
-    throw "Visual Studio 2022 is needed, with the 'Visual Studio extension development' workload"
-}
+# Visual Studio's MSBuild first: a missing one stops here, not after building cmcoder.
+$msbuild = & (Join-Path $root "visualstudio\find-msbuild.ps1")
+Write-Host "MSBuild: $msbuild"
 Need-Node
 Assert-GitCommit
 $exe = Build-Cmcoder

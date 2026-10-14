@@ -11,7 +11,7 @@ Visual Studio exists only on Windows, so there is one file, built on Windows.
 | Needs | Why |
 |---|---|
 | **Windows 10/11 x64** | Visual Studio and the Windows cmcoder |
-| **Visual Studio 2022** (17.10 or newer, any edition) with the **"Visual Studio extension development"** workload | builds the extension (MSBuild and the VS SDK) |
+| **Visual Studio 2022 or newer** (any edition) with the **"Visual Studio extension development"** workload; or the **Build Tools for Visual Studio** with "MSBuild" and the ".NET Framework 4.8 targeting pack" | builds the extension (MSBuild; the VS SDK comes from NuGet) |
 | **Git for Windows** | the build is named after its commit |
 | **uv** ([docs.astral.sh/uv](https://docs.astral.sh/uv/)) | builds cmcoder; it downloads its own Python 3.12 |
 | **Node.js 22 LTS** (with npm) | builds the shared chat page |
@@ -43,8 +43,9 @@ powershell -ExecutionPolicy Bypass -File packaging\package-visualstudio.ps1
 
 The script does sections 3 to 5 in one go, as the Release build does:
 
-1. checks the tools (Visual Studio 2022, Node.js 22) and that git can name
-   the build;
+1. checks the tools first (Visual Studio's MSBuild and the .NET Framework
+   4.8 targeting pack, Node.js 22) and that git can name the build, so a
+   missing one stops it before the long steps;
 2. builds the standalone cmcoder and runs it with no Python in reach;
 3. builds the shared chat page;
 4. puts a fresh copy of cmcoder into the extension and builds it with
@@ -188,7 +189,8 @@ User guide: [../guides/visualstudio.md](../guides/visualstudio.md).
 
 | Problem | Fix |
 |---|---|
-| "MSBuild (Visual Studio) not found" | install Visual Studio 2022 with the "Visual Studio extension development" workload |
+| "No Visual Studio on this PC", or "Visual Studio's installer is on this PC, but ..." | the message lists what's installed and why each doesn't do (often: Visual Studio's installer came with another product, such as SQL Server Management Studio, but no Visual Studio is installed). Install Visual Studio 2022 or newer, any edition, with the "Visual Studio extension development" workload; or the Build Tools for Visual Studio with "MSBuild" and the ".NET Framework 4.8 targeting pack". A preview (Preview, Insiders) is used when there's no release. `visualstudio\find-msbuild.ps1` runs the same check on its own |
+| "Found MSBuild ..., but not the .NET Framework 4.8 targeting pack" | Visual Studio Installer → Modify → Individual components → ".NET Framework 4.8 targeting pack" |
 | "panel/chat.js is missing from the .vsix" | build the chat page (step 4) |
 | `cmcoder inside: False` | copy `dist\cmcoder` into `visualstudio\src\Cmcoder.VisualStudio\bin\cmcoder` (step 5) |
 | NuGet restore errors | the build machine needs nuget.org (or your company's NuGet mirror) |
