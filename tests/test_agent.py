@@ -110,6 +110,29 @@ async def test_bad_tool_calls_become_errors_for_the_model(mock_server: Any, proj
     assert result(events).subtype == "success"
 
 
+async def test_a_broken_call_does_not_break_the_rest_of_the_session(
+    mock_server: Any, project: Path
+) -> None:
+    """vLLM parses the history's tool-call arguments: one the model wrote as
+    broken JSON (here, SQL with unescaped quotes) failed every later message
+    with 400 "Expecting ',' delimiter". It goes back as an object instead."""
+    broken = '{"sql": "SELECT "Name" FROM t", "max_rows": 5}'
+    server = mock_server(
+        [
+            {"tool_calls": [{"name": "Read", "arguments": broken}]},
+            {"content": "That call was wrong."},
+            {"content": "pong"},
+        ]
+    )
+    agent = make_agent(server, project)
+    first = [e async for e in agent.run("query it")]
+    second = await run(agent, "ping")
+    assert result(first).subtype == "success"
+    assert result(second).subtype == "success" and result(second).result == "pong"
+    calls = [c for m in server.requests[-1]["messages"] for c in m.get("tool_calls") or []]
+    assert json.loads(calls[0]["function"]["arguments"]) == {"_raw": broken}
+
+
 async def test_headless_denies_with_hint(mock_server: Any, project: Path) -> None:
     server = mock_server(
         [

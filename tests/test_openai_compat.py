@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import pytest
@@ -17,6 +18,7 @@ from cmcoder.providers.openai_compat import (
     BudgetExceeded,
     ServerError,
     to_wire_messages,
+    wire_arguments,
 )
 from cmcoder.providers.profiles import resolve_profile
 
@@ -189,6 +191,22 @@ def test_wire_messages() -> None:
     }
     assert "reasoning" not in str(wire)
     assert wire[2] == {"role": "tool", "tool_call_id": "c1", "content": "data"}
+
+
+def test_wire_arguments_are_strict_json_objects() -> None:
+    """What the gateway gets back for a past call: vLLM parses each one, and a
+    broken one fails the whole request (test_agent.py has the session)."""
+    assert wire_arguments('{"a": 1}') == '{"a": 1}'  # as written
+    assert wire_arguments("") == "{}"
+    # Repaired as the tool ran it: a trailing comma, a raw newline in a string,
+    # a Python-style dict, double-encoded.
+    assert json.loads(wire_arguments('{"a": 1,}')) == {"a": 1}
+    assert json.loads(wire_arguments('{"s": "line1\nline2"}')) == {"s": "line1\nline2"}
+    assert json.loads(wire_arguments("{'a': True}")) == {"a": True}
+    assert json.loads(wire_arguments('"{\\"a\\": 1}"')) == {"a": 1}
+    # Not repairable, or not an object: what the model wrote, under "_raw".
+    for raw in ('{"sql": "SELECT "Name" FROM t"}', "[1]", "{broken"):
+        assert json.loads(wire_arguments(raw)) == {"_raw": raw}
 
 
 async def test_list_models_and_model_info(mock_server: Any) -> None:

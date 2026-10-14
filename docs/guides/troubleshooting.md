@@ -35,6 +35,8 @@ needs Python, and cmcoder never tries to install it. If something asks for
 | Proxy errors | set `HTTPS_PROXY`; put internal gateway domains in `NO_PROXY` |
 | "No API key" / 401 | `cmcoder login` again (keys expire); for Open WebUI an API key, not a password |
 | Model not found | `cmcoder models` lists the gateway's names; fix `model` in your settings |
+| Every message, even "ping", gets `Request rejected (400)` with "Expecting ',' delimiter" | the model once wrote a tool call with broken JSON, and cmcoder built before 2026-10-14 (`cmcoder --version` shows the date) sent it back as written, so the gateway's vLLM rejects the whole chat: start a new chat (or update cmcoder, which sends it back fixed) |
+| "Error doing the fallback: … max_tokens must be at least 1, got -N" | the gateway's fallback model has a smaller context window than the chat (N tokens too small), so it can't take over: `/compact` the chat, or ask your AI team for a fallback with the main model's window |
 | "… can't see images. Set "visionModel" …" | your model is text only: set `visionModel` to a model that reads images ([images.md](../features/images.md)) |
 | Alt+V: "no image in the clipboard" (Linux terminal) | install `wl-clipboard` (Wayland) or `xclip` (X11) |
 | Terminal: the model says it sees no image | no `[Image #1]` in your prompt means nothing was attached: in Windows Terminal and VS Code's terminal Ctrl+V pastes only text, so press **Alt+V** or type `/image` ([images.md](../features/images.md#when-an-image-doesnt-get-through)) |

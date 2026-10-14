@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import ast
 import asyncio
-import json
 import re
 import time
 import uuid
@@ -29,6 +27,7 @@ from ..providers.messages import (
     ToolCall,
     ToolSpec,
     Usage,
+    parse_tool_arguments,
 )
 from ..providers.openai_compat import (
     ContextTooLong,
@@ -168,42 +167,6 @@ class PermissionAnswer:
 
 
 AskFn = Callable[[PermissionRequest], Awaitable[PermissionAnswer]]
-
-
-def parse_tool_arguments(raw: str) -> tuple[dict[str, Any] | None, str | None]:
-    """Parse model-produced JSON arguments, repairing common mistakes."""
-    text = (raw or "").strip()
-    if not text:
-        return {}, None
-    attempts = [text]
-    fenced = re.sub(r"^```(?:json)?\s*|\s*```$", "", text)
-    attempts.append(re.sub(r",\s*([}\]])", r"\1", fenced))
-    value: Any = None
-    error: str | None = None
-    for candidate in attempts:
-        try:
-            value = json.loads(candidate, strict=False)
-            error = None
-            break
-        except ValueError as e:
-            error = str(e)
-    if error is not None:
-        # Python-style dicts ({'path': 'a', 'all': True}) from some small models.
-        try:
-            value = ast.literal_eval(fenced)
-            error = None
-        except (ValueError, SyntaxError, MemoryError, RecursionError):
-            pass
-    if error is not None:
-        return None, f"arguments are not valid JSON ({error})"
-    if isinstance(value, str):  # double-encoded
-        try:
-            value = json.loads(value, strict=False)
-        except ValueError:
-            pass
-    if not isinstance(value, dict):
-        return None, "arguments must be a JSON object"
-    return value, None
 
 
 def format_validation_error(e: ValidationError) -> str:

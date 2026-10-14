@@ -6,6 +6,9 @@ them to and from its wire format.
 
 from __future__ import annotations
 
+import ast
+import json
+import re
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
@@ -18,9 +21,46 @@ Role = Literal["system", "user", "assistant", "tool"]
 class ToolCall:
     id: str
     name: str
-    # Raw JSON text as produced by the model. Parsed (and repaired) by the agent,
-    # because weaker models often produce slightly malformed JSON.
+    # Raw JSON text as produced by the model. Parsed (and repaired) by
+    # parse_tool_arguments, because weaker models often produce slightly
+    # malformed JSON; the gateway gets it back strict (wire_arguments).
     arguments: str
+
+
+def parse_tool_arguments(raw: str) -> tuple[dict[str, Any] | None, str | None]:
+    """Parse model-produced JSON arguments, repairing common mistakes."""
+    text = (raw or "").strip()
+    if not text:
+        return {}, None
+    attempts = [text]
+    fenced = re.sub(r"^```(?:json)?\s*|\s*```$", "", text)
+    attempts.append(re.sub(r",\s*([}\]])", r"\1", fenced))
+    value: Any = None
+    error: str | None = None
+    for candidate in attempts:
+        try:
+            value = json.loads(candidate, strict=False)
+            error = None
+            break
+        except ValueError as e:
+            error = str(e)
+    if error is not None:
+        # Python-style dicts ({'path': 'a', 'all': True}) from some small models.
+        try:
+            value = ast.literal_eval(fenced)
+            error = None
+        except (ValueError, SyntaxError, MemoryError, RecursionError):
+            pass
+    if error is not None:
+        return None, f"arguments are not valid JSON ({error})"
+    if isinstance(value, str):  # double-encoded
+        try:
+            value = json.loads(value, strict=False)
+        except ValueError:
+            pass
+    if not isinstance(value, dict):
+        return None, "arguments must be a JSON object"
+    return value, None
 
 
 @dataclass

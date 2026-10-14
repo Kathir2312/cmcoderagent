@@ -221,6 +221,20 @@ def _ollama_chunks(reply: dict[str, Any], model: str, prompt_tokens: int) -> lis
     return out
 
 
+def _bad_tool_arguments(messages: list[dict[str, Any]]) -> str | None:
+    """Like vLLM: the history's tool-call arguments are parsed for the chat
+    template, and one that isn't a JSON object fails the whole request."""
+    for m in messages:
+        for call in m.get("tool_calls") or []:
+            try:
+                args = json.loads(call["function"]["arguments"])
+            except ValueError as e:
+                return str(e)
+            if not isinstance(args, dict):
+                return "tool call arguments must be a JSON object"
+    return None
+
+
 def make_handler(state: MockState) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
@@ -359,6 +373,15 @@ def make_handler(state: MockState) -> type[BaseHTTPRequestHandler]:
                 with state.lock, open(state.record, "a", encoding="utf-8") as f:
                     f.write(json.dumps(body) + "\n")
             model = body.get("model", "mock")
+            problem = _bad_tool_arguments(body.get("messages") or [])
+            if problem:
+                self._json(
+                    400,
+                    {"detail": problem}
+                    if state.openwebui is not None
+                    else {"error": {"message": problem, "type": "BadRequestError", "code": 400}},
+                )
+                return
             # Realistic usage (~3.5 chars per token), so context handling is exercised.
             prompt_tokens = int(
                 len(json.dumps(body.get("messages", [])) + json.dumps(body.get("tools", []))) / 3.5

@@ -29,6 +29,7 @@ from .messages import (
     ToolCallStarted,
     ToolSpec,
     Usage,
+    parse_tool_arguments,
 )
 from .profiles import ModelProfile
 from .text_tools import to_prompted_wire
@@ -229,6 +230,23 @@ def no_tool_support(err: ProviderError) -> bool:
     return isinstance(err, BadRequest) and bool(_NO_TOOL_SUPPORT.search(str(err)))
 
 
+def wire_arguments(raw: str) -> str:
+    """A past tool call's arguments as the strict JSON object servers expect.
+
+    vLLM parses every one in the history and rejects the whole request over
+    one the model got wrong (400 "Expecting ',' delimiter"), which would fail
+    every later message in the session too. So: as written when it's strict
+    JSON, else as repaired (what the tool ran with), else what the model wrote
+    under "_raw" (its tool result says what was wrong with it)."""
+    try:
+        if isinstance(json.loads(raw), dict):
+            return raw
+    except ValueError:
+        pass
+    args, _ = parse_tool_arguments(raw)
+    return json.dumps(args if args is not None else {"_raw": raw}, ensure_ascii=False)
+
+
 def to_wire_messages(messages: list[Message], vision: bool = False) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for m in messages:
@@ -239,7 +257,7 @@ def to_wire_messages(messages: list[Message], vision: bool = False) -> list[dict
                     {
                         "id": tc.id,
                         "type": "function",
-                        "function": {"name": tc.name, "arguments": tc.arguments or "{}"},
+                        "function": {"name": tc.name, "arguments": wire_arguments(tc.arguments)},
                     }
                     for tc in m.tool_calls
                 ]
