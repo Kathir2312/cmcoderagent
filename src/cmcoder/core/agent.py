@@ -108,6 +108,13 @@ WRAP_UP_REQUEST = (
     "get to.</system-reminder>"
 )
 STOPPED_WITH_OTHERS = "Stopped: the user denied a tool call of a subagent running alongside."
+# After a reply with nothing in it (no text, no tool call: say, all of it
+# thinking): asked once before the turn ends.
+EMPTY_REPLY_RETRY = (
+    "<system-reminder>Your last reply was empty: nothing reached the user and no tool "
+    "was called. Carry on with the task: call the tool you need, or write your "
+    "answer.</system-reminder>"
+)
 STOP_REQUEST = (
     "<system-reminder>The user stopped you, so you can't use tools any more. Write "
     "your report for the main agent now from what you have found so far, with file "
@@ -851,6 +858,7 @@ class Agent:
         warned_context = False
         overflow_retried = False
         prompted_retried = False
+        empty_retry: Message | None = None  # the request after an empty reply, if sent
         # Turned off for the rest of the turn if summarising fails, so a
         # broken summariser isn't retried before every model call.
         can_compact = self.auto_compact
@@ -1050,7 +1058,11 @@ class Agent:
                     msg.content, msg.tool_calls = extract(msg.content, set(self.tools))
                 if wrapping_up:
                     msg.tool_calls = []  # no tools now: what it wrote is the report
-                self.messages.append(msg)
+                empty = not msg.content.strip() and not msg.tool_calls
+                if not empty:
+                    # An empty reply stays out of the history: the model would copy it.
+                    self.messages.append(msg)
+                    empty_retry = None
                 self.usage.add(done.usage)
                 turn_usage.add(done.usage)
                 message_event = ev.AssistantMessage(
@@ -1089,7 +1101,14 @@ class Agent:
                 if not msg.tool_calls:
                     if done.finish_reason == "length":
                         yield ev.Warning(message="The reply was cut off at the max output length.")
-                    if not msg.content and not msg.tool_calls:
+                    if empty and empty_retry is None and not wrapping_up:
+                        yield ev.Warning(message="The model returned an empty reply; asking again.")
+                        empty_retry = Message.user(EMPTY_REPLY_RETRY)
+                        self.messages.append(empty_retry)
+                        continue
+                    if empty:
+                        if self.messages and self.messages[-1] is empty_retry:
+                            self.messages.pop()  # it didn't help: the history as it was
                         yield ev.Warning(message="The model returned an empty reply.")
                     if self.hooks is not None and stop_blocks < MAX_STOP_HOOK_BLOCKS:
                         outcome = await self._hook(

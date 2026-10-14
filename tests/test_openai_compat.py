@@ -21,6 +21,7 @@ from cmcoder.providers.openai_compat import (
     wire_arguments,
 )
 from cmcoder.providers.profiles import resolve_profile
+from cmcoder.providers.text_tools import to_prompted_wire
 
 from .conftest import make_provider
 
@@ -191,6 +192,19 @@ def test_wire_messages() -> None:
     }
     assert "reasoning" not in str(wire)
     assert wire[2] == {"role": "tool", "tool_call_id": "c1", "content": "data"}
+
+
+def test_empty_replies_saved_in_older_chats_are_left_out() -> None:
+    """The model copies empty replies it sees in the history (test_agent.py)."""
+    msgs = [
+        Message.system("s"),
+        Message.user("go on"),
+        Message(role="assistant", content=""),
+        Message(role="assistant", content="", reasoning="thinking only"),
+        Message.user("continue"),
+    ]
+    assert [m["role"] for m in to_wire_messages(msgs)] == ["system", "user", "user"]
+    assert [m["role"] for m in to_prompted_wire(msgs, [], False)] == ["system", "user", "user"]
 
 
 def test_wire_arguments_are_strict_json_objects() -> None:

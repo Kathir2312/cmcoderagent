@@ -133,6 +133,56 @@ async def test_a_broken_call_does_not_break_the_rest_of_the_session(
     assert json.loads(calls[0]["function"]["arguments"]) == {"_raw": broken}
 
 
+def empty_replies(agent: Agent) -> list[Any]:
+    return [
+        m for m in agent.messages if m.role == "assistant" and not m.content and not m.tool_calls
+    ]
+
+
+async def test_an_empty_reply_is_asked_again_and_kept_out_of_the_history(
+    mock_server: Any, project: Path
+) -> None:
+    """Seen with Qwen3.6 after a tool result: a reply with nothing in it (all
+    thinking). Kept in the history, it was copied: every "continue" got an
+    empty reply too. Now the model is asked once more, and it stays out."""
+    (project / "a.txt").write_text("hello\n")
+    server = mock_server(
+        [
+            {"tool_calls": [{"name": "Read", "arguments": {"file_path": "a.txt"}}]},
+            {"content": "", "reasoning": "Next I should"},
+            {"content": "It says hello."},
+        ]
+    )
+    agent = make_agent(server, project)
+    events = await run(agent, "read a.txt")
+    warnings = [e.message for e in events if isinstance(e, ev.Warning)]
+    assert warnings == ["The model returned an empty reply; asking again."]
+    assert result(events).result == "It says hello."
+    again = server.requests[2]["messages"]
+    assert again[-2]["role"] == "tool" and "Your last reply was empty" in again[-1]["content"]
+    assert not empty_replies(agent)
+
+
+async def test_a_second_empty_reply_ends_the_turn_and_the_chat_goes_on(
+    mock_server: Any, project: Path
+) -> None:
+    server = mock_server([{"content": ""}, {"content": ""}, {"content": "Back on track."}])
+    agent = make_agent(server, project)
+    first = [e async for e in agent.run("go on")]
+    assert [e.message for e in first if isinstance(e, ev.Warning)] == [
+        "The model returned an empty reply; asking again.",
+        "The model returned an empty reply.",
+    ]
+    assert result(first).subtype == "success"
+    second = await run(agent, "continue")
+    assert result(second).result == "Back on track."
+    # Neither the empty replies nor the request after them: the history as it was.
+    sent = server.requests[-1]["messages"]
+    assert [m["role"] for m in sent] == ["system", "user", "user"]
+    assert "Your last reply was empty" not in json.dumps(sent)
+    assert not empty_replies(agent)
+
+
 async def test_headless_denies_with_hint(mock_server: Any, project: Path) -> None:
     server = mock_server(
         [

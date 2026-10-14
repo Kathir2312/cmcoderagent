@@ -133,6 +133,8 @@ def to_prompted_wire(
     for m in messages:
         if m.role == "system":
             out.append({"role": "system", "content": f"{m.content}\n\n{tools_prompt(tools)}"})
+        elif m.role == "assistant" and not m.content.strip() and not m.tool_calls:
+            continue  # an empty reply: the model would copy it
         elif m.role == "assistant":
             parts = [m.content] if m.content else []
             for c in m.tool_calls:

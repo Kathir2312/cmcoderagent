@@ -250,6 +250,8 @@ def wire_arguments(raw: str) -> str:
 def to_wire_messages(messages: list[Message], vision: bool = False) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for m in messages:
+        if m.role == "assistant" and not m.content.strip() and not m.tool_calls:
+            continue  # an empty reply (older chats kept them): the model would copy it
         if m.role == "assistant":
             item: dict[str, Any] = {"role": "assistant", "content": m.content or None}
             if m.tool_calls:
@@ -261,8 +263,6 @@ def to_wire_messages(messages: list[Message], vision: bool = False) -> list[dict
                     }
                     for tc in m.tool_calls
                 ]
-            elif not m.content:
-                item["content"] = ""
             out.append(item)
         elif m.role == "tool":
             out.append({"role": "tool", "tool_call_id": m.tool_call_id, "content": m.content})
