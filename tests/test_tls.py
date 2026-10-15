@@ -154,3 +154,27 @@ async def test_doctor_names_the_untrusted_issuer(
     d, _ = doctor(internal_ca["ca"])
     assert await d.check_network("corp") is True
     assert "TLS: certificate verified" in d.console.export_text()
+
+
+def test_phase8_chat_model_trusts_the_company_ca_only_when_told(
+    tls_server: MockServer, internal_ca: dict[str, Path]
+) -> None:
+    """The LangChain chat model goes through cmcoder's TLS clients: an
+    internal CA is refused until caCertPath names it (never unverified)."""
+    import openai
+
+    from cmcoder.llm.factory import chat_model
+
+    def model(ca: Path | None) -> Any:
+        return chat_model(
+            "qwen3-27b",
+            resolve_profile("qwen3-27b"),
+            base_url=tls_server.base_url,
+            api_key=API_KEY,
+            transport=TransportOptions(ca_cert_path=str(ca) if ca else None, read_timeout=10),
+            max_retries=0,
+        )
+
+    with pytest.raises(openai.APIConnectionError):
+        model(None).invoke("hi")
+    assert model(internal_ca["ca"]).invoke("hi").content == "secure hello"
