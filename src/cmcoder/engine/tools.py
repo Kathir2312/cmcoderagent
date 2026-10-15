@@ -47,7 +47,7 @@ def run_context(fallback: ToolContext | None) -> ToolContext:
     except (RuntimeError, LookupError):  # not inside a graph
         runtime = None
     context = runtime.context if runtime is not None else None
-    if isinstance(context, EngineContext):
+    if isinstance(context, EngineContext) and context.tool_ctx is not None:
         return context.tool_ctx
     if fallback is None:
         raise ToolException("No working folder for this tool (no EngineContext in the run).")

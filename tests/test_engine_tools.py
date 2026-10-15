@@ -125,3 +125,18 @@ async def test_in_a_graph_the_tool_works_in_the_runs_folder(project: Path) -> No
         lost["messages"][-1].status == "error"
         and "No working folder" in lost["messages"][-1].content
     )
+
+
+async def test_an_empty_runtime_context_falls_back_to_the_tools_own(project: Path) -> None:
+    """A LangGraph server (`langgraph dev`, behind Studio) makes the context
+    with no arguments when a run gives none."""
+    (project / "a.py").write_text("x = 1\n")
+    graph = StateGraph(MessagesState, context_schema=EngineContext)
+    graph.add_node(
+        "tools",
+        ToolNode(langchain_tools([ReadTool()], ToolContext(cwd=project, project_root=project))),
+    )
+    graph.add_edge(START, "tools")
+    ask = {"messages": [AIMessage(content="", tool_calls=[call("Read", file_path="a.py")])]}
+    out = await graph.compile().ainvoke(ask, context=EngineContext())
+    assert "x = 1" in out["messages"][-1].content

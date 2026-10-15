@@ -1,0 +1,6 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "cmcoder-m3": "./studio.py:graph"
+  }
+}

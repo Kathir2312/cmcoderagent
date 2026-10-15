@@ -232,7 +232,13 @@ with a lab to `docs/learn/phase8/`.
   (`mcp__server__tool` names, text results, error status). LangChain
   inlines `$defs` and drops `title` keys in schemas: same meaning, noted.
   The learning page and lab are in [docs/learn/phase8/](../../../learn/phase8/README.md).)
-- [ ] M3. Hand-built graph lab
+- [x] M3. Hand-built graph lab (15 Oct: [m3-graph-by-hand.md](../../../learn/phase8/m3-graph-by-hand.md)
+  and its lab: the loop as a `StateGraph` from cmcoder's model and tools,
+  reducers, streaming, the recursion limit, a checkpointer; a Studio entry
+  point checked with `langgraph dev` here (Studio itself needs the user's
+  LangSmith account). Found and fixed: a LangGraph server makes the runtime
+  context with no arguments, so `EngineContext.tool_ctx` is optional. A
+  test now runs every lab.)
 - [ ] M4. The engine on `create_agent`, the engine switch
 - [ ] M5. Sessions, approvals, long-term memory
 - [ ] M6. Subagents, critic, team
