@@ -28,6 +28,7 @@ track that matches what you know.
 | 5: Code search | RAG over the project: embeddings, the index, `CodeSearch` | [phase5/python-guide.md](phase5/python-guide.md) | [phase5/langgraph-guide.md](phase5/langgraph-guide.md) |
 | 6: Other IDEs | one chat page, the JVM and .NET hosts, Visual Studio, Eclipse, NetBeans | [phase6/python-guide.md](phase6/python-guide.md) | [phase6/langgraph-guide.md](phase6/langgraph-guide.md) |
 | 7: IntelliJ-based IDEs | the JetBrains plugin on the same JVM core | — (Java: the IDE track) | — |
+| 8: The engine on LangChain and LangGraph (in progress) | the engine rewritten on LangChain, LangGraph, LangSmith and Langfuse, milestone by milestone, each with a lab | — (the LangChain track is the main one here) | [phase8/](phase8/README.md) |
 
 **IDE track (Java, C#, TypeScript):** [phase6/ide-guide.md](phase6/ide-guide.md)
 explains how the plugins are built: one chat page in each IDE's browser, one

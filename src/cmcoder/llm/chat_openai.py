@@ -20,10 +20,18 @@ provider (providers/openai_compat.py):
 Per call, `thinking=False` turns Qwen's thinking off the way the model
 profile says, and the request carries `max_tokens` under the name the
 server takes and Ollama's options through Open WebUI.
+
+Tool calls written as text (Qwen's `<tool_call>` format) become real tool
+calls, for a server without a tool-call parser. With the profile's
+`toolCalling: "prompted"` (a server that rejects the `tools` parameter) the
+tools are described in the system prompt instead, and past calls and their
+results are sent as text (providers/text_tools.py).
 """
 
 from __future__ import annotations
 
+import json
+import uuid
 from collections.abc import AsyncIterator, Iterator
 from typing import Any
 from uuid import UUID
@@ -34,8 +42,11 @@ from langchain_core.outputs import ChatGeneration, ChatGenerationChunk, ChatResu
 from langchain_openai import ChatOpenAI
 from pydantic import Field, PrivateAttr
 
-from ..providers.messages import wire_arguments
+from ..providers.messages import ToolSpec, parse_tool_arguments, wire_arguments
 from ..providers.profiles import ModelProfile
+from ..providers.text_tools import CLOSE as CALL_CLOSE
+from ..providers.text_tools import OPEN as CALL_OPEN
+from ..providers.text_tools import extract, tools_prompt
 from ..providers.thinking import CLOSE, ThinkSplitter
 
 REASONING = "reasoning_content"  # where a message keeps the model's thinking
@@ -67,6 +78,11 @@ class CmcoderChatOpenAI(ChatOpenAI):
         payload = super()._get_request_payload(input_, stop=stop, **kwargs)
         payload["messages"] = wire_history(payload.get("messages") or [])
         p = self.cm_profile
+        if p.tool_calling == "prompted" and payload.get("tools"):
+            specs = [_spec(tool) for tool in payload.pop("tools")]
+            payload.pop("tool_choice", None)
+            payload.pop("parallel_tool_calls", None)
+            payload["messages"] = prompted_history(payload["messages"], specs)
         for name in ("max_tokens", "max_completion_tokens"):
             if name in payload and name != p.max_tokens_param:
                 payload[p.max_tokens_param] = payload.pop(name)
@@ -183,7 +199,7 @@ class CmcoderChatOpenAI(ChatOpenAI):
         result = super()._generate_with_cache(
             messages, stop=stop, run_manager=run_manager, **kwargs
         )
-        return self._finish(result, run_manager)
+        return self._finish(result, run_manager, kwargs.get("tools"))
 
     async def _agenerate_with_cache(
         self,
@@ -195,16 +211,19 @@ class CmcoderChatOpenAI(ChatOpenAI):
         result = await super()._agenerate_with_cache(
             messages, stop=stop, run_manager=run_manager, **kwargs
         )
-        return self._finish(result, run_manager)
+        return self._finish(result, run_manager, kwargs.get("tools"))
 
-    def _finish(self, result: ChatResult, run_manager: Any) -> ChatResult:
+    def _finish(self, result: ChatResult, run_manager: Any, tools: Any = None) -> ChatResult:
         """The whole reply's corrections, once its last chunk is in."""
         seen = self._think_seen.pop(run_manager.run_id, None) if run_manager else None
+        known = {_spec(tool).name for tool in tools or []}
         generations: list[ChatGeneration] = []
         for gen in result.generations:
             message = gen.message
             if isinstance(message, AIMessage) and self.cm_profile.reasoning in TAG_MODES:
                 message = self._finish_thinking(message, seen)
+            if isinstance(message, AIMessage) and known:
+                message = text_tool_calls(message, known)
             generations.append(ChatGeneration(message=message, generation_info=gen.generation_info))
         return ChatResult(generations=generations, llm_output=result.llm_output)
 
@@ -321,3 +340,82 @@ def _with(chunk: ChatGenerationChunk, text: str, thought: str) -> ChatGeneration
         kwargs[REASONING] = str(kwargs.get(REASONING, "")) + thought
     new = message.model_copy(update={"content": text, "additional_kwargs": kwargs})
     return ChatGenerationChunk(message=new, generation_info=chunk.generation_info)
+
+
+def _spec(tool: Any) -> ToolSpec:
+    """A bound tool (OpenAI's format) as cmcoder's ToolSpec."""
+    fn = tool.get("function", tool) if isinstance(tool, dict) else {}
+    return ToolSpec(
+        name=str(fn.get("name", "")),
+        description=str(fn.get("description", "")),
+        parameters=fn.get("parameters") or {},
+    )
+
+
+def prompted_history(messages: list[dict[str, Any]], tools: list[ToolSpec]) -> list[dict[str, Any]]:
+    """The request for a server that gets no `tools` parameter: the tools in
+    the system prompt, calls and their results as text (several results in
+    one user message)."""
+    out: list[dict[str, Any]] = []
+    described = False
+    results: dict[str, Any] | None = None  # the user message collecting tool results
+    for m in messages:
+        role = m.get("role")
+        if role in ("system", "developer") and not described:
+            out.append({**m, "content": f"{m.get('content') or ''}\n\n{tools_prompt(tools)}"})
+            described = True
+        elif role == "assistant":
+            parts = [m["content"]] if isinstance(m.get("content"), str) and m["content"] else []
+            for call in m.get("tool_calls") or []:
+                fn = call.get("function") or {}
+                args, _ = parse_tool_arguments(fn.get("arguments") or "")
+                block = {"name": fn.get("name"), "arguments": args if args is not None else {}}
+                parts.append(f"{CALL_OPEN}\n{json.dumps(block, ensure_ascii=False)}\n{CALL_CLOSE}")
+            out.append({"role": "assistant", "content": "\n".join(parts)})
+        elif role == "tool":
+            block = f"<tool_response>\n{m.get('content') or ''}\n</tool_response>"
+            if results is not None and out and out[-1] is results:
+                results["content"] += "\n" + block
+            else:
+                results = {"role": "user", "content": block}
+                out.append(results)
+            continue
+        else:
+            out.append(m)
+        results = None
+    if not described:
+        out.insert(0, {"role": "system", "content": tools_prompt(tools)})
+    return out
+
+
+def text_tool_calls(message: AIMessage, known: set[str]) -> AIMessage:
+    """A reply's `<tool_call>` text for known tools, as its tool calls."""
+    if (
+        message.tool_calls
+        or not isinstance(message.content, str)
+        or CALL_OPEN not in message.content
+    ):
+        return message
+    text, calls = extract(message.content, known)
+    if not calls:
+        return message
+    valid: list[dict[str, Any]] = []
+    invalid: list[dict[str, Any]] = []
+    for call in calls:
+        call_id = call.id or f"call_{uuid.uuid4().hex[:12]}"
+        args, error = parse_tool_arguments(call.arguments)
+        if args is None:
+            invalid.append(
+                {
+                    "type": "invalid_tool_call",
+                    "id": call_id,
+                    "name": call.name,
+                    "args": call.arguments,
+                    "error": error,
+                }
+            )
+        else:
+            valid.append({"type": "tool_call", "id": call_id, "name": call.name, "args": args})
+    return message.model_copy(
+        update={"content": text, "tool_calls": valid, "invalid_tool_calls": invalid}
+    )

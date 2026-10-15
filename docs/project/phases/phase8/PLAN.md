@@ -219,7 +219,12 @@ with a lab to `docs/learn/phase8/`.
 - [x] M0. Spike, `SPIKE.md`, D18, go (15 Oct: E1–E6 run here, results and
   design rules in [SPIKE.md](SPIKE.md); decisions 8 and 9; go. E7 on the real
   gateway, E6 on Windows and Studio run on the user's side before M1 closes.)
-- [ ] M1. Model layer
+- [ ] M1. Model layer (15 Oct: code and tests in; closes once E7 has run on
+  the real gateway. `src/cmcoder/llm/`: `CmcoderChatOpenAI` and the factory,
+  prompted tool calls, the fast model's fallback, structured output,
+  embeddings; the tracing guard; the learning page and lab in
+  [docs/learn/phase8/](../../../learn/phase8/README.md). The engine doesn't use
+  it yet, so the start-up time is measured when it does, in M4.)
 - [ ] M2. Tools and MCP
 - [ ] M3. Hand-built graph lab
 - [ ] M4. The engine on `create_agent`, the engine switch
