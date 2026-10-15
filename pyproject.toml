@@ -14,12 +14,15 @@ dependencies = [
     "keyring>=25",
     "pathspec>=0.12",
     "textual>=0.80",
-    "mcp>=2.3,<3",
+    "mcp>=1.24,<2",  # 1.x for langchain-mcp-adapters (Phase 8, D18)
     "numpy>=1.26",
     "pillow>=10",  # pasted images: made smaller, read from the clipboard
     # The Phase 8 engine (docs/project/phases/phase8/PLAN.md):
     "langchain-core>=1.6,<2",
     "langchain-openai>=1.7,<2",
+    "langchain>=1.4,<2",
+    "langgraph>=1.2,<2",
+    "langchain-mcp-adapters>=0.3,<0.4",
 ]
 
 [project.scripts]

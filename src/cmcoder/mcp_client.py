@@ -19,8 +19,9 @@ import json
 import os
 import re
 from collections.abc import AsyncIterator, Awaitable, Callable
-from contextlib import suppress
+from contextlib import AsyncExitStack, suppress
 from dataclasses import dataclass, field
+from datetime import timedelta
 from pathlib import Path
 from typing import Any, ClassVar, Literal
 
@@ -129,7 +130,7 @@ class McpTool(Tool):
         self.description = f"[MCP server {server.name}] {text}"[:MAX_DESCRIPTION_CHARS]  # type: ignore[misc]
 
     def spec(self) -> ToolSpec:
-        schema = dict(self.tool.input_schema or {})
+        schema = dict(self.tool.inputSchema or {})
         schema.setdefault("type", "object")
         schema.setdefault("properties", {})
         return ToolSpec(name=self.name, description=self.description, parameters=schema)
@@ -155,7 +156,7 @@ class McpTool(Tool):
             )
         except Exception as e:  # the server's problem, not the agent's
             return ToolResult(f"{self.name} failed: {type(e).__name__}: {e}", is_error=True)
-        return ToolResult(content_text(result), is_error=bool(result.is_error))
+        return ToolResult(content_text(result), is_error=bool(result.isError))
 
 
 def content_text(result: Any) -> str:
@@ -166,16 +167,16 @@ def content_text(result: Any) -> str:
         if hasattr(item, "text") and item.text is not None:
             parts.append(item.text)
         elif kind in ("image", "audio"):
-            parts.append(f"[{kind}: {getattr(item, 'mime_type', '?')}; not shown to the model]")
+            parts.append(f"[{kind}: {getattr(item, 'mimeType', '?')}; not shown to the model]")
         elif kind == "resource_link":
             parts.append(f"[resource: {item.uri}]")
         elif kind == "resource" and getattr(item, "resource", None) is not None:
             res = item.resource
             parts.append(getattr(res, "text", None) or f"[resource: {res.uri}]")
         elif getattr(item, "blob", None) is not None:
-            parts.append(f"[binary content: {getattr(item, 'mime_type', '?')}]")
-    if not parts and getattr(result, "structured_content", None) is not None:
-        parts.append(json.dumps(result.structured_content, ensure_ascii=False, indent=2))
+            parts.append(f"[binary content: {getattr(item, 'mimeType', '?')}]")
+    if not parts and getattr(result, "structuredContent", None) is not None:
+        parts.append(json.dumps(result.structuredContent, ensure_ascii=False, indent=2))
     return "\n".join(parts) or "(no content)"
 
 
@@ -312,10 +313,8 @@ class McpManager:
 
     async def _run(self, s: McpServer) -> None:
         """Owns one server's connection for its whole life."""
-        from mcp import Client  # imported lazily: only when servers are configured
-
         try:
-            async with Client(
+            async with _Client(
                 self._transport(s), read_timeout_seconds=s.config.tool_timeout
             ) as client:
                 s.client = client
@@ -340,7 +339,7 @@ class McpManager:
             s._ready.set()
 
     def _transport(self, s: McpServer) -> Any:
-        import httpx2
+        import httpx
         from mcp import StdioServerParameters
         from mcp.client.sse import sse_client
         from mcp.client.stdio import stdio_client
@@ -369,16 +368,16 @@ class McpManager:
                 url,
                 headers=headers,
                 httpx_client_factory=lambda headers=None, timeout=None, auth=None: (
-                    httpx2.AsyncClient(
+                    httpx.AsyncClient(
                         headers=headers, timeout=timeout, auth=auth, verify=ssl_ctx, trust_env=True
                     )
                 ),
             )
-        http = httpx2.AsyncClient(
+        http = httpx.AsyncClient(
             headers=headers,
             verify=ssl_ctx,
             trust_env=True,
-            timeout=httpx2.Timeout(30.0, read=300.0),
+            timeout=httpx.Timeout(30.0, read=300.0),
         )
         return _closing(streamable_http_client(url, http_client=http), http)
 
@@ -391,6 +390,41 @@ class McpManager:
             for t in still:
                 t.cancel()
             await asyncio.gather(*still, return_exceptions=True)
+
+
+class _Client:
+    """A connected MCP session, as cmcoder used mcp 2.x's `Client` (it moved to
+    mcp 1.x for langchain-mcp-adapters, Phase 8 design decision D18): the
+    transport's streams, a `ClientSession` on them, initialised. The session's
+    calls (list_tools, call_tool, list_resources, read_resource,
+    list_prompts, get_prompt) pass through."""
+
+    def __init__(self, transport: Any, read_timeout_seconds: float) -> None:
+        self._transport = transport
+        self._timeout = timedelta(seconds=read_timeout_seconds)
+        self._stack = AsyncExitStack()
+        self.session: Any = None
+        self.server_capabilities: Any = None
+
+    async def __aenter__(self) -> _Client:
+        from mcp import ClientSession  # imported lazily: only when servers are configured
+
+        try:
+            read, write, *_ = await self._stack.enter_async_context(self._transport)
+            self.session = await self._stack.enter_async_context(
+                ClientSession(read, write, read_timeout_seconds=self._timeout)
+            )
+            self.server_capabilities = (await self.session.initialize()).capabilities
+        except BaseException:
+            await self._stack.aclose()
+            raise
+        return self
+
+    async def __aexit__(self, *exc: Any) -> Any:
+        return await self._stack.__aexit__(*exc)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.session, name)
 
 
 class _closing:

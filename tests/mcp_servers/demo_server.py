@@ -8,9 +8,9 @@ from __future__ import annotations
 import os
 import sys
 
-from mcp.server.mcpserver import MCPServer
+from mcp.server.fastmcp import FastMCP
 
-server = MCPServer("demo", instructions="Demo server for cmcoder's tests.")
+server = FastMCP("demo", instructions="Demo server for cmcoder's tests.")
 
 
 @server.tool()
@@ -54,4 +54,6 @@ if __name__ == "__main__":
     if transport == "stdio":
         server.run("stdio")
     else:
-        server.run("streamable-http", port=int(sys.argv[2]), host="127.0.0.1")  # type: ignore[call-overload]
+        server.settings.host = "127.0.0.1"
+        server.settings.port = int(sys.argv[2])
+        server.run("streamable-http")
