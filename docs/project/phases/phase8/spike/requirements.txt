@@ -16,3 +16,8 @@ openevals==0.2.0
 agentevals==0.0.9
 truststore==0.10.5
 pyinstaller==6.22.3
+# Indirect dependencies, pinned to the patched versions the spike ran with:
+# the security scan otherwise assumes the oldest versions they allow.
+httpx2==2.13.1
+httpcore2==2.13.1
+python-multipart==0.0.32
