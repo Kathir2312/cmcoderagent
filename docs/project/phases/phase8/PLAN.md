@@ -208,11 +208,14 @@ with a lab to `docs/learn/phase8/`.
 | Library churn | Versions pinned in `uv.lock`; the 1.x LTS lines; upgrades only behind the full test gate |
 | Scope creep in a learning rewrite | Every milestone ends with a working engine and green comparison runs; memory, the team and agentic code search are separate items |
 | Two engines during the move | The engine switch; the old engine removed in M11 |
+| Found in M0 ([SPIKE.md](SPIKE.md)): `LANGSMITH_TRACING` in a developer's shell sends every turn to the cloud; hooks rerun on resume; checkpoints grow with the square of a turn; `langchain-mcp-adapters` needs `mcp` below 2.0; about 2 s more start-up and about 180 MB | The eight design rules in SPIKE.md; the MCP decision there |
 
 ## Checklist
 
 - [x] Plan and decisions (15 Oct)
-- [ ] M0. Spike, `SPIKE.md`, D18, go or no-go
+- [ ] M0. Spike, `SPIKE.md`, D18, go or no-go (15 Oct: E1–E6 done here,
+  results and design rules in [SPIKE.md](SPIKE.md), recommendation: go. Still
+  to run on the user's side: E7 on the real gateway, E6 on Windows, Studio.)
 - [ ] M1. Model layer
 - [ ] M2. Tools and MCP
 - [ ] M3. Hand-built graph lab
