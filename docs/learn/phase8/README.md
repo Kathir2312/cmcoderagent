@@ -9,6 +9,6 @@ gateway (no model or key needed).
 | Milestone | Page | Lab |
 |---|---|---|
 | M1: the model layer | [m1-model-layer.md](m1-model-layer.md) | [labs/m1_model.py](labs/m1_model.py) |
-| M2: tools and MCP | to come | |
+| M2: tools and MCP | [m2-tools-and-mcp.md](m2-tools-and-mcp.md) | [labs/m2_tools.py](labs/m2_tools.py) |
 | M3: the loop by hand as a `StateGraph` | to come | |
 | M4: the engine on `create_agent` | to come | |

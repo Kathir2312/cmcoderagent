@@ -225,7 +225,13 @@ with a lab to `docs/learn/phase8/`.
   embeddings; the tracing guard; the learning page and lab in
   [docs/learn/phase8/](../../../learn/phase8/README.md). The engine doesn't use
   it yet, so the start-up time is measured when it does, in M4.)
-- [ ] M2. Tools and MCP
+- [x] M2. Tools and MCP (15 Oct: cmcoder on the `mcp` library 1.x, its MCP
+  tests unchanged; `src/cmcoder/engine/`: `CmcoderTool` (the classic schema
+  and error texts, the runtime context for the working folder) and MCP
+  tools through `langchain-mcp-adapters` on cmcoder's lasting sessions
+  (`mcp__server__tool` names, text results, error status). LangChain
+  inlines `$defs` and drops `title` keys in schemas: same meaning, noted.
+  The learning page and lab are in [docs/learn/phase8/](../../../learn/phase8/README.md).)
 - [ ] M3. Hand-built graph lab
 - [ ] M4. The engine on `create_agent`, the engine switch
 - [ ] M5. Sessions, approvals, long-term memory
