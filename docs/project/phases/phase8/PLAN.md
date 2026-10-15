@@ -1,7 +1,8 @@
 # Phase 8 — the engine on LangChain and LangGraph: plan
 
-**Status:** planned (15 October 2026). Next: M0, the spike, which ends in a
-go or no-go.
+**Status:** M1 under way (15 October 2026). M0, the spike, ended in a go
+([SPIKE.md](SPIKE.md), design decision D18); E7 on the real gateway, E6 on
+Windows and Studio still run on the user's side.
 
 **Goal:** rewrite cmcoder's core engine on the Python agent stack (LangChain,
 LangGraph, LangSmith, Langfuse and the libraries around them), so that the
@@ -30,6 +31,8 @@ with a lab.
 | 5 | Prompt management in LangSmith or Langfuse | **Decided with 2**: syncing prompts sends cmcoder's prompt texts (no code, no keys) to the same services. Until then prompts are files in the repository, which stay the fallback. |
 | 6 | The old engine | **Removed in M11**, with the tag `classic-engine` kept to compare against. |
 | 7 | People | **Three developers**, about 3–4 months, split (M1, M2, M7), (M3–M6), (M8–M10). One developer would take about 6–7 months. |
+| 8 | MCP (from M0) | **`langchain-mcp-adapters`**, with cmcoder on the `mcp` library 1.x (M2); today's MCP client is checked on 1.x first. |
+| 9 | Size and start-up (from M0) | **Accepted**: about 180 MB and about 2 s more at start-up, with limits in CI. |
 
 ## What changes and what doesn't
 
@@ -213,9 +216,9 @@ with a lab to `docs/learn/phase8/`.
 ## Checklist
 
 - [x] Plan and decisions (15 Oct)
-- [ ] M0. Spike, `SPIKE.md`, D18, go or no-go (15 Oct: E1–E6 done here,
-  results and design rules in [SPIKE.md](SPIKE.md), recommendation: go. Still
-  to run on the user's side: E7 on the real gateway, E6 on Windows, Studio.)
+- [x] M0. Spike, `SPIKE.md`, D18, go (15 Oct: E1–E6 run here, results and
+  design rules in [SPIKE.md](SPIKE.md); decisions 8 and 9; go. E7 on the real
+  gateway, E6 on Windows and Studio run on the user's side before M1 closes.)
 - [ ] M1. Model layer
 - [ ] M2. Tools and MCP
 - [ ] M3. Hand-built graph lab

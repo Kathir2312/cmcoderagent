@@ -1,14 +1,14 @@
 # Phase 8 — M0 spike: results
 
-**Status (15 October 2026):** experiments E1–E6 ran in the cloud
+**Status (15 October 2026): go.** Experiments E1–E6 ran in the cloud
 environment against cmcoder's mock gateway, which checks the history the way
 vLLM does. Still to run on your side: **E7** against your real gateway (Qwen3.6
 on vLLM), **E6 on Windows**, and **LangGraph Studio** (`langgraph dev`, which
-needs a free LangSmith account). Then design decision D18 and the go or
-no-go.
+needs a free LangSmith account). Design decision D18 records the decisions
+below.
 
-**Recommendation: go.** Nothing found blocks the plan; every finding has a
-known fix, now written into the design rules below.
+Nothing found blocks the plan; every finding has a known fix, written into
+the design rules below.
 
 ## How to run them
 
@@ -72,12 +72,15 @@ Python 3.12. The whole stack is 96 packages, 133 MB installed.
 7. Checkpoints are pruned to the start of each user message.
 8. Start-up time and program size have limits in CI.
 
-## Decisions this raises (for D18)
+## Decisions (15 October 2026, design decision D18)
 
-| Question | Options | Recommendation |
+| Question | Options | Decision |
 |---|---|---|
-| MCP | (a) keep cmcoder's MCP client on `mcp` 2.x and wrap its tools as LangChain `StructuredTool`s; (b) move to `mcp` 1.x to use `langchain-mcp-adapters` | **(a)** until the adapters support `mcp` 2.x; the adapters stay in the learning labs |
-| Start-up (+2 s) and size (about 180 MB) | accept, with limits in CI | Accept, and cut what lazy imports can in M1 |
+| MCP | (a) keep cmcoder's MCP client on `mcp` 2.x and wrap its tools as LangChain `StructuredTool`s; (b) move to `mcp` 1.x to use `langchain-mcp-adapters` | **(b)**: `langchain-mcp-adapters`, with cmcoder on `mcp` 1.x. In M2, today's MCP client is checked on `mcp` 1.x first, since both engines use it until M11; the adapters' gaps (a process per call, names, logs) are covered by design rule 6 |
+| Start-up (+2 s) and size (about 180 MB) | accept, with limits in CI | **Accepted**; lazy imports in M1 cut what they can, and CI keeps both within limits |
+
+**Go:** the user took the decisions above on 15 October; M1 starts. E7, E6
+on Windows and Studio still run on the user's side, before M1 is closed.
 
 ## For you to run
 
