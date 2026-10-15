@@ -1,8 +1,8 @@
 """A tiny ticket tracker as an MCP server (for the mcp-ticket eval)."""
 
-from mcp.server.mcpserver import MCPServer
+from mcp.server.fastmcp import FastMCP
 
-server = MCPServer("tickets")
+server = FastMCP("tickets")
 
 TICKETS = {
     "ABC-41": "Title: Fix the login timeout\nUsers are logged out after 5 minutes.",
