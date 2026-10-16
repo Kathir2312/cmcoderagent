@@ -12,7 +12,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from ..compat import kill_process_tree, new_process_group_kwargs
-from ..tracing_guard import held
 
 if TYPE_CHECKING:
     from ..sandbox import Sandbox
@@ -35,14 +34,13 @@ class ShellResult:
 
 
 def child_env(cwd: Path) -> dict[str, str]:
-    """The environment for commands: cmcoder's own virtualenv taken out, the
-    tracing variables cmcoder held back put in again (tracing_guard.py).
+    """The environment for commands: cmcoder's own virtualenv taken out.
 
     `uv run cmcoder` (or an activated venv) puts cmcoder's venv first on PATH,
     so `python`, `pytest` and `pip` would be cmcoder's, not the user's project's.
     Kept when the venv lives inside the project (cmcoder installed in the
     project's own venv)."""
-    env = {**os.environ, **held()}
+    env = dict(os.environ)
     venv = Path(sys.prefix).resolve()
     if venv == Path(sys.base_prefix).resolve():
         return env  # not in a venv

@@ -43,34 +43,18 @@ def build_ssl_context(opts: TransportOptions) -> ssl.SSLContext:
     return ssl.create_default_context()
 
 
-def _timeout(opts: TransportOptions) -> httpx.Timeout:
-    return httpx.Timeout(
-        connect=opts.connect_timeout,
-        read=opts.read_timeout,
-        write=60.0,
-        pool=opts.connect_timeout,
-    )
-
-
 def build_client(
     opts: TransportOptions, headers: dict[str, str] | None = None
 ) -> httpx.AsyncClient:
     # httpx reads HTTPS_PROXY / NO_PROXY from the environment (trust_env=True).
     return httpx.AsyncClient(
         verify=build_ssl_context(opts),
-        timeout=_timeout(opts),
-        headers=headers or {},
-        trust_env=True,
-    )
-
-
-def build_sync_client(
-    opts: TransportOptions, headers: dict[str, str] | None = None
-) -> httpx.Client:
-    """Like build_client, for code that isn't async (LangChain's `invoke`)."""
-    return httpx.Client(
-        verify=build_ssl_context(opts),
-        timeout=_timeout(opts),
+        timeout=httpx.Timeout(
+            connect=opts.connect_timeout,
+            read=opts.read_timeout,
+            write=60.0,
+            pool=opts.connect_timeout,
+        ),
         headers=headers or {},
         trust_env=True,
     )

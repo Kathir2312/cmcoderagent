@@ -27,7 +27,6 @@ frozen in its folder. The guides that explain each phase's code are in
 | **5: Code search (RAG)** | ✅ Complete | commit `46f2e75` | [PLAN](phases/phase5/PLAN.md), [STATUS](phases/phase5/STATUS.md), [TESTING](phases/phase5/TESTING.md), [SECURITY-REVIEW](phases/phase5/SECURITY-REVIEW.md) | [learn/phase5/](../learn/phase5/python-guide.md) |
 | **6: Other IDEs** | ✅ Complete | | [PLAN](phases/phase6/PLAN.md), [STATUS](phases/phase6/STATUS.md), [SECURITY-REVIEW](phases/phase6/SECURITY-REVIEW.md) | [learn/phase6/](../learn/phase6/ide-guide.md) |
 | **7: IntelliJ-based IDEs** | ✅ Complete (13 Oct 2026; the guide's screenshots to come) | | [PLAN](phases/phase7/PLAN.md) (with its status) | — |
-| **8: The engine on LangChain and LangGraph** | 🚧 In progress (M0 done 15 Oct 2026; M1 under way) | | [PLAN](phases/phase8/PLAN.md), [SPIKE](phases/phase8/SPIKE.md) | [learn/phase8/](../learn/phase8/README.md) |
 
 ## What each phase's documents contain
 

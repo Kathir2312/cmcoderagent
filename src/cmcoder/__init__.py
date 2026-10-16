@@ -2,11 +2,6 @@
 
 from pathlib import Path
 
-from .tracing_guard import hold as _hold_tracing_variables
-
-# First, before anything can import LangChain (see tracing_guard.py).
-_hold_tracing_variables()
-
 __version__ = "0.1.0"
 
 

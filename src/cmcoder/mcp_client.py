@@ -10,11 +10,6 @@ reported and skipped; cmcoder carries on without it.
 Tools appear to the model as `mcp__<server>__<tool>` and go through the
 permission engine like any other tool (they ask unless an allow rule such as
 `mcp__github` or `mcp__github__create_issue` says otherwise).
-
-Each server is reached through FastMCP's client (on the `mcp` library 2.x),
-the client LangChain's own MCP support (`langchain.mcp`) runs on, so the
-Phase 8 engine's tools use the same connection (engine/mcp.py, design
-decision D18).
 """
 
 from __future__ import annotations
@@ -23,7 +18,6 @@ import asyncio
 import json
 import os
 import re
-import warnings
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import suppress
 from dataclasses import dataclass, field
@@ -151,7 +145,7 @@ class McpTool(Tool):
             )
         try:
             result = await asyncio.wait_for(
-                self.server.client.call_tool_mcp(self.tool.name, args.model_dump()),
+                self.server.client.call_tool(self.tool.name, args.model_dump()),
                 self.server.config.tool_timeout,
             )
         except TimeoutError:
@@ -165,10 +159,9 @@ class McpTool(Tool):
 
 
 def content_text(result: Any) -> str:
-    """A tool result or a resource's contents (a list) as text for the model."""
+    """A tool result or resource as text for the model."""
     parts: list[str] = []
-    items = result if isinstance(result, list) else getattr(result, "content", None) or []
-    for item in items:
+    for item in getattr(result, "content", None) or getattr(result, "contents", None) or []:
         kind = getattr(item, "type", "")
         if hasattr(item, "text") and item.text is not None:
             parts.append(item.text)
@@ -181,9 +174,8 @@ def content_text(result: Any) -> str:
             parts.append(getattr(res, "text", None) or f"[resource: {res.uri}]")
         elif getattr(item, "blob", None) is not None:
             parts.append(f"[binary content: {getattr(item, 'mime_type', '?')}]")
-    structured = None if isinstance(result, list) else getattr(result, "structured_content", None)
-    if not parts and structured is not None:
-        parts.append(json.dumps(structured, ensure_ascii=False, indent=2))
+    if not parts and getattr(result, "structured_content", None) is not None:
+        parts.append(json.dumps(result.structured_content, ensure_ascii=False, indent=2))
     return "\n".join(parts) or "(no content)"
 
 
@@ -213,7 +205,7 @@ class ListMcpResourcesTool(Tool):
             except Exception as e:
                 lines.append(f"{s.name}: failed to list resources ({e})")
                 continue
-            for r in listed:
+            for r in listed.resources:
                 lines.append(
                     f"{s.name}: {r.uri} — {r.name}"
                     + (f": {r.description}" if r.description else "")
@@ -320,22 +312,20 @@ class McpManager:
 
     async def _run(self, s: McpServer) -> None:
         """Owns one server's connection for its whole life."""
-        Client = fastmcp_client()
+        from mcp import Client  # imported lazily: only when servers are configured
+
         try:
-            client = Client(
-                self._transport(s),
-                timeout=s.config.tool_timeout,
-                init_timeout=s.config.startup_timeout,
-            )
-            async with client:
+            async with Client(
+                self._transport(s), read_timeout_seconds=s.config.tool_timeout
+            ) as client:
                 s.client = client
                 listed = await asyncio.wait_for(client.list_tools(), s.config.startup_timeout)
-                s.tools = list(listed)
+                s.tools = list(listed.tools)
                 caps = client.server_capabilities
-                s.resources = caps is not None and caps.resources is not None
-                if caps is not None and caps.prompts is not None:
+                s.resources = caps.resources is not None
+                if caps.prompts is not None:
                     with suppress(Exception):
-                        s.prompts = list(await client.list_prompts())
+                        s.prompts = list((await client.list_prompts()).prompts)
                 s.status = "connected"
                 s._ready.set()
                 await s._stop.wait()
@@ -351,48 +341,46 @@ class McpManager:
 
     def _transport(self, s: McpServer) -> Any:
         import httpx2
-        from fastmcp.client.transports import SSETransport, StdioTransport, StreamableHttpTransport
+        from mcp import StdioServerParameters
+        from mcp.client.sse import sse_client
+        from mcp.client.stdio import stdio_client
+        from mcp.client.streamable_http import streamable_http_client
 
         cfg = s.config
         if cfg.transport == "stdio":
             assert cfg.command
-            log_dir = config_dir() / "logs"
-            log_dir.mkdir(parents=True, exist_ok=True)
-            return StdioTransport(
+            params = StdioServerParameters(
                 command=resolve_command(expand(cfg.command)),
                 args=[expand(a) for a in cfg.args],
                 env={k: expand(v) for k, v in cfg.env.items()},
                 cwd=expand(cfg.cwd) if cfg.cwd else str(self.root),
-                # The server's stderr, one file per server (`/mcp` points to it).
-                log_file=log_dir / f"mcp-{NAME_RE.sub('_', s.name)}.log",
-                keep_alive=False,  # the server stops when cmcoder closes the connection
             )
+            log_dir = config_dir() / "logs"
+            log_dir.mkdir(parents=True, exist_ok=True)
+            errlog = open(log_dir / f"mcp-{NAME_RE.sub('_', s.name)}.log", "a", encoding="utf-8")  # noqa: SIM115
+            return _closing(stdio_client(params, errlog=errlog), errlog)
         if not cfg.url:
             raise ValueError("an MCP server needs either `command` or `url`")
         url = expand(cfg.url)
         headers = {k: expand(v) for k, v in cfg.headers.items()}
         ssl_ctx = build_ssl_context(TransportOptions(ca_cert_path=cfg.ca_cert_path))
-
-        def http_client(
-            headers: dict[str, str] | None = None,
-            timeout: httpx2.Timeout | None = None,
-            auth: httpx2.Auth | None = None,
-            **kwargs: Any,
-        ) -> httpx2.AsyncClient:
-            # cmcoder's TLS (the OS certificate store, or caCertPath; never
-            # unverified) and HTTPS_PROXY / NO_PROXY from the environment.
-            return httpx2.AsyncClient(
-                headers=headers,
-                timeout=timeout or httpx2.Timeout(30.0, read=300.0),
-                auth=auth,
-                follow_redirects=kwargs.get("follow_redirects", True),
-                verify=ssl_ctx,
-                trust_env=True,
-            )
-
         if cfg.transport == "sse":
-            return SSETransport(url, headers=headers, httpx_client_factory=http_client)
-        return StreamableHttpTransport(url, headers=headers, httpx_client_factory=http_client)
+            return sse_client(
+                url,
+                headers=headers,
+                httpx_client_factory=lambda headers=None, timeout=None, auth=None: (
+                    httpx2.AsyncClient(
+                        headers=headers, timeout=timeout, auth=auth, verify=ssl_ctx, trust_env=True
+                    )
+                ),
+            )
+        http = httpx2.AsyncClient(
+            headers=headers,
+            verify=ssl_ctx,
+            trust_env=True,
+            timeout=httpx2.Timeout(30.0, read=300.0),
+        )
+        return _closing(streamable_http_client(url, http_client=http), http)
 
     async def close(self) -> None:
         for s in self.servers:
@@ -405,29 +393,24 @@ class McpManager:
             await asyncio.gather(*still, return_exceptions=True)
 
 
-# What FastMCP reads from the environment while it's imported, set only for
-# that moment: its settings from a `.env` file in the current folder (the
-# user's project, which shouldn't configure cmcoder), and its log output (to
-# the terminal, under the REPL's and TUI's screens). Not left set, because
-# MCP servers started from here inherit the environment.
-_FASTMCP_IMPORT_ENV = {"FASTMCP_ENV_FILE": os.devnull, "FASTMCP_LOG_ENABLED": "false"}
+class _closing:
+    """Enter a transport, and close `resource` (a log file or HTTP client) after it."""
 
+    def __init__(self, inner: Any, resource: Any) -> None:
+        self.inner, self.resource = inner, resource
 
-def fastmcp_client() -> Any:
-    """FastMCP's `Client`, imported the safe way (see above)."""
-    saved = {k: os.environ.get(k) for k in _FASTMCP_IMPORT_ENV}
-    os.environ.update(_FASTMCP_IMPORT_ENV)
-    try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            from fastmcp import Client
-    finally:
-        for k, v in saved.items():
-            if v is None:
-                os.environ.pop(k, None)
+    async def __aenter__(self) -> Any:
+        return await self.inner.__aenter__()
+
+    async def __aexit__(self, *exc: Any) -> Any:
+        try:
+            return await self.inner.__aexit__(*exc)
+        finally:
+            closer = getattr(self.resource, "aclose", None)
+            if closer is not None:
+                await closer()
             else:
-                os.environ[k] = v
-    return Client
+                self.resource.close()
 
 
 def _describe(e: BaseException) -> str:

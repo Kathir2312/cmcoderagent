@@ -51,13 +51,11 @@ class MockState:
         ollama_context: dict[str, int] | None = None,
         embedding_models: list[str] | None = None,
         embedding_dim: int = 64,
-        reasoning_field: str = "reasoning_content",
     ) -> None:
         self.script = list(script)
         self.models = models or ["qwen3-27b", "qwen3-7b"]
         self.api_key = api_key
         self.context_window = context_window
-        self.reasoning_field = reasoning_field
         self.context_windows = context_windows or {}
         self.enforce_context = enforce_context
         self.summary = summary
@@ -97,15 +95,10 @@ class MockState:
 
 
 def _chunks(
-    reply: dict[str, Any],
-    model: str,
-    think_tags: bool | str,
-    prompt_tokens: int = 100,
-    reasoning_field: str = "reasoning_content",
+    reply: dict[str, Any], model: str, think_tags: bool | str, prompt_tokens: int = 100
 ) -> list[dict[str, Any]]:
-    """think_tags: False = a reasoning field (`reasoning_content`, or `reasoning`
-    as newer vLLM names it); True = <think>..</think> in content; "open" = like
-    Qwen3 Thinking-2507, only the closing </think> appears."""
+    """think_tags: False = reasoning_content field; True = <think>..</think> in content;
+    "open" = like Qwen3 Thinking-2507, only the closing </think> appears."""
     cid = f"chatcmpl-{uuid.uuid4().hex[:8]}"
 
     def chunk(delta: dict[str, Any], finish: str | None = None) -> dict[str, Any]:
@@ -127,7 +120,7 @@ def _chunks(
             out.append(chunk({"content": f"nk>{reasoning}</th"}))
             out.append(chunk({"content": "ink>\n\n"}))
         else:
-            out.append(chunk({reasoning_field: reasoning}))
+            out.append(chunk({"reasoning_content": reasoning}))
     content = reply.get("content") or ""
     for i in range(0, len(content), 12):
         out.append(chunk({"content": content[i : i + 12]}))
@@ -455,9 +448,7 @@ def make_handler(state: MockState) -> type[BaseHTTPRequestHandler]:
                 chunks = (
                     _ollama_chunks(reply, model, prompt_tokens)
                     if ollama
-                    else _chunks(
-                        reply, model, state.think_tags, prompt_tokens, state.reasoning_field
-                    )
+                    else _chunks(reply, model, state.think_tags, prompt_tokens)
                 )
                 for c in chunks:
                     self.wfile.write(f"data: {json.dumps(c)}\n\n".encode())

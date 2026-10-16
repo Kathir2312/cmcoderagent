@@ -21,6 +21,3 @@ eclipse/**/.tycho-consumer-pom.xml
 jetbrains/.gradle/
 jetbrains/.intellijPlatform/
 jetbrains/.kotlin/
-
-# langgraph dev (LangGraph Studio) local server state
-.langgraph_api/

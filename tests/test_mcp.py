@@ -132,20 +132,6 @@ async def test_a_broken_server_is_reported_and_skipped(mock_server: Any, project
     # (demo was connected; "disabled" after the agent closed it)
 
 
-async def test_the_eval_ticket_server_works(mock_server: Any, project: Path) -> None:
-    """The mcp-ticket eval's server (also in docs/project/phases/phase3/try-phase3.ps1):
-    with scripted replies the eval passes even when it can't start, so check it here."""
-    ticket_server = Path(__file__).parent.parent / "evals/tasks/mcp-ticket/repo/tickets_server.py"
-    server = mock_server([call("mcp__tickets__get_ticket", ticket_id="ABC-42"), {"content": "ok"}])
-    settings = Settings.model_validate(
-        {"mcpServers": {"tickets": {"command": sys.executable, "args": [str(ticket_server)]}}}
-    )
-    events = await run(agent_with(server, project, settings), "look it up")
-    assert [e.message for e in events if isinstance(e, ev.Warning)] == []
-    result = tool_results(events)["mcp__tickets__get_ticket"]
-    assert not result.is_error and result.content.startswith("Title: Add a --version flag")
-
-
 async def test_environment_values_expand(
     mock_server: Any, project: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

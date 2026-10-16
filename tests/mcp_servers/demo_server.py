@@ -12,11 +12,6 @@ from mcp.server.mcpserver import MCPServer
 
 server = MCPServer("demo", instructions="Demo server for cmcoder's tests.")
 
-# Tests that count how often the server starts set this to a file.
-if starts := os.environ.get("DEMO_SERVER_STARTS"):
-    with open(starts, "a", encoding="utf-8") as f:
-        f.write(f"{os.getpid()}\n")
-
 
 @server.tool()
 def add(a: int, b: int) -> int:
