@@ -15,3 +15,6 @@ class EngineContext:
     """The working folder, the project, the shell and the rest that cmcoder's
     tools use. Optional: a LangGraph server (`langgraph dev`) makes the context
     with no arguments when a run gives none, and the tools then use their own."""
+
+    bridged: bool = False
+    """Set by the event bridge (events.py) for the runs it streams to a front end."""

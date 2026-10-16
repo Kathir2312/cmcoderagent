@@ -18,10 +18,12 @@ from pydantic import BaseModel, SecretStr
 
 from ..config.settings import Settings, SettingsError, env_api_key_source
 from ..providers.auth import AuthError, load_stored_api_key
+from ..providers.openai_compat import AuthFailed
 from ..providers.openwebui import api_base
 from ..providers.profiles import ModelProfile
 from ..providers.transport import TransportOptions, build_client, build_sync_client
 from .chat_openai import CmcoderChatOpenAI
+from .usage import record_cost
 
 # A provider with `auth: none`: ChatOpenAI needs some key, the server ignores it.
 NO_KEY = "no-key"
@@ -50,6 +52,8 @@ def chat_model(
     max_retries: int = 2,
 ) -> CmcoderChatOpenAI:
     opts = transport or TransportOptions()
+    async_client = build_client(opts, headers)
+    async_client.event_hooks = {"response": [record_cost]}  # LiteLLM's cost header
     return CmcoderChatOpenAI(
         model=model,
         base_url=base_url,
@@ -62,9 +66,46 @@ def chat_model(
         max_completion_tokens=profile.max_output,  # sent as the profile names it
         use_responses_api=False,
         http_client=build_sync_client(opts, headers),
-        http_async_client=build_client(opts, headers),
+        http_async_client=async_client,
         # cmcoder's clients as they are: no transport of langchain-openai's, which
         # would turn off httpx's use of HTTPS_PROXY / NO_PROXY (company proxies).
+        http_socket_options=(),
+        profile=langchain_profile(profile),
+        cm_profile=profile,
+    )
+
+
+def chat_model_from_provider(provider: Any, model: str, profile: ModelProfile) -> CmcoderChatOpenAI:
+    """The chat model for `model` on a provider the classic engine already
+    made (providers/openai_compat.py): the same address, the same key lookup
+    (environment, then keychain) and the same HTTP client, which has the
+    TLS, timeouts and headers from settings. The engine uses this, so
+    `/model` and a subagent's model work as before."""
+    auth = provider.auth
+    key: str | None = None
+    if (resolve_key := getattr(auth, "resolve_key", None)) is not None:
+        key = resolve_key()
+        if not key:
+            raise AuthFailed(  # as the classic provider words it
+                f"No API key for provider '{provider.name}'. "
+                "Run `cmcoder login` or set CMCODER_API_KEY."
+            )
+    client = provider.client
+    hooks = client.event_hooks.setdefault("response", [])
+    if record_cost not in hooks:
+        hooks.append(record_cost)
+    return CmcoderChatOpenAI(
+        model=model,
+        base_url=provider.base_url,
+        api_key=SecretStr(key or NO_KEY),
+        streaming=True,
+        stream_usage=profile.stream_usage,
+        max_retries=provider.max_retries,
+        temperature=profile.temperature,
+        top_p=profile.top_p,
+        max_completion_tokens=profile.max_output,
+        use_responses_api=False,
+        http_async_client=client,
         http_socket_options=(),
         profile=langchain_profile(profile),
         cm_profile=profile,

@@ -580,7 +580,7 @@ class Agent:
     def spawn_subagent(self, choice: ModelChoice, tools: dict[str, Tool], prompt: str) -> Agent:
         """A fresh agent for one Task: same permissions, prompts, hooks and
         checkpoints (so /rewind undoes its edits), its own conversation."""
-        child = Agent(
+        child = type(self)(  # a subagent runs on the same engine
             choice.provider,
             choice.model,
             choice.profile,

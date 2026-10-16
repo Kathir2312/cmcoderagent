@@ -9,23 +9,32 @@ a LangChain `BaseTool`, so LangGraph can run it in its tool node:
   and simpler for small models' tool parsers;
 - the arguments are checked with the tool's own pydantic `Input`, with the
   same error text as before;
-- a failed tool becomes a `ToolMessage` with `status="error"` (LangChain's
-  `ToolException`); its output is cut to the run's limit as before;
+- a failed tool becomes a `ToolMessage` with `status="error"`; its output
+  is cut to the run's limit as before. A failure the tool reports keeps its
+  one-line summary (the artifact); one it raises becomes LangChain's
+  `ToolException`;
 - the tool runs where the run is: in the graph's runtime context
-  (`EngineContext`), or the `ToolContext` it was made with.
+  (`EngineContext`), or the `ToolContext` it was made with;
+- a tool that streams (the Task tool, whose subagent's tool calls show as
+  they happen) sends what it streams to the front end (engine/events.py).
 """
 
 from __future__ import annotations
 
 import asyncio
+from contextvars import ContextVar
 from typing import Any
 
+from langchain_core.messages import ToolMessage
 from langchain_core.tools import BaseTool, ToolException
 from pydantic import ConfigDict, ValidationError
 
 from ..providers.messages import ToolSpec
-from ..tools.base import Tool, ToolContext, truncate_middle
+from ..tools.base import Tool, ToolContext, ToolResult, truncate_middle
 from .context import EngineContext
+
+# The id of the tool call being run (for a tool that needs it, as Task does).
+_CALL_ID: ContextVar[str] = ContextVar("cmcoder_tool_call_id", default="")
 
 
 def format_validation_error(e: ValidationError) -> str:
@@ -82,6 +91,17 @@ class CmcoderTool(BaseTool):
     def _run(self, *args: Any, **kwargs: Any) -> tuple[str, dict[str, Any]]:
         return asyncio.run(self._arun(*args, **kwargs))
 
+    async def arun(self, tool_input: Any, *args: Any, **kwargs: Any) -> Any:
+        token = _CALL_ID.set(kwargs.get("tool_call_id") or "")
+        try:
+            out = await super().arun(tool_input, *args, **kwargs)
+        finally:
+            _CALL_ID.reset(token)
+        if isinstance(out, ToolMessage) and isinstance(out.artifact, dict):
+            if out.artifact.get("is_error"):
+                out.status = "error"
+        return out
+
     async def _arun(self, *args: Any, **kwargs: Any) -> tuple[str, dict[str, Any]]:
         kwargs.pop("run_manager", None)
         kwargs.pop("config", None)
@@ -93,16 +113,40 @@ class CmcoderTool(BaseTool):
             raise ToolException(
                 f"Invalid arguments for {tool.name}: {format_validation_error(e)}"
             ) from e
+        stop_turn = False
         try:
-            res = await tool.run(args_in, ctx)
+            if (run_stream := getattr(tool, "run_stream", None)) is not None:
+                res, stop_turn = await self._streamed(run_stream(args_in, ctx, _CALL_ID.get()))
+            else:
+                res = await tool.run(args_in, ctx)
         except asyncio.CancelledError:
             raise
         except Exception as e:  # a tool bug must not end the run (as in the classic engine)
             raise ToolException(f"{tool.name} failed: {type(e).__name__}: {e}") from e
         content = truncate_middle(res.content, ctx.max_output_chars)
+        artifact: dict[str, Any] = {"summary": res.summary}
         if res.is_error:
-            raise ToolException(content)
-        return content, {"summary": res.summary}
+            artifact["is_error"] = True  # status "error" (arun), with the summary kept
+        if stop_turn:
+            artifact["stop_turn"] = True  # the user denied a subagent's tool call
+        return content, artifact
+
+    @staticmethod
+    async def _streamed(items: Any) -> tuple[ToolResult, bool]:
+        """Passes a streaming tool's events on, each delivered before the
+        next (a subagent's permission question must not overtake them)."""
+        from ..core.subagents import TaskDone
+        from .events import delivered, emit
+
+        res = ToolResult("The tool didn't finish.", is_error=True)
+        stop_turn = False
+        async for item in items:
+            if isinstance(item, TaskDone):
+                res, stop_turn = item.result, item.stop_turn
+            else:
+                emit(item)
+                await delivered()
+        return res, stop_turn
 
 
 def langchain_tools(tools: list[Tool], ctx: ToolContext | None = None) -> list[CmcoderTool]:

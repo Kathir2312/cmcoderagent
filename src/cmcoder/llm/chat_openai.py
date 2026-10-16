@@ -224,6 +224,8 @@ class CmcoderChatOpenAI(ChatOpenAI):
                 message = self._finish_thinking(message, seen)
             if isinstance(message, AIMessage) and known:
                 message = text_tool_calls(message, known)
+            if isinstance(message, AIMessage):
+                message = checked_tool_calls(message)
             generations.append(ChatGeneration(message=message, generation_info=gen.generation_info))
         return ChatResult(generations=generations, llm_output=result.llm_output)
 
@@ -386,6 +388,32 @@ def prompted_history(messages: list[dict[str, Any]], tools: list[ToolSpec]) -> l
     if not described:
         out.insert(0, {"role": "system", "content": tools_prompt(tools)})
     return out
+
+
+def checked_tool_calls(message: AIMessage) -> AIMessage:
+    """The reply's tool calls as cmcoder's own provider took them: arguments
+    the model got slightly wrong (a trailing comma, a Python dict, a code
+    fence) repaired, as LangChain doesn't; a call without a name dropped; and
+    every call with an id of its own (some servers send none, or repeat one)."""
+    if not message.tool_calls and not message.invalid_tool_calls:
+        return message
+    valid = [dict(c) for c in message.tool_calls]
+    invalid: list[dict[str, Any]] = []
+    for bad in message.invalid_tool_calls:
+        if not bad.get("name"):
+            continue
+        raw = bad.get("args")
+        args, error = parse_tool_arguments(raw) if isinstance(raw, str) else (None, None)
+        if args is not None:
+            valid.append({"type": "tool_call", "id": bad.get("id"), "name": bad["name"], "args": args})
+        else:
+            invalid.append({**bad, "error": bad.get("error") or error})
+    seen: set[str] = set()
+    for call in [*valid, *invalid]:
+        if not call.get("id") or call["id"] in seen:
+            call["id"] = f"call_{uuid.uuid4().hex[:16]}"
+        seen.add(call["id"])
+    return message.model_copy(update={"tool_calls": valid, "invalid_tool_calls": invalid})
 
 
 def text_tool_calls(message: AIMessage, known: set[str]) -> AIMessage:
