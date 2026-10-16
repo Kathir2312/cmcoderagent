@@ -29,7 +29,7 @@ fix; in M1 the same checks become tests that pass.
 ## Versions tested
 
 langchain 1.4.6, langchain-core 1.6.10, langchain-openai 1.7.2, langgraph
-1.2.15, langgraph-checkpoint-sqlite 3.1.2, langchain-mcp-adapters 0.3.2,
+1.2.15, langgraph-checkpoint-sqlite 3.1.2, langchain-mcp-adapters 0.3.2 (replaced by `langchain.mcp` and fastmcp-slim 4.1.0 on 16 Oct, E5b),
 langsmith 0.14.9, langfuse 5.0.1, langmem 0.0.30, openevals 0.2.0, agentevals
 0.0.9, langgraph-supervisor 0.0.31, langgraph-swarm 0.1.0, PyInstaller 6.22.3,
 Python 3.12. The whole stack is 96 packages, 133 MB installed.
@@ -54,6 +54,7 @@ Python 3.12. The whole stack is 96 packages, 133 MB installed.
 | E5 | `langchain-mcp-adapters` and cmcoder's `mcp` | The adapters need **`mcp` below 2.0**; cmcoder uses **2.3 or newer** | A decision (below) |
 | E5 | A real stdio MCP server | Default: **a new server process for every call** (3 for 3 calls); with `client.session()` none (pass) | Lasting sessions only |
 | E5 | Tool names, results, logs, TLS | Names `tickets_find_ticket` (cmcoder: `mcp__tickets__find_ticket`); results as content blocks; no option to send a server's error output to its own log; `httpx_client_factory` for TLS | Rename; flatten results; keep per-server logs ourselves |
+| E5b | (16 Oct) LangChain's own `langchain.mcp`, in `langchain` 1.4.6 (beta), on FastMCP 4.1's client and `mcp` 2.3: [spike/e5b_langchain_mcp.py](spike/e5b_langchain_mcp.py) | Missed on 15 Oct. Held open, **one server process for every call** (pass); not held and `keep_alive=False`, one per call; a tool's failure is an **error result**; the stdio transport writes the server's stderr to a **log file**; HTTP takes an `httpx_client_factory` (TLS, proxy); tool lists can be cached (SEP-2549) and a server's questions answered through `interrupt` (elicitation). FastMCP reads **`FASTMCP_*` settings from a `.env` in the current folder** when imported, and logs to the terminal | Decision 8 revisited (below); cmcoder imports FastMCP with those two switched off |
 | E6 | SQLite checkpoints: 25 steps with 20 kB outputs | About **1 ms more per step** (Linux; Windows to run) | Fast enough |
 | E6 | Database size | **7.2 MB** for one such turn: every step stores the whole history, so size grows with the square of a turn's length | Rule: keep only the checkpoints at the start of each user message (what `/rewind` needs) and prune the rest |
 | — | `langmem`'s dependencies | Pulls in `langchain-anthropic`, which cmcoder doesn't use | Accept (small) or leave it out of the build in M10 |
@@ -76,7 +77,7 @@ Python 3.12. The whole stack is 96 packages, 133 MB installed.
 
 | Question | Options | Decision |
 |---|---|---|
-| MCP | (a) keep cmcoder's MCP client on `mcp` 2.x and wrap its tools as LangChain `StructuredTool`s; (b) move to `mcp` 1.x to use `langchain-mcp-adapters` | **(b)**: `langchain-mcp-adapters`, with cmcoder on `mcp` 1.x. In M2, today's MCP client is checked on `mcp` 1.x first, since both engines use it until M11; the adapters' gaps (a process per call, names, logs) are covered by design rule 6 |
+| MCP | (a) keep cmcoder's MCP client on `mcp` 2.x and wrap its tools as LangChain `StructuredTool`s; (b) move to `mcp` 1.x to use `langchain-mcp-adapters` | **(b)**: `langchain-mcp-adapters`, with cmcoder on `mcp` 1.x. In M2, today's MCP client is checked on `mcp` 1.x first, since both engines use it until M11; the adapters' gaps (a process per call, names, logs) are covered by design rule 6. **Revisited 16 October (E5b):** (c) LangChain's own `langchain.mcp` on FastMCP 4 and `mcp` 2.x, chosen by the user. cmcoder's MCP client connects through FastMCP's client, so both engines share one connection per server; `langchain` is pinned exactly while `langchain.mcp` is in beta; `langchain-mcp-adapters` is gone |
 | Start-up (+2 s) and size (about 180 MB) | accept, with limits in CI | **Accepted**; lazy imports in M1 cut what they can, and CI keeps both within limits |
 
 **Go:** the user took the decisions above on 15 October; M1 starts. E7, E6

@@ -65,7 +65,7 @@ async def main() -> None:
         )
         print(f"{folder.name}: {out['messages'][-1].content.strip()!r}")
 
-    section("4. An MCP server's tools through langchain-mcp-adapters, on cmcoder's session")
+    section("4. An MCP server's tools through langchain.mcp, on cmcoder's connection")
     settings = Settings.model_validate(
         {"mcpServers": {"demo": {"command": sys.executable, "args": [str(DEMO_SERVER)]}}}
     )

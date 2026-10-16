@@ -10,6 +10,11 @@ reported and skipped; cmcoder carries on without it.
 Tools appear to the model as `mcp__<server>__<tool>` and go through the
 permission engine like any other tool (they ask unless an allow rule such as
 `mcp__github` or `mcp__github__create_issue` says otherwise).
+
+Each server is reached through FastMCP's client (on the `mcp` library 2.x),
+the client LangChain's own MCP support (`langchain.mcp`) runs on, so the
+Phase 8 engine's tools use the same connection (engine/mcp.py, design
+decision D18).
 """
 
 from __future__ import annotations
@@ -18,10 +23,10 @@ import asyncio
 import json
 import os
 import re
+import warnings
 from collections.abc import AsyncIterator, Awaitable, Callable
-from contextlib import AsyncExitStack, suppress
+from contextlib import suppress
 from dataclasses import dataclass, field
-from datetime import timedelta
 from pathlib import Path
 from typing import Any, ClassVar, Literal
 
@@ -130,7 +135,7 @@ class McpTool(Tool):
         self.description = f"[MCP server {server.name}] {text}"[:MAX_DESCRIPTION_CHARS]  # type: ignore[misc]
 
     def spec(self) -> ToolSpec:
-        schema = dict(self.tool.inputSchema or {})
+        schema = dict(self.tool.input_schema or {})
         schema.setdefault("type", "object")
         schema.setdefault("properties", {})
         return ToolSpec(name=self.name, description=self.description, parameters=schema)
@@ -146,7 +151,7 @@ class McpTool(Tool):
             )
         try:
             result = await asyncio.wait_for(
-                self.server.client.call_tool(self.tool.name, args.model_dump()),
+                self.server.client.call_tool_mcp(self.tool.name, args.model_dump()),
                 self.server.config.tool_timeout,
             )
         except TimeoutError:
@@ -156,27 +161,29 @@ class McpTool(Tool):
             )
         except Exception as e:  # the server's problem, not the agent's
             return ToolResult(f"{self.name} failed: {type(e).__name__}: {e}", is_error=True)
-        return ToolResult(content_text(result), is_error=bool(result.isError))
+        return ToolResult(content_text(result), is_error=bool(result.is_error))
 
 
 def content_text(result: Any) -> str:
-    """A tool result or resource as text for the model."""
+    """A tool result or a resource's contents (a list) as text for the model."""
     parts: list[str] = []
-    for item in getattr(result, "content", None) or getattr(result, "contents", None) or []:
+    items = result if isinstance(result, list) else getattr(result, "content", None) or []
+    for item in items:
         kind = getattr(item, "type", "")
         if hasattr(item, "text") and item.text is not None:
             parts.append(item.text)
         elif kind in ("image", "audio"):
-            parts.append(f"[{kind}: {getattr(item, 'mimeType', '?')}; not shown to the model]")
+            parts.append(f"[{kind}: {getattr(item, 'mime_type', '?')}; not shown to the model]")
         elif kind == "resource_link":
             parts.append(f"[resource: {item.uri}]")
         elif kind == "resource" and getattr(item, "resource", None) is not None:
             res = item.resource
             parts.append(getattr(res, "text", None) or f"[resource: {res.uri}]")
         elif getattr(item, "blob", None) is not None:
-            parts.append(f"[binary content: {getattr(item, 'mimeType', '?')}]")
-    if not parts and getattr(result, "structuredContent", None) is not None:
-        parts.append(json.dumps(result.structuredContent, ensure_ascii=False, indent=2))
+            parts.append(f"[binary content: {getattr(item, 'mime_type', '?')}]")
+    structured = None if isinstance(result, list) else getattr(result, "structured_content", None)
+    if not parts and structured is not None:
+        parts.append(json.dumps(structured, ensure_ascii=False, indent=2))
     return "\n".join(parts) or "(no content)"
 
 
@@ -206,7 +213,7 @@ class ListMcpResourcesTool(Tool):
             except Exception as e:
                 lines.append(f"{s.name}: failed to list resources ({e})")
                 continue
-            for r in listed.resources:
+            for r in listed:
                 lines.append(
                     f"{s.name}: {r.uri} — {r.name}"
                     + (f": {r.description}" if r.description else "")
@@ -313,18 +320,22 @@ class McpManager:
 
     async def _run(self, s: McpServer) -> None:
         """Owns one server's connection for its whole life."""
+        Client = fastmcp_client()
         try:
-            async with _Client(
-                self._transport(s), read_timeout_seconds=s.config.tool_timeout
-            ) as client:
+            client = Client(
+                self._transport(s),
+                timeout=s.config.tool_timeout,
+                init_timeout=s.config.startup_timeout,
+            )
+            async with client:
                 s.client = client
                 listed = await asyncio.wait_for(client.list_tools(), s.config.startup_timeout)
-                s.tools = list(listed.tools)
+                s.tools = list(listed)
                 caps = client.server_capabilities
-                s.resources = caps.resources is not None
-                if caps.prompts is not None:
+                s.resources = caps is not None and caps.resources is not None
+                if caps is not None and caps.prompts is not None:
                     with suppress(Exception):
-                        s.prompts = list((await client.list_prompts()).prompts)
+                        s.prompts = list(await client.list_prompts())
                 s.status = "connected"
                 s._ready.set()
                 await s._stop.wait()
@@ -339,47 +350,49 @@ class McpManager:
             s._ready.set()
 
     def _transport(self, s: McpServer) -> Any:
-        import httpx
-        from mcp import StdioServerParameters
-        from mcp.client.sse import sse_client
-        from mcp.client.stdio import stdio_client
-        from mcp.client.streamable_http import streamable_http_client
+        import httpx2
+        from fastmcp.client.transports import SSETransport, StdioTransport, StreamableHttpTransport
 
         cfg = s.config
         if cfg.transport == "stdio":
             assert cfg.command
-            params = StdioServerParameters(
+            log_dir = config_dir() / "logs"
+            log_dir.mkdir(parents=True, exist_ok=True)
+            return StdioTransport(
                 command=resolve_command(expand(cfg.command)),
                 args=[expand(a) for a in cfg.args],
                 env={k: expand(v) for k, v in cfg.env.items()},
                 cwd=expand(cfg.cwd) if cfg.cwd else str(self.root),
+                # The server's stderr, one file per server (`/mcp` points to it).
+                log_file=log_dir / f"mcp-{NAME_RE.sub('_', s.name)}.log",
+                keep_alive=False,  # the server stops when cmcoder closes the connection
             )
-            log_dir = config_dir() / "logs"
-            log_dir.mkdir(parents=True, exist_ok=True)
-            errlog = open(log_dir / f"mcp-{NAME_RE.sub('_', s.name)}.log", "a", encoding="utf-8")  # noqa: SIM115
-            return _closing(stdio_client(params, errlog=errlog), errlog)
         if not cfg.url:
             raise ValueError("an MCP server needs either `command` or `url`")
         url = expand(cfg.url)
         headers = {k: expand(v) for k, v in cfg.headers.items()}
         ssl_ctx = build_ssl_context(TransportOptions(ca_cert_path=cfg.ca_cert_path))
-        if cfg.transport == "sse":
-            return sse_client(
-                url,
+
+        def http_client(
+            headers: dict[str, str] | None = None,
+            timeout: httpx2.Timeout | None = None,
+            auth: httpx2.Auth | None = None,
+            **kwargs: Any,
+        ) -> httpx2.AsyncClient:
+            # cmcoder's TLS (the OS certificate store, or caCertPath; never
+            # unverified) and HTTPS_PROXY / NO_PROXY from the environment.
+            return httpx2.AsyncClient(
                 headers=headers,
-                httpx_client_factory=lambda headers=None, timeout=None, auth=None: (
-                    httpx.AsyncClient(
-                        headers=headers, timeout=timeout, auth=auth, verify=ssl_ctx, trust_env=True
-                    )
-                ),
+                timeout=timeout or httpx2.Timeout(30.0, read=300.0),
+                auth=auth,
+                follow_redirects=kwargs.get("follow_redirects", True),
+                verify=ssl_ctx,
+                trust_env=True,
             )
-        http = httpx.AsyncClient(
-            headers=headers,
-            verify=ssl_ctx,
-            trust_env=True,
-            timeout=httpx.Timeout(30.0, read=300.0),
-        )
-        return _closing(streamable_http_client(url, http_client=http), http)
+
+        if cfg.transport == "sse":
+            return SSETransport(url, headers=headers, httpx_client_factory=http_client)
+        return StreamableHttpTransport(url, headers=headers, httpx_client_factory=http_client)
 
     async def close(self) -> None:
         for s in self.servers:
@@ -392,59 +405,29 @@ class McpManager:
             await asyncio.gather(*still, return_exceptions=True)
 
 
-class _Client:
-    """A connected MCP session, as cmcoder used mcp 2.x's `Client` (it moved to
-    mcp 1.x for langchain-mcp-adapters, Phase 8 design decision D18): the
-    transport's streams, a `ClientSession` on them, initialised. The session's
-    calls (list_tools, call_tool, list_resources, read_resource,
-    list_prompts, get_prompt) pass through."""
-
-    def __init__(self, transport: Any, read_timeout_seconds: float) -> None:
-        self._transport = transport
-        self._timeout = timedelta(seconds=read_timeout_seconds)
-        self._stack = AsyncExitStack()
-        self.session: Any = None
-        self.server_capabilities: Any = None
-
-    async def __aenter__(self) -> _Client:
-        from mcp import ClientSession  # imported lazily: only when servers are configured
-
-        try:
-            read, write, *_ = await self._stack.enter_async_context(self._transport)
-            self.session = await self._stack.enter_async_context(
-                ClientSession(read, write, read_timeout_seconds=self._timeout)
-            )
-            self.server_capabilities = (await self.session.initialize()).capabilities
-        except BaseException:
-            await self._stack.aclose()
-            raise
-        return self
-
-    async def __aexit__(self, *exc: Any) -> Any:
-        return await self._stack.__aexit__(*exc)
-
-    def __getattr__(self, name: str) -> Any:
-        return getattr(self.session, name)
+# What FastMCP reads from the environment while it's imported, set only for
+# that moment: its settings from a `.env` file in the current folder (the
+# user's project, which shouldn't configure cmcoder), and its log output (to
+# the terminal, under the REPL's and TUI's screens). Not left set, because
+# MCP servers started from here inherit the environment.
+_FASTMCP_IMPORT_ENV = {"FASTMCP_ENV_FILE": os.devnull, "FASTMCP_LOG_ENABLED": "false"}
 
 
-class _closing:
-    """Enter a transport, and close `resource` (a log file or HTTP client) after it."""
-
-    def __init__(self, inner: Any, resource: Any) -> None:
-        self.inner, self.resource = inner, resource
-
-    async def __aenter__(self) -> Any:
-        return await self.inner.__aenter__()
-
-    async def __aexit__(self, *exc: Any) -> Any:
-        try:
-            return await self.inner.__aexit__(*exc)
-        finally:
-            closer = getattr(self.resource, "aclose", None)
-            if closer is not None:
-                await closer()
+def fastmcp_client() -> Any:
+    """FastMCP's `Client`, imported the safe way (see above)."""
+    saved = {k: os.environ.get(k) for k in _FASTMCP_IMPORT_ENV}
+    os.environ.update(_FASTMCP_IMPORT_ENV)
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            from fastmcp import Client
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
             else:
-                self.resource.close()
+                os.environ[k] = v
+    return Client
 
 
 def _describe(e: BaseException) -> str:

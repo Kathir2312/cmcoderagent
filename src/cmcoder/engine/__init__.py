@@ -2,5 +2,5 @@
 
 context.py: what a run carries for its tools (LangGraph's runtime context).
 tools.py: cmcoder's tools as LangChain tools. mcp.py: MCP servers' tools
-through langchain-mcp-adapters.
+through LangChain's own `langchain.mcp`.
 """

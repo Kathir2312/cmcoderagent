@@ -95,6 +95,11 @@ def main() -> None:
             # Imported lazily or found through entry points / package data:
             "--collect-submodules=cmcoder",
             "--collect-submodules=mcp",
+            "--collect-submodules=mcp_types",
+            # MCP servers are reached through FastMCP's client, which loads
+            # parts lazily and reads its own version from its metadata.
+            "--collect-submodules=fastmcp",
+            "--copy-metadata=fastmcp-slim",
             "--collect-submodules=keyring",
             "--copy-metadata=keyring",
             "--collect-data=textual",

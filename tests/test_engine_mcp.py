@@ -1,6 +1,6 @@
-"""engine/mcp.py: MCP servers' tools through langchain-mcp-adapters, on
-cmcoder's own lasting session per server, with cmcoder's names, schema and
-error handling (the Phase 8 spike, E5)."""
+"""engine/mcp.py: MCP servers' tools through `langchain.mcp`, on cmcoder's
+own lasting connection per server (FastMCP's client), with cmcoder's names,
+schema and error handling (the Phase 8 spike, E5 and E5b)."""
 
 from __future__ import annotations
 
@@ -66,25 +66,34 @@ async def test_results_and_errors(manager: McpManager) -> None:
     ok = await tools["mcp__demo__add"].ainvoke(call("mcp__demo__add", a=2, b=3))
     assert (ok.content, ok.status) == ("5", "success")
     failed = await tools["mcp__demo__fail"].ainvoke(call("mcp__demo__fail", reason="test"))
-    assert failed.status == "error" and "failed on purpose: test" in failed.content
+    # (mcp 2.x servers report an exception's text only when it's a ToolError.)
+    assert failed.status == "error" and failed.content.startswith("Error executing tool fail")
 
 
-async def test_calls_go_through_cmcoders_lasting_session(
-    manager: McpManager, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The adapters' default would start the server again for every call."""
-    session = manager.connected()[0].client.session
-    real, calls = session.call_tool, []
-
-    async def counted(*args: Any, **kwargs: Any) -> Any:
-        calls.append(args[0])
-        return await real(*args, **kwargs)
-
-    monkeypatch.setattr(session, "call_tool", counted)
-    tools = {t.name: t for t in await mcp_tools(manager)}
-    for _ in range(3):
-        await tools["mcp__demo__shout"].ainvoke({"text": "hi"})
-    assert calls == ["shout"] * 3
+async def test_calls_go_through_cmcoders_lasting_connection(project: Path) -> None:
+    """One server process for every call, on the connection McpManager opened
+    (the spike's E5: by default the adapters started one per call)."""
+    starts = project / "starts.txt"
+    settings = Settings.model_validate(
+        {
+            "mcpServers": {
+                "demo": {
+                    "command": sys.executable,
+                    "args": [SERVER],
+                    "env": {"DEMO_SERVER_STARTS": str(starts)},
+                }
+            }
+        }
+    )
+    m = McpManager(settings, project)
+    try:
+        assert [w async for w in m.start(None)] == []
+        tools = {t.name: t for t in await mcp_tools(m)}
+        for n in range(3):
+            assert await tools["mcp__demo__shout"].ainvoke({"text": f"hi{n}"}) == f"HI{n}"
+        assert len(starts.read_text().split()) == 1
+    finally:
+        await m.close()
 
 
 async def test_a_stopped_server_is_an_error_result(manager: McpManager) -> None:

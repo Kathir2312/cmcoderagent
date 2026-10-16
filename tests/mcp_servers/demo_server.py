@@ -8,9 +8,14 @@ from __future__ import annotations
 import os
 import sys
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
-server = FastMCP("demo", instructions="Demo server for cmcoder's tests.")
+server = MCPServer("demo", instructions="Demo server for cmcoder's tests.")
+
+# Tests that count how often the server starts set this to a file.
+if starts := os.environ.get("DEMO_SERVER_STARTS"):
+    with open(starts, "a", encoding="utf-8") as f:
+        f.write(f"{os.getpid()}\n")
 
 
 @server.tool()
@@ -54,6 +59,4 @@ if __name__ == "__main__":
     if transport == "stdio":
         server.run("stdio")
     else:
-        server.settings.host = "127.0.0.1"
-        server.settings.port = int(sys.argv[2])
-        server.run("streamable-http")
+        server.run("streamable-http", port=int(sys.argv[2]), host="127.0.0.1")  # type: ignore[call-overload]

@@ -8,7 +8,7 @@ section follows [PLAN.md](../../project/phases/phase3/PLAN.md).
 
 | Phase 3 item | LangChain / LangGraph equivalent |
 |---|---|
-| 1. MCP client | `langchain-mcp-adapters`: `MultiServerMCPClient`, `load_mcp_tools` |
+| 1. MCP client | `langchain.mcp` (LangChain's own, on FastMCP): `MCPAdapter`, `as_langchain_tool`; formerly `langchain-mcp-adapters` |
 | 2. Hooks | Callbacks / middleware (`before_model`, `after_model`, tool call wrappers) |
 | 3. Slash commands | Prompt templates (`ChatPromptTemplate`), LangSmith prompt hub |
 | 4. Subagents | Subgraphs; "supervisor" and "agents as tools" patterns |
@@ -21,23 +21,30 @@ section follows [PLAN.md](../../project/phases/phase3/PLAN.md).
 ### The LangGraph way
 
 ```python
-from langchain_mcp_adapters.client import MultiServerMCPClient
+from fastmcp.mcp_config import MCPConfig
+from langchain.agents import create_agent
+from langchain.mcp import MCPAdapter
 
-client = MultiServerMCPClient({
-    "github": {"url": "https://mcp.example.com/github", "transport": "streamable_http"},
-    "files": {"command": "npx", "args": ["-y", "@modelcontextprotocol/server-filesystem", "."],
-              "transport": "stdio"},
-})
-tools = await client.get_tools()          # LangChain BaseTool objects
-agent = create_react_agent(model, tools)
+servers = MCPConfig.model_validate({"mcpServers": {
+    "github": {"url": "https://mcp.example.com/github"},
+    "files": {"command": "npx", "args": ["-y", "@modelcontextprotocol/server-filesystem", "."]},
+}})
+async with MCPAdapter(servers) as adapter:
+    tools = await adapter.list_tools()    # LangChain BaseTool objects
+    agent = create_agent(model, tools)
 ```
+
+`langchain.mcp` (in `langchain` 1.4.6, beta) runs on FastMCP's client and the
+`mcp` library 2.x. The older `langchain-mcp-adapters` (`MultiServerMCPClient`,
+`load_mcp_tools`) still exists but needs `mcp` 1.x. Phase 8 builds cmcoder's
+engine on `langchain.mcp`: see [M2](../phase8/m2-tools-and-mcp.md).
 
 ### The cmcoder way
 
-| langchain-mcp-adapters | cmcoder |
+| langchain.mcp | cmcoder |
 |---|---|
-| `MultiServerMCPClient({...})` | `McpManager(settings, project_root)` from `mcpServers` / `.mcp.json` |
-| `await client.get_tools()` | `manager.start()` then `manager.tools()` (cmcoder `Tool`s) |
+| `MCPAdapter(MCPConfig(...))` | `McpManager(settings, project_root)` from `mcpServers` / `.mcp.json` |
+| `await adapter.list_tools()` | `manager.start()` then `manager.tools()` (cmcoder `Tool`s) |
 | tool name = the server's | `mcp__<server>__<tool>`, so servers can't collide or impersonate built-in tools |
 | tool runs when the model calls it | the permission engine asks first (allow rules per server or tool) |
 | a server failing raises | a failing server is reported and skipped |
@@ -53,7 +60,7 @@ deployment's concern.
 ### Exercise
 
 Load the demo server (`tests/mcp_servers/demo_server.py`) with
-`MultiServerMCPClient` in a small LangGraph agent, and with
+`MCPAdapter(Path("tests/mcp_servers/demo_server.py"))` in a small agent, and with
 `cmcoder mcp add demo -- python tests/mcp_servers/demo_server.py`. Compare
 what each shows the model as the tool's name and schema.
 
@@ -90,8 +97,9 @@ repository's hooks need trust and approval before they run.
 
 LangChain has **prompt templates** (`ChatPromptTemplate.from_template("Review
 {file}")`) filled in code, and LangSmith's prompt hub to share them. MCP
-servers' prompts can be loaded with `langchain-mcp-adapters`
-(`load_mcp_prompt`).
+servers' prompts come from the MCP client itself (FastMCP's
+`client.get_prompt`): `langchain.mcp` converts tools only (the older
+`langchain-mcp-adapters` has `load_mcp_prompt`).
 
 ### The cmcoder way
 

@@ -31,7 +31,7 @@ with a lab.
 | 5 | Prompt management in LangSmith or Langfuse | **Decided with 2**: syncing prompts sends cmcoder's prompt texts (no code, no keys) to the same services. Until then prompts are files in the repository, which stay the fallback. |
 | 6 | The old engine | **Removed in M11**, with the tag `classic-engine` kept to compare against. |
 | 7 | People | **Three developers**, about 3–4 months, split (M1, M2, M7), (M3–M6), (M8–M10). One developer would take about 6–7 months. |
-| 8 | MCP (from M0) | **`langchain-mcp-adapters`**, with cmcoder on the `mcp` library 1.x (M2); today's MCP client is checked on 1.x first. |
+| 8 | MCP (from M0; revisited 16 Oct) | **`langchain.mcp`**, LangChain's own MCP support (in `langchain` 1.4.6, in beta), on FastMCP 4's client and the `mcp` library 2.x; cmcoder's MCP client uses the same FastMCP client, so both engines share one connection per server. (On 15 Oct it was `langchain-mcp-adapters`, which needs `mcp` 1.x; we had missed `langchain.mcp`. See [SPIKE.md](SPIKE.md), E5b.) |
 | 9 | Size and start-up (from M0) | **Accepted**: about 180 MB and about 2 s more at start-up, with limits in CI. |
 
 ## What changes and what doesn't
@@ -68,7 +68,7 @@ engine/graph.py      create_agent(model, tools, middleware=[...], checkpointer, 
   agents/            Task → subagent graphs · team supervisor graph · critic reflection graph
         ▼
 llm/                 CmcoderChatOpenAI(ChatOpenAI) + PromptedToolsChatModel · embeddings · profiles
-tools/               StructuredTools (+ langchain-mcp-adapters for MCP) · CodeSearch retriever tool
+tools/               StructuredTools (+ langchain.mcp for MCP) · CodeSearch retriever tool
 rag/                 text splitters · OpenAIEmbeddings · Chroma / in-memory store · index() + RecordManager
 persistence          AsyncSqliteSaver (sessions, rewind) · SqliteStore + langmem (long-term memory)
 observability        LangSmith · Langfuse · local JSONL tracer (callbacks) · OpenTelemetry metrics
@@ -85,7 +85,7 @@ evaluation           LangSmith datasets/experiments · Langfuse datasets/scores 
 | `langgraph` | `StateGraph`, reducers, `Send`, subgraphs, `interrupt` and `Command`, streaming, runtime context | Graphs, state, control flow, human in the loop, durable execution |
 | `langgraph-checkpoint-sqlite` | Sessions, resume, rewind | Checkpointers, threads, time travel |
 | LangGraph Store + `langmem` | Optional long-term memory: project facts and the user's preferences across sessions | Memory types, store namespaces, background memory |
-| `langchain-mcp-adapters` | MCP servers as tools, with lasting sessions; MCP prompts as slash commands | MCP in LangChain |
+| `langchain.mcp` (+ FastMCP's client) | MCP servers as tools, on lasting connections; MCP prompts as slash commands; later, a server's questions to the user through `interrupt` (elicitation) | MCP in LangChain |
 | `langchain-text-splitters`, `langchain-chroma` | Code search | RAG from loading to re-indexing |
 | `langgraph-supervisor`, `langgraph-swarm` | Compared with the hand-built team graph | Multi-agent patterns |
 | `deepagents` | Studied and compared, not shipped (its tool names break parity) | How LangChain builds a Claude Code-style agent |
@@ -158,7 +158,7 @@ src/cmcoder/
   engine/        graph.py · state.py · context.py · events.py · sessions.py · memory.py · middleware/
   agents/        subagents.py · team.py · critic.py
   llm/           chat_openai.py · prompted_tools.py · embeddings.py · profiles.py   (+ transport.py, auth.py kept)
-  tools/         LangChain tools (bodies kept) · mcp.py (adapters)
+  tools/         LangChain tools (bodies kept) · mcp.py (langchain.mcp)
   rag/           splitters.py · stores.py · index.py · retriever.py
   observability/ local_trace.py · langsmith.py · langfuse.py · telemetry.py
   core/          permission rules · risk · readonly · hook runner · settings glue   (reused)
@@ -176,7 +176,7 @@ with a lab to `docs/learn/phase8/`.
 |---|---|---|---|---|
 | M0 | **Spike.** Pin versions. Prove: the PyInstaller program (size, startup, hidden imports); `ChatOpenAI` against the vLLM-strict mock gateway and Qwen3.6 on the real gateway (reasoning, tool calls, this week's two failures); `interrupt` running each tool exactly once; MCP adapters with TLS; SQLite speed on Windows; no network call except the gateway | The package map, Runnables | `SPIKE.md` and design decision D18; the user says go or no-go | 2 |
 | M1 | `llm/`: the chat model subclass, prompted tools, profiles, embeddings, retries and fallbacks, structured output | Chat models, messages, streaming, `bind_tools`, callbacks | Unit tests on the mock gateway pass, including this week's vLLM failures | 2 |
-| M2 | `tools/` as `StructuredTool`s; MCP through the adapters | Tool schemas, runtime injection, `ToolMessage`, streamed progress | Each tool's existing tests pass through the new interface | 2 |
+| M2 | `tools/` as `StructuredTool`s; MCP through `langchain.mcp` | Tool schemas, runtime injection, `ToolMessage`, streamed progress | Each tool's existing tests pass through the new interface | 2 |
 | M3 | Lab: the loop by hand as a `StateGraph`, seen in Studio | State, reducers, nodes, edges, `ToolNode`, `tools_condition`, `recursion_limit` | The lab in `docs/learn/phase8/labs/` | 1 |
 | M4 | `engine/`: `create_agent` with middleware 1–12; the engine switch (`"engine": "classic" \| "langgraph"`); front ends rewired | Middleware hooks, `jump_to`, state and context schemas | Front ends run on the new engine; comparison runs match | 4–5 |
 | M5 | Sessions and approvals: checkpointer, `interrupt` and resume, rewind through history, old sessions imported; long-term memory with Store and `langmem` | Checkpointers, interrupts, time travel, durable execution, memory | Resume, rewind and approval tests, and exactly-once tests, pass | 2–3 |
@@ -211,7 +211,7 @@ with a lab to `docs/learn/phase8/`.
 | Library churn | Versions pinned in `uv.lock`; the 1.x LTS lines; upgrades only behind the full test gate |
 | Scope creep in a learning rewrite | Every milestone ends with a working engine and green comparison runs; memory, the team and agentic code search are separate items |
 | Two engines during the move | The engine switch; the old engine removed in M11 |
-| Found in M0 ([SPIKE.md](SPIKE.md)): `LANGSMITH_TRACING` in a developer's shell sends every turn to the cloud; hooks rerun on resume; checkpoints grow with the square of a turn; `langchain-mcp-adapters` needs `mcp` below 2.0; about 2 s more start-up and about 180 MB | The eight design rules in SPIKE.md; the MCP decision there |
+| Found in M0 ([SPIKE.md](SPIKE.md)): `LANGSMITH_TRACING` in a developer's shell sends every turn to the cloud; hooks rerun on resume; checkpoints grow with the square of a turn; `langchain-mcp-adapters` needs `mcp` below 2.0 (since replaced by `langchain.mcp`, decision 8); about 2 s more start-up and about 180 MB | The eight design rules in SPIKE.md; the MCP decision there |
 
 ## Checklist
 
@@ -231,7 +231,12 @@ with a lab to `docs/learn/phase8/`.
   tools through `langchain-mcp-adapters` on cmcoder's lasting sessions
   (`mcp__server__tool` names, text results, error status). LangChain
   inlines `$defs` and drops `title` keys in schemas: same meaning, noted.
-  The learning page and lab are in [docs/learn/phase8/](../../../learn/phase8/README.md).)
+  The learning page and lab are in [docs/learn/phase8/](../../../learn/phase8/README.md).
+  16 Oct, decision 8 revisited: MCP now goes through `langchain.mcp` on
+  FastMCP 4 and the `mcp` library 2.x. cmcoder's MCP client connects
+  through FastMCP's client (its tests unchanged), FastMCP is imported so a
+  project's `.env` can't configure it and it doesn't log to the terminal,
+  and `langchain-mcp-adapters` is gone.)
 - [x] M3. Hand-built graph lab (15 Oct: [m3-graph-by-hand.md](../../../learn/phase8/m3-graph-by-hand.md)
   and its lab: the loop as a `StateGraph` from cmcoder's model and tools,
   reducers, streaming, the recursion limit, a checkpointer; a Studio entry
