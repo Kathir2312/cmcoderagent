@@ -17,6 +17,7 @@ dependencies = [
     "mcp>=2.3,<3",
     "numpy>=1.26",
     "pillow>=10",  # pasted images: made smaller, read from the clipboard
+    "langgraph>=0.1.0",
 ]
 
 [project.scripts]
